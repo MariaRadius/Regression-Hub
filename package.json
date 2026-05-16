@@ -1,0 +1,25 @@
+{
+  "name": "qa-regression-management",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "mongodb": "^6.5.0",
+    "next": "15.2.4",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^2.12.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "tailwindcss": "^3"
+  }
+}
