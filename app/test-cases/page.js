@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ToastProvider, { showToast } from '@/components/Toast';
-import { QA_USERS, STATUSES, normalizedStatus, toDateInputValue, dateStamp } from '@/utils/formatters';
+import { QA_USERS, normalizedStatus, toDateInputValue, dateStamp } from '@/utils/formatters';
 
 function statusClass(status) {
   if (status === 'Pass') return 'pass';
@@ -30,6 +30,10 @@ export default function TestCasesPage() {
   const [bDate, setBDate] = useState('');
   const [bVersion, setBVersion] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Pagination
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
 
   // Sticky context
   const sticky = useRef({ testedBy: '', testedOn: '', softwareVersionTested: '' });
@@ -59,7 +63,7 @@ export default function TestCasesPage() {
     }
   }, [fApp, fMod, fStatus, fTester, fVersion]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { setPage(1); fetchData(); }, [fetchData]);
 
   async function saveField(id, field, value) {
     setSaving((s) => ({ ...s, [id]: true }));
@@ -274,6 +278,9 @@ export default function TestCasesPage() {
     ? modules.filter((m) => m.applicationId === fApp)
     : modules;
 
+  const totalPages = Math.max(1, Math.ceil(cases.length / PAGE_SIZE));
+  const pageData = cases.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div>
       <ToastProvider />
@@ -292,7 +299,14 @@ export default function TestCasesPage() {
 
       {/* Bulk fill */}
       <div className="panel" style={{ marginBottom: 16 }}>
-        <div className="panel-header"><h3>Bulk Fill</h3></div>
+        <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3>Bulk Fill</h3>
+          <button
+            onClick={() => { setBStatus(''); setBTester(''); setBDate(''); setBVersion(''); }}
+            title="Clear bulk fill fields"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}
+          >×</button>
+        </div>
         <div className="panel-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, alignItems: 'end' }}>
             <div className="field-group">
@@ -335,21 +349,30 @@ export default function TestCasesPage() {
         <div className="panel-body" style={{ padding: '14px 20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
             <div className="field-group">
-              <label className="field-label">Application</label>
+              <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                Application
+                {fApp && <button onClick={() => { setFApp(''); setFMod(''); }} title="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>}
+              </label>
               <select className="field-select" value={fApp} onChange={(e) => { setFApp(e.target.value); setFMod(''); }}>
                 <option value="">All</option>
                 {applications.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
               </select>
             </div>
             <div className="field-group">
-              <label className="field-label">Module</label>
+              <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                Module
+                {fMod && <button onClick={() => setFMod('')} title="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>}
+              </label>
               <select className="field-select" value={fMod} onChange={(e) => setFMod(e.target.value)}>
                 <option value="">All</option>
                 {filteredModules.map((m) => <option key={m._id} value={m._id}>{m.name}</option>)}
               </select>
             </div>
             <div className="field-group">
-              <label className="field-label">Status</label>
+              <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                Status
+                {fStatus && <button onClick={() => setFStatus('')} title="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>}
+              </label>
               <select className="field-select" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
                 <option value="">All</option>
                 <option value="Pass">Pass</option>
@@ -358,7 +381,10 @@ export default function TestCasesPage() {
               </select>
             </div>
             <div className="field-group">
-              <label className="field-label">Tested By</label>
+              <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                Tested By
+                {fTester && <button onClick={() => setFTester('')} title="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>}
+              </label>
               <select className="field-select" value={fTester} onChange={(e) => setFTester(e.target.value)}>
                 <option value="">All</option>
                 {QA_USERS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -394,7 +420,7 @@ export default function TestCasesPage() {
                 </tr>
               </thead>
               <tbody>
-                {cases.map((tc) => (
+                {pageData.map((tc) => (
                   <TestCaseRow
                     key={tc._id}
                     tc={tc}
@@ -406,6 +432,26 @@ export default function TestCasesPage() {
             </table>
           )}
         </div>
+        {!loading && cases.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1px solid var(--line)', fontSize: 13, color: 'var(--muted)' }}>
+            <span>
+              Rows {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, cases.length)} of {cases.length}
+            </span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >← Prev</button>
+              <span style={{ padding: '0 8px' }}>Page {page} of {totalPages}</span>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >Next →</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
