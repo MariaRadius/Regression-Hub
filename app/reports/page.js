@@ -93,8 +93,12 @@ export default function ReportsPage() {
       const cases = await res.json();
       if (!cases.length) { showToast('No test cases to export', 'info'); setGeneratingPdf(false); return; }
 
-      const { default: jsPDF } = await import('jspdf');
-      const { autoTable } = await import('jspdf-autotable');
+      // jsPDF v4 uses a named export; v3 used default — support both
+      const jsPDFModule = await import('jspdf');
+      const jsPDF = jsPDFModule.jsPDF ?? jsPDFModule.default;
+      // jspdf-autotable v5 ships as default export; v3 as named — support both
+      const autoTableModule = await import('jspdf-autotable');
+      const autoTable = autoTableModule.default ?? autoTableModule.autoTable;
 
       const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
       const W = doc.internal.pageSize.width;   // 595
