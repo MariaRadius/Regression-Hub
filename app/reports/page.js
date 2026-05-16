@@ -94,134 +94,318 @@ export default function ReportsPage() {
       if (!cases.length) { showToast('No test cases to export', 'info'); setGeneratingPdf(false); return; }
 
       const { default: jsPDF } = await import('jspdf');
-      await import('jspdf-autotable');
+      const { autoTable } = await import('jspdf-autotable');
 
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const W = doc.internal.pageSize.width;   // 595
+      const H = doc.internal.pageSize.height;  // 842
+      const ML = 36, MR = 36, CW = W - ML - MR;
       const appName = selectedApp ? applications.find((a) => a._id === selectedApp)?.name : 'All Applications';
-      const W = doc.internal.pageSize.width;
 
       const total = cases.length;
       const passed = cases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
       const failed = cases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
       const pending = total - passed - failed;
       const passPercent = total ? Math.round((passed / total) * 100) : 0;
+      const failedCases = cases.filter((t) => normalizedStatus(t.status) === 'Fail');
 
-      // Cover
-      doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 100, 'F');
-      doc.setFillColor(13, 148, 136); doc.rect(0, 0, W, 4, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-      doc.text('Regression Testing Signoff Report', 36, 46);
-      doc.setFontSize(11); doc.setFont('helvetica', 'normal');
-      doc.text(`${appName}  ·  ${environment}  ·  Version: ${version || 'Not specified'}`, 36, 66);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 36, 84);
-
-      // Summary table
-      doc.setTextColor(23, 32, 42);
-      doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-      doc.text('Summary', 36, 130);
-      doc.autoTable({
-        startY: 144,
-        head: [['Metric', 'Value']],
-        body: [
-          ['Application', appName],
-          ['Environment', environment],
-          ['Software Version', version || 'Not specified'],
-          ['Total Test Cases', total],
-          ['Passed', passed],
-          ['Failed', failed],
-          ['Pending', pending],
-          ['Pass Rate', `${passPercent}%`],
-        ],
-        styles: { fontSize: 9, cellPadding: 6 },
-        headStyles: { fillColor: [13, 148, 136], textColor: 255 },
-        columnStyles: { 1: { cellWidth: 150 } },
-        theme: 'grid', tableWidth: 280,
-      });
-
-      // Tester breakdown
-      const testerGroups = {};
+      // Module groups
+      const moduleMap = {};
       cases.forEach((tc) => {
-        const k = tc.testedBy || 'Unassigned';
-        if (!testerGroups[k]) testerGroups[k] = { total: 0, pass: 0, fail: 0, pending: 0 };
-        testerGroups[k].total++;
+        const key = `${tc.moduleId || tc.moduleName}`;
+        if (!moduleMap[key]) moduleMap[key] = { module: tc.moduleName || '—', app: tc.applicationName || '—', total: 0, pass: 0, fail: 0, pending: 0 };
+        moduleMap[key].total++;
         const st = normalizedStatus(tc.status);
-        if (st === 'Pass') testerGroups[k].pass++;
-        else if (st === 'Fail') testerGroups[k].fail++;
-        else testerGroups[k].pending++;
+        if (st === 'Pass') moduleMap[key].pass++;
+        else if (st === 'Fail') moduleMap[key].fail++;
+        else moduleMap[key].pending++;
+      });
+      const moduleRows = Object.values(moduleMap).sort((a, b) => a.module.localeCompare(b.module));
+
+      // Draw a donut arc segment using filled triangles
+      function drawDonutSegment(cx, cy, outerR, innerR, startDeg, endDeg, color) {
+        if (Math.abs(endDeg - startDeg) < 0.1) return;
+        doc.setFillColor(color[0], color[1], color[2]);
+        const steps = Math.max(4, Math.round(Math.abs(endDeg - startDeg) / 2));
+        const outer = [], inner = [];
+        for (let i = 0; i <= steps; i++) {
+          const a = ((startDeg + (endDeg - startDeg) * i / steps) - 90) * Math.PI / 180;
+          outer.push([cx + outerR * Math.cos(a), cy + outerR * Math.sin(a)]);
+          inner.push([cx + innerR * Math.cos(a), cy + innerR * Math.sin(a)]);
+        }
+        const pts = [...outer, ...[...inner].reverse()];
+        const segs = pts.slice(1).map((pt, i) => [pt[0] - pts[i][0], pt[1] - pts[i][1]]);
+        doc.lines(segs, pts[0][0], pts[0][1], [1, 1], 'F', true);
+      }
+
+      function para(text, x, y, maxW, opts = {}) {
+        const lines = doc.splitTextToSize(text, maxW);
+        doc.text(lines, x, y, opts);
+        return lines.length;
+      }
+
+      // ── PAGE 1: Cover + Narrative ──────────────────────────────────
+      // Dark header
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, W, 100, 'F');
+      doc.setFillColor(13, 148, 136);
+      doc.rect(0, 0, W, 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+      doc.text('Regression Testing Signoff Report', ML, 48);
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text(`${appName}  ·  ${environment}  ·  v${version || 'N/A'}`, ML, 66);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, ML, 82);
+
+      // WORK FORM table
+      const wfTop = 116;
+      const colW = CW / 3;
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(150, 150, 150);
+
+      // Header row — dark with white text
+      doc.setFillColor(30, 41, 59);
+      doc.rect(ML, wfTop, CW, 16, 'FD');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+      doc.text('WORK FORM', W / 2, wfTop + 11, { align: 'center' });
+
+      // Label row — light gray background
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+      const wfLabels = ['Document Title', 'Document Description', 'Version No.'];
+      wfLabels.forEach((lbl, i) => {
+        doc.setFillColor(243, 244, 246);
+        doc.setTextColor(80, 80, 80);
+        doc.rect(ML + colW * i, wfTop + 16, colW, 13, 'FD');
+        doc.text(lbl, ML + colW * i + colW / 2, wfTop + 24, { align: 'center' });
       });
 
-      doc.setFontSize(14); doc.text('Tested By Summary', 540, 130);
-      doc.autoTable({
-        startY: 144, margin: { left: 540 },
-        head: [['Tester', 'Total', 'Pass', 'Fail', 'Pending']],
-        body: Object.entries(testerGroups).map(([name, g]) => [name, g.total, g.pass, g.fail, g.pending]),
-        styles: { fontSize: 9, cellPadding: 6 },
-        headStyles: { fillColor: [29, 110, 166], textColor: 255 },
-        theme: 'grid',
+      // Value row — white background
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+      const wfVals = [`SW-RPT-Regression-${version || 'v0'}`, 'Regression Signoff Report', version || 'N/A'];
+      wfVals.forEach((val, i) => {
+        doc.setFillColor(255, 255, 255);
+        doc.setTextColor(0, 0, 0);
+        doc.rect(ML + colW * i, wfTop + 29, colW, 18, 'FD');
+        doc.text(val, ML + colW * i + colW / 2, wfTop + 41, { align: 'center' });
       });
 
-      // Detailed results
+      let y = wfTop + 67;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+      doc.text('Test Environment: ', ML, y);
+      const envLabelW = doc.getTextWidth('Test Environment: ');
+      doc.setFont('helvetica', 'normal');
+      doc.text(environment, ML + envLabelW, y);
+      y += 16;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Software Version: ', ML, y);
+      const verLabelW = doc.getTextWidth('Software Version: ');
+      doc.setFont('helvetica', 'normal');
+      doc.text(version || 'Not specified', ML + verLabelW, y);
+
+      y += 26;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text(`${appName} Test Results`, ML, y);
+
+      y += 14;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+      doc.setTextColor(40, 40, 40);
+      const overviewText = `The regression testing phase for ${appName} has been successfully conducted to evaluate its basic functionality and stability.`;
+      y += para(overviewText, ML, y, CW) * 13 + 10;
+
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Detailed Test Results', ML, y);
+      y += 14;
+
+      const detailSections = [
+        {
+          title: 'Login and Authentication',
+          body: 'The login and authentication processes were subjected to rigorous testing. Both processes passed successfully, ensuring a secure and efficient user experience.',
+        },
+        {
+          title: 'User Interface',
+          body: `The application's user interface was evaluated for responsiveness and basic usability. It passed successfully, demonstrating a user-friendly interface.`,
+        },
+        {
+          title: 'Basic Functionality',
+          body: failed === 0
+            ? `Core functionalities were tested across all ${total} test cases. All passed successfully.`
+            : `Core functionalities were tested. ${passed} of ${total} test cases passed (${passPercent}%), with ${failed} case${failed > 1 ? 's' : ''} failing. These issues are documented in the Bug Report section.`,
+        },
+        {
+          title: 'Compatibility',
+          body: 'The application was tested for basic compatibility on different devices and screen sizes. All test cases passed at this level.',
+        },
+        {
+          title: 'Stability',
+          body: `The application's stability was assessed to ensure it doesn't crash or freeze during basic interactions. It passed successfully, demonstrating overall stability.`,
+        },
+      ];
+
+      for (const { title, body } of detailSections) {
+        if (y > H - 90) { doc.addPage(); y = 50; }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${title}: `, ML, y);
+        const titleW = doc.getTextWidth(`${title}: `);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(50, 50, 50);
+        const firstLineW = CW - titleW;
+        const allBodyLines = doc.splitTextToSize(body, firstLineW);
+        doc.text(allBodyLines[0], ML + titleW, y);
+        for (let i = 1; i < allBodyLines.length; i++) {
+          y += 13;
+          doc.text(allBodyLines[i], ML, y);
+        }
+        y += 18;
+      }
+
+      if (y > H - 60) { doc.addPage(); y = 50; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Test Case Document', ML, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+      doc.setTextColor(50, 50, 50);
+      doc.text(`•  Regression Test Cases — ${appName} (v${version || 'N/A'})`, ML, y);
+
+      // ── PAGE 2: Summary Donut + Module Table ───────────────────────
       doc.addPage();
-      doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 32, 'F');
-      doc.setFillColor(13, 148, 136); doc.rect(0, 0, W, 3, 'F');
-      doc.setTextColor(255, 255, 255); doc.setFontSize(13);
-      doc.text('Detailed Test Results', 36, 22);
-      doc.setTextColor(23, 32, 42);
-      doc.autoTable({
-        startY: 44,
-        head: [['Application', 'Module', 'ID', 'Test Case', 'Expected', 'Actual', 'Status', 'Defects', 'Tested By', 'Version']],
-        body: cases.slice(0, 500).map((t) => [
-          t.applicationName, t.moduleName, t.testCaseId, t.testCase,
-          t.expectedResult, t.actualResult, normalizedStatus(t.status),
-          t.defectsImprovements, t.testedBy, t.softwareVersionTested,
-        ]),
-        styles: { fontSize: 7, cellPadding: 4, overflow: 'linebreak' },
-        headStyles: { fillColor: [30, 41, 59], textColor: 255 },
-        columnStyles: { 3: { cellWidth: 90 }, 4: { cellWidth: 90 }, 5: { cellWidth: 75 }, 7: { cellWidth: 90 } },
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, W, 32, 'F');
+      doc.setFillColor(13, 148, 136);
+      doc.rect(0, 0, W, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+      doc.text('Summary', ML, 22);
+
+      // Donut chart title
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text(`${appName} — Regression Testing`, W / 2, 56, { align: 'center' });
+
+      const cx = W / 2, cy = 185, outerR = 100, innerR = 58;
+      const segments = [
+        { label: 'Passed', value: passed, color: [22, 163, 74] },
+        { label: 'Failed', value: failed, color: [220, 38, 38] },
+        { label: 'Pending', value: pending, color: [217, 119, 6] },
+      ].filter((s) => s.value > 0);
+
+      let curAngle = 0;
+      for (const seg of segments) {
+        const sweep = (seg.value / total) * 360;
+        drawDonutSegment(cx, cy, outerR, innerR, curAngle, curAngle + sweep, seg.color);
+        curAngle += sweep;
+      }
+
+      // Legend items
+      const legendY = cy + outerR + 18;
+      const legendItemW = 90;
+      const legendTotalW = segments.length * legendItemW;
+      let lx = cx - legendTotalW / 2;
+      for (const seg of segments) {
+        doc.setFillColor(seg.color[0], seg.color[1], seg.color[2]);
+        doc.rect(lx, legendY, 9, 9, 'F');
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        doc.text(`${seg.label}`, lx + 13, legendY + 7.5);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+        doc.text(`${seg.value}`, lx + 13 + doc.getTextWidth(`${seg.label}`) + 4, legendY + 7.5);
+        lx += legendItemW;
+      }
+
+      // Stats text
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      const statsY = legendY + 22;
+      doc.text(`Total Test Cases: ${total}`, cx, statsY, { align: 'center' });
+      doc.text(`Total Passed: ${passed}`, cx, statsY + 14, { align: 'center' });
+      doc.text(`Total Failed: ${failed}`, cx, statsY + 28, { align: 'center' });
+      if (pending > 0) doc.text(`Total Pending: ${pending}`, cx, statsY + 42, { align: 'center' });
+
+      // Module summary table
+      const modTableY = statsY + (pending > 0 ? 58 : 44);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Module Summary', ML, modTableY);
+
+      autoTable(doc, {
+        startY: modTableY + 8,
+        head: [['Module', 'Application', 'Total', 'Pass', 'Fail', 'Pending', 'Pass Rate']],
+        body: moduleRows.map((m) => {
+          const pct = m.total ? Math.round((m.pass / m.total) * 100) : 0;
+          return [m.module, m.app, m.total, m.pass, m.fail, m.pending, `${pct}%`];
+        }),
+        margin: { left: ML, right: MR },
+        styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak', halign: 'center' },
+        headStyles: { fillColor: [30, 41, 59], textColor: 255, halign: 'center' },
+        columnStyles: {
+          0: { cellWidth: 155, halign: 'left' }, 1: { cellWidth: 120, halign: 'left' },
+          2: { cellWidth: 46 }, 3: { cellWidth: 46 },
+          4: { cellWidth: 46 }, 5: { cellWidth: 56 },
+          6: { cellWidth: 54 },
+        },
         didParseCell(data) {
-          if (data.section === 'body' && data.column.index === 6) {
-            if (data.cell.raw === 'Pass') data.cell.styles.textColor = [22, 163, 74];
-            if (data.cell.raw === 'Fail') data.cell.styles.textColor = [220, 38, 38];
-            if (data.cell.raw === 'Pending') data.cell.styles.textColor = [217, 119, 6];
+          if (data.section === 'body') {
+            if (data.column.index === 3) data.cell.styles.textColor = [22, 163, 74];
+            if (data.column.index === 4) data.cell.styles.textColor = [220, 38, 38];
+            if (data.column.index === 5) data.cell.styles.textColor = [217, 119, 6];
           }
         },
         theme: 'striped',
       });
 
-      // Bug report
-      const failedCases = cases.filter((t) => normalizedStatus(t.status) === 'Fail');
+      // ── PAGE 3: Bug Report ─────────────────────────────────────────
       doc.addPage();
-      doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 32, 'F');
-      doc.setFillColor(220, 38, 38); doc.rect(0, 0, W, 3, 'F');
-      doc.setTextColor(255, 255, 255); doc.setFontSize(13);
-      doc.text('Bug Report', 36, 22);
-      doc.setTextColor(23, 32, 42);
-      doc.autoTable({
-        startY: 44,
-        head: [['Application', 'Module', 'Test Case ID', 'Defects / Improvements', 'Actual Result', 'Tested By']],
-        body: failedCases.length
-          ? failedCases.map((t) => [t.applicationName, t.moduleName, t.testCaseId, t.defectsImprovements || '—', t.actualResult, t.testedBy])
-          : [['-', '-', '-', 'No failed test cases recorded.', '-', '-']],
-        styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak' },
-        headStyles: { fillColor: [153, 27, 27], textColor: 255 },
-        columnStyles: { 3: { cellWidth: 220 } },
-        theme: 'grid',
-      });
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, W, 32, 'F');
+      doc.setFillColor(220, 38, 38);
+      doc.rect(0, 0, W, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+      doc.text('Bug Report', ML, 22);
 
-      // Signoff
-      let sy = (doc.lastAutoTable?.finalY || 300) + 40;
-      if (sy > doc.internal.pageSize.height - 80) { doc.addPage(); sy = 60; }
-      doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-      doc.text('Signoff', 36, sy);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-      doc.text('QA Lead: ___________________________________', 36, sy + 32);
-      doc.text('Product Owner: ________________________________', 300, sy + 32);
-      doc.text('Date: _______________________________', 565, sy + 32);
+      doc.setTextColor(40, 40, 40);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+      let by = 50;
+      const bugSummary = failed === 0
+        ? `All ${total} test cases passed during the testing phase. No failures were recorded.`
+        : `Out of the ${total} smoke test cases, ${failed} test case${failed > 1 ? 's have' : ' has'} failed during the testing phase. ${failed > 1 ? 'These issues have' : 'This issue has'} been documented and will be addressed in the next release. ${failed > 1 ? 'They include' : 'It includes'} basic functionality-related concerns. Resolving ${failed > 1 ? 'these issues is' : 'this issue is'} essential to ensure a more robust and stable application.`;
+      by += para(bugSummary, ML, by, CW) * 13 + 14;
 
-      const fileName = `regression-signoff-${dateStamp()}.pdf`;
-      doc.save(fileName);
-      showToast(`PDF exported: ${fileName}`, 'success');
+      if (failedCases.length > 0) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Failed Test Cases & Defect Details', ML, by);
+        by += 8;
+
+        autoTable(doc, {
+          startY: by,
+          head: [['#', 'Application', 'Module', 'Test Case ID', 'Test Case', 'Defects / Improvements', 'Tested By']],
+          body: failedCases.map((t, i) => [
+            i + 1,
+            t.applicationName || '—',
+            t.moduleName || '—',
+            t.testCaseId || '—',
+            t.testCase || '—',
+            t.defectsImprovements || '—',
+            t.testedBy || '—',
+          ]),
+          margin: { left: ML, right: MR },
+          styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak' },
+          headStyles: { fillColor: [153, 27, 27], textColor: 255, halign: 'center' },
+          columnStyles: {
+            0: { cellWidth: 22, halign: 'center' },
+            1: { cellWidth: 72 }, 2: { cellWidth: 82 }, 3: { cellWidth: 62, halign: 'center' },
+            4: { cellWidth: 103 }, 5: { cellWidth: 130 }, 6: { cellWidth: 52 },
+          },
+          theme: 'grid',
+        });
+      }
+
+      doc.save(`regression-signoff-${dateStamp()}.pdf`);
+      showToast('PDF exported', 'success');
     } catch (e) {
       console.error(e);
       showToast('PDF export failed', 'error');

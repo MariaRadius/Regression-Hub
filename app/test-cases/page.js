@@ -183,7 +183,7 @@ export default function TestCasesPage() {
   async function exportPdf() {
     try {
       const { default: jsPDF } = await import('jspdf');
-      await import('jspdf-autotable');
+      const { autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
       const summary = {
@@ -209,7 +209,7 @@ export default function TestCasesPage() {
       doc.text(`Total: ${summary.total}  Pass: ${summary.passed}  Fail: ${summary.failed}  Pending: ${summary.pending}  Pass Rate: ${summary.passPercent}%`, 36, 70);
 
       doc.setTextColor(23, 32, 42);
-      doc.autoTable({
+      autoTable(doc, {
         startY: 100,
         head: [['Application', 'Module', 'ID', 'Test Case', 'Expected', 'Actual', 'Status', 'Tested By', 'Version']],
         body: cases.slice(0, 500).map((t) => [
@@ -243,7 +243,7 @@ export default function TestCasesPage() {
         doc.setFontSize(13);
         doc.text('Bug Report', 36, 22);
         doc.setTextColor(23, 32, 42);
-        doc.autoTable({
+        autoTable(doc, {
           startY: 44,
           head: [['Application', 'Module', 'Test Case ID', 'Defects/Improvements', 'Actual Result', 'Tested By']],
           body: failed.map((t) => [t.applicationName, t.moduleName, t.testCaseId, t.defectsImprovements || '—', t.actualResult, t.testedBy]),
