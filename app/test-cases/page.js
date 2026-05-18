@@ -10,12 +10,29 @@ function statusClass(status) {
   return 'pending';
 }
 
+const EMPTY_FORM = {
+  applicationId: '', moduleId: '', testCaseId: '', testCase: '', type: '',
+  traceability: '', preconditions: '', steps: '', expectedResult: '',
+  actualResult: '', status: '', defectsImprovements: '', testedBy: '',
+  testedOn: '', softwareVersionTested: '',
+};
+
+const PAGE_SIZE = 50;
+
 export default function TestCasesPage() {
-  const [cases, setCases] = useState([]);
+  const [cases, setCases] = useState([]);        // current page only
+  const [totalCount, setTotalCount] = useState(0);
   const [applications, setApplications] = useState([]);
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
+
+  // Add single test case modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState(EMPTY_FORM);
+  const [addSaving, setAddSaving] = useState(false);
+  const [newModuleName, setNewModuleName] = useState(null); // null = hidden, string = visible
+  const [creatingModule, setCreatingModule] = useState(false);
 
   // Filters
   const [fApp, setFApp] = useState('');
@@ -24,7 +41,6 @@ export default function TestCasesPage() {
   const [fTester, setFTester] = useState('');
   const [fVersion, setFVersion] = useState('');
 
-  // Team QA users (loaded from settings, team-scoped)
   const [qaUsers, setQaUsers] = useState([]);
 
   // Bulk fill
@@ -37,6 +53,68 @@ export default function TestCasesPage() {
 
   // Selection
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Pagination
+  const [page, setPage] = useState(1);
+
+  const versionSaveTimer = useRef(null);
+  const settingsVersionRef = useRef('');
+
+  // Load apps, modules, and settings once on mount
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/applications').then((r) => r.json()),
+      fetch('/api/modules').then((r) => r.json()),
+      fetch('/api/settings').then((r) => r.json()),
+    ]).then(([apps, mods, settings]) => {
+      setApplications(Array.isArray(apps) ? apps : []);
+      setModules(Array.isArray(mods) ? mods : []);
+      if (settings.softwareVersion) {
+        setBVersion(settings.softwareVersion);
+        settingsVersionRef.current = settings.softwareVersion;
+      }
+      if (settings.qaUsers?.length) setQaUsers(settings.qaUsers);
+    }).catch(() => {});
+  }, []);
+
+  // Core fetch — only fetches one page of test cases
+  const fetchPage = useCallback(async (pageNum) => {
+    setLoading(true);
+    setSelectedIds(new Set());
+    try {
+      const params = new URLSearchParams();
+      if (fApp)    params.set('applicationId', fApp);
+      if (fMod)    params.set('moduleId', fMod);
+      if (fStatus) params.set('status', fStatus);
+      if (fTester) params.set('testedBy', fTester);
+      if (fVersion) params.set('version', fVersion);
+      params.set('page', pageNum);
+      params.set('limit', PAGE_SIZE);
+
+      const res  = await fetch(`/api/test-cases?${params}`);
+      const json = await res.json();
+      const { data = [], total = 0 } = json;
+
+      const ver = settingsVersionRef.current;
+      setCases(ver ? data.map((tc) => ({ ...tc, softwareVersionTested: ver })) : data);
+      setTotalCount(total);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [fApp, fMod, fStatus, fTester, fVersion]);
+
+  // When filters change → reset to page 1
+  useEffect(() => {
+    setPage(1);
+    fetchPage(1);
+  }, [fetchPage]);
+
+  function goToPage(newPage) {
+    setPage(newPage);
+    fetchPage(newPage);
+  }
 
   function toggleSelect(id) {
     setSelectedIds((prev) => {
@@ -55,117 +133,41 @@ export default function TestCasesPage() {
     });
   }
 
-  // Pagination
-  const PAGE_SIZE = 50;
-  const [page, setPage] = useState(1);
-
-  // Sticky context
-  const sticky = useRef({ testedBy: '', testedOn: '', softwareVersionTested: '' });
-  const versionSaveTimer = useRef(null);
-
-  // Load saved version from team settings — stored in a ref so fetchData can read it
-  const settingsVersionRef = useRef('');
-  useEffect(() => {
-    fetch('/api/settings')
-      .then((r) => r.json())
-      .then((s) => {
-        if (s.softwareVersion) {
-          setBVersion(s.softwareVersion);
-          settingsVersionRef.current = s.softwareVersion;
-        }
-        if (s.qaUsers?.length) setQaUsers(s.qaUsers);
-      })
-      .catch(() => {});
-  }, []);
-
-  // When cases load and bVersion is set, apply it to all rows
-  const casesRef = useRef([]);
-  useEffect(() => { casesRef.current = cases; }, [cases]);
-
-  // Apply version to all visible cases (state + DB) and sync to settings
+  // Version change: save to settings + apply to ALL cases via filter-based bulk
   function handleVersionChange(val) {
     setBVersion(val);
     clearTimeout(versionSaveTimer.current);
     versionSaveTimer.current = setTimeout(async () => {
-      // 1. Update team settings
+      settingsVersionRef.current = val;
+
       fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ softwareVersion: val }),
       }).catch(() => {});
 
-      // 2. Apply to all visible cases in state immediately
-      if (!val || !casesRef.current.length) return;
+      if (!val) return;
+
+      // Apply visually to current page
       setCases((prev) => prev.map((tc) => ({ ...tc, softwareVersionTested: val })));
 
-      // 3. Persist to DB for all visible cases
+      // Persist to ALL team cases via filter-based bulk (no IDs needed)
       fetch('/api/test-cases-bulk', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: casesRef.current.map((t) => t._id),
-          fields: { softwareVersionTested: val },
-        }),
+        body: JSON.stringify({ filter: {}, fields: { softwareVersionTested: val } }),
       }).catch(() => {});
     }, 800);
   }
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setSelectedIds(new Set());
-    try {
-      const params = new URLSearchParams();
-      if (fApp) params.set('applicationId', fApp);
-      if (fMod) params.set('moduleId', fMod);
-      if (fStatus) params.set('status', fStatus);
-      if (fTester) params.set('testedBy', fTester);
-      if (fVersion) params.set('version', fVersion);
-
-      // Ensure settings are loaded before cases so the version ref is populated
-      if (!settingsVersionRef.current) {
-        const s = await fetch('/api/settings').then((r) => r.json()).catch(() => ({}));
-        if (s.softwareVersion) {
-          settingsVersionRef.current = s.softwareVersion;
-          setBVersion(s.softwareVersion);
-        }
-        if (s.qaUsers?.length) setQaUsers(s.qaUsers);
-      }
-
-      const [casesRes, appsRes, modsRes] = await Promise.all([
-        fetch(`/api/test-cases?${params}`),
-        fetch('/api/applications'),
-        fetch('/api/modules'),
-      ]);
-      const loadedCases = await casesRes.json();
-      const ver = settingsVersionRef.current;
-      // Apply current team version to every row so display is always in sync
-      setCases(ver ? loadedCases.map((tc) => ({ ...tc, softwareVersionTested: ver })) : loadedCases);
-      setApplications(await appsRes.json());
-      setModules(await modsRes.json());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [fApp, fMod, fStatus, fTester, fVersion]);
-
-  useEffect(() => { setPage(1); fetchData(); }, [fetchData]);
-
   async function saveField(id, field, value) {
     setSaving((s) => ({ ...s, [id]: true }));
     try {
-      // Update sticky
-      if (['testedBy', 'testedOn', 'softwareVersionTested'].includes(field) && value) {
-        sticky.current[field] = value;
-      }
-
-      // Auto-fill companions on status set
       let extra = {};
-      if ((field === 'status') && (value === 'Pass' || value === 'Fail')) {
+      if (field === 'status' && (value === 'Pass' || value === 'Fail')) {
         const today = dateStamp();
-        if (sticky.current.testedBy) extra.testedBy = sticky.current.testedBy;
-        if (sticky.current.softwareVersionTested) extra.softwareVersionTested = sticky.current.softwareVersionTested;
-        extra.testedOn = sticky.current.testedOn || today;
+        if (bVersion) extra.softwareVersionTested = bVersion;
+        extra.testedOn = today;
       }
 
       await fetch(`/api/test-cases/${id}`, {
@@ -191,57 +193,114 @@ export default function TestCasesPage() {
       return;
     }
 
-    const hasSelection = selectedIds.size > 0;
-    let targets;
-    if (hasSelection) {
-      targets = cases.filter((tc) => selectedIds.has(tc._id));
-      if (pendingOnly) targets = targets.filter((tc) => normalizedStatus(tc.status) === 'Pending');
-    } else {
-      targets = pendingOnly
-        ? cases.filter((tc) => normalizedStatus(tc.status) === 'Pending')
-        : [...cases];
-      if (bFromTester) targets = targets.filter((tc) => tc.testedBy === bFromTester);
-    }
-
-    if (!targets.length) {
-      showToast(pendingOnly ? 'No pending rows' : 'No rows to fill', 'info');
-      return;
-    }
+    const fields = {};
+    if (bStatus) fields.status = bStatus === 'Pending' ? '' : bStatus;
+    if (bTester) fields.testedBy = bTester;
+    if (bDate)   fields.testedOn = bDate;
+    if (bVersion) fields.softwareVersionTested = bVersion;
+    if (bStatus && bStatus !== 'Pending' && !bDate) fields.testedOn = dateStamp();
 
     setBulkLoading(true);
     try {
-      const fields = {};
-      if (bStatus) fields.status = bStatus === 'Pending' ? '' : bStatus;
-      if (bTester) fields.testedBy = bTester;
-      if (bDate) fields.testedOn = bDate;
-      if (bVersion) fields.softwareVersionTested = bVersion;
-      if (bStatus && bStatus !== 'Pending' && !bDate) fields.testedOn = dateStamp();
+      let body;
+
+      if (selectedIds.size > 0) {
+        // ID-based: fill only explicitly selected rows
+        body = { ids: Array.from(selectedIds), fields, pendingOnly };
+      } else {
+        // Filter-based: fill all rows matching current view filters
+        body = {
+          filter: {
+            applicationId: fApp || undefined,
+            moduleId: fMod || undefined,
+            testedBy: bFromTester || undefined,
+            version: fVersion || undefined,
+          },
+          fields,
+          pendingOnly,
+        };
+      }
 
       const res = await fetch('/api/test-cases-bulk', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: targets.map((t) => t._id), fields }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('Bulk save failed');
+      const { updated } = await res.json();
 
-      // Persist the applied version to team settings so dashboard & reports stay in sync
       if (bVersion) {
         fetch('/api/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ softwareVersion: bVersion }),
         }).catch(() => {});
+        settingsVersionRef.current = bVersion;
       }
 
-      setCases((prev) => prev.map((tc) =>
-        targets.find((t) => t._id === tc._id) ? { ...tc, ...fields } : tc
-      ));
+      // Refresh current page to reflect changes
+      fetchPage(page);
       setSelectedIds(new Set());
-      showToast(`${targets.length} rows updated`, 'success');
+      showToast(`${updated} rows updated`, 'success');
     } catch (e) {
       showToast(e.message, 'error');
     } finally {
       setBulkLoading(false);
+    }
+  }
+
+  async function addTestCase(e) {
+    e.preventDefault();
+    if (!addForm.applicationId || !addForm.moduleId) {
+      showToast('Select an application and module', 'info'); return;
+    }
+    setAddSaving(true);
+    try {
+      const app = applications.find((a) => a._id === addForm.applicationId);
+      const mod = modules.find((m) => m._id === addForm.moduleId);
+      const res = await fetch('/api/test-cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...addForm,
+          applicationName: app?.name,
+          moduleName: mod?.name,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast('Test case added', 'success');
+      setShowAddModal(false);
+      setAddForm(EMPTY_FORM);
+      setNewModuleName(null);
+      setTotalCount((n) => n + 1);
+      fetchPage(page);
+    } catch (err) {
+      showToast(err.message || 'Failed to add', 'error');
+    } finally {
+      setAddSaving(false);
+    }
+  }
+
+  async function createModule() {
+    if (!newModuleName.trim()) return;
+    if (!addForm.applicationId) { showToast('Select an application first', 'info'); return; }
+    setCreatingModule(true);
+    try {
+      const res = await fetch('/api/modules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newModuleName.trim(), applicationId: addForm.applicationId }),
+      });
+      const mod = await res.json();
+      if (!res.ok) throw new Error(mod.error);
+      setModules((prev) => [...prev, mod]);
+      setAddForm((f) => ({ ...f, moduleId: mod._id }));
+      setNewModuleName(null);
+      showToast(`Module "${mod.name}" created`, 'success');
+    } catch (e) {
+      showToast(e.message || 'Failed to create module', 'error');
+    } finally {
+      setCreatingModule(false);
     }
   }
 
@@ -256,6 +315,7 @@ export default function TestCasesPage() {
       }),
     ]);
     setCases([]);
+    setTotalCount(0);
     setApplications([]);
     setModules([]);
     setBVersion('');
@@ -265,8 +325,19 @@ export default function TestCasesPage() {
 
   async function exportExcel() {
     try {
+      // Fetch all (no pagination) for export
+      const params = new URLSearchParams();
+      if (fApp)    params.set('applicationId', fApp);
+      if (fMod)    params.set('moduleId', fMod);
+      if (fStatus) params.set('status', fStatus);
+      if (fTester) params.set('testedBy', fTester);
+      if (fVersion) params.set('version', fVersion);
+      params.set('limit', '10000');
+      const res = await fetch(`/api/test-cases?${params}`);
+      const { data: allCases } = await res.json();
+
       const { utils, writeFile } = await import('xlsx');
-      const rows = cases.map((tc) => ({
+      const rows = allCases.map((tc) => ({
         'Platform/Application': tc.applicationName,
         'Module': tc.moduleName,
         'Type': tc.type,
@@ -296,13 +367,23 @@ export default function TestCasesPage() {
 
   async function exportPdf() {
     try {
+      // Fetch all for export
+      const params = new URLSearchParams();
+      if (fApp)    params.set('applicationId', fApp);
+      if (fMod)    params.set('moduleId', fMod);
+      if (fStatus) params.set('status', fStatus);
+      if (fTester) params.set('testedBy', fTester);
+      if (fVersion) params.set('version', fVersion);
+      params.set('limit', '10000');
+      const res = await fetch(`/api/test-cases?${params}`);
+      const { data: allCases } = await res.json();
+
       const { default: jsPDF } = await import('jspdf');
       const { autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
       const pw = doc.internal.pageSize.width;
       const ph = doc.internal.pageSize.height;
 
-      // Draw a donut chart using native jsPDF polygon approximation — no canvas needed
       function drawDonut(cx, cy, outerR, innerR, pass, fail, pend) {
         const tot = pass + fail + pend;
         if (!tot) {
@@ -345,14 +426,12 @@ export default function TestCasesPage() {
         doc.circle(cx, cy, innerR, 'F');
       }
 
-      // Overall stats
-      const total = cases.length;
-      const pass  = cases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
-      const fail  = cases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
-      const pend  = cases.filter((t) => normalizedStatus(t.status) === 'Pending').length;
+      const total = allCases.length;
+      const pass  = allCases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
+      const fail  = allCases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
+      const pend  = allCases.filter((t) => normalizedStatus(t.status) === 'Pending').length;
       const pct   = total ? Math.round((pass / total) * 100) : 0;
 
-      // ── PAGE 1: Cover ──────────────────────────────────────────
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, pw, 80, 'F');
       doc.setFillColor(13, 148, 136);
@@ -364,10 +443,8 @@ export default function TestCasesPage() {
       doc.text(`Generated: ${new Date().toLocaleString()}`, 36, 58);
       doc.text(`Total: ${total}  |  Passed: ${pass}  |  Failed: ${fail}  |  Pending: ${pend}  |  Pass Rate: ${pct}%`, 36, 72);
 
-      // Overall donut centred on cover page
       drawDonut(pw / 2, 190, 86, 46, pass, fail, pend);
 
-      // Legend below donut
       const legendY = 292;
       const legendItems = [
         [22, 163, 74, `Passed  ${pass}`, pass],
@@ -381,19 +458,17 @@ export default function TestCasesPage() {
         doc.text(label, lx + 14, legendY + 9);
       });
 
-      // ── PER-APPLICATION pages ──────────────────────────────────
-      const appNames = [...new Set(cases.map((t) => t.applicationName))].sort();
+      const appNames = [...new Set(allCases.map((t) => t.applicationName))].sort();
 
       for (const appName of appNames) {
         doc.addPage();
-        const appCases = cases.filter((t) => t.applicationName === appName);
+        const appCases = allCases.filter((t) => t.applicationName === appName);
         const ap  = appCases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
         const af  = appCases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
         const apd = appCases.filter((t) => normalizedStatus(t.status) === 'Pending').length;
         const at  = appCases.length;
         const apct = at ? Math.round((ap / at) * 100) : 0;
 
-        // App header bar
         doc.setFillColor(15, 23, 42);
         doc.rect(0, 0, pw, 36, 'F');
         doc.setFillColor(13, 148, 136);
@@ -404,11 +479,9 @@ export default function TestCasesPage() {
         doc.setFontSize(9); doc.setFont('helvetica', 'normal');
         doc.text(`${at} test cases  ·  ${apct}% pass rate`, pw - 36, 24, { align: 'right' });
 
-        // Donut (left side)
         const dCx = 96, dCy = 104;
         drawDonut(dCx, dCy, 54, 29, ap, af, apd);
 
-        // Stats (right of donut)
         const sx = 166, sy = 58;
         doc.setFontSize(10);
         doc.setTextColor(22, 163, 74);  doc.text(`● Passed   ${ap}`, sx, sy);
@@ -418,7 +491,6 @@ export default function TestCasesPage() {
         doc.setFont('helvetica', 'bold');   doc.text(`${apct}% Pass Rate`, sx, sy + 58);
         doc.setFont('helvetica', 'normal'); doc.text(`${at} total cases`, sx, sy + 74);
 
-        // Module summary table
         const modMap = {};
         for (const tc of appCases) {
           if (!modMap[tc.moduleName]) modMap[tc.moduleName] = { p: 0, f: 0, d: 0 };
@@ -448,7 +520,6 @@ export default function TestCasesPage() {
           theme: 'striped',
         });
 
-        // Defects summary — compact, only if failures exist
         const failedCases = appCases.filter((t) => normalizedStatus(t.status) === 'Fail');
         if (failedCases.length) {
           let dy = (doc.lastAutoTable?.finalY || 300) + 20;
@@ -479,7 +550,6 @@ export default function TestCasesPage() {
         }
       }
 
-      // ── Signoff page ───────────────────────────────────────────
       doc.addPage();
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, pw, 32, 'F');
@@ -503,13 +573,9 @@ export default function TestCasesPage() {
     }
   }
 
-  const filteredModules = fApp
-    ? modules.filter((m) => m.applicationId === fApp)
-    : modules;
-
-  const totalPages = Math.max(1, Math.ceil(cases.length / PAGE_SIZE));
-  const pageData = cases.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const pageIds = pageData.map((t) => t._id);
+  const filteredModules = fApp ? modules.filter((m) => m.applicationId === fApp) : modules;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pageIds = cases.map((t) => t._id);
   const selectedOnPage = pageIds.filter((id) => selectedIds.has(id));
   const allPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length;
   const somePageSelected = selectedOnPage.length > 0 && !allPageSelected;
@@ -521,11 +587,12 @@ export default function TestCasesPage() {
         <div className="page-header" style={{ marginBottom: 0 }}>
           <div className="page-eyebrow">Data Grid</div>
           <h1 className="page-title">Test Cases</h1>
-          <p className="page-sub">{loading ? 'Loading…' : `${cases.length} rows visible`}</p>
+          <p className="page-sub">{loading ? 'Loading…' : `${totalCount} rows`}</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>+ Add Test Case</button>
           <button className="btn btn-secondary btn-sm" onClick={exportExcel}>Export Excel</button>
-          <button className="btn btn-primary btn-sm" onClick={exportPdf}>Export PDF</button>
+          <button className="btn btn-secondary btn-sm" onClick={exportPdf}>Export PDF</button>
           <button className="btn btn-danger btn-sm" onClick={clearAll}>Clear All Data</button>
         </div>
       </div>
@@ -590,11 +657,33 @@ export default function TestCasesPage() {
               <input className="field-input" type="text" value={bVersion} onChange={(e) => handleVersionChange(e.target.value)} placeholder="e.g. 2.4.1" />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-secondary" onClick={() => bulkFill(true)} disabled={bulkLoading} style={{ flex: 1 }}>
-                Fill Pending
+              <button
+                className="btn btn-secondary"
+                onClick={() => bulkFill(true)}
+                disabled={bulkLoading}
+                style={{
+                  flex: 1,
+                  ...(bStatus === 'Pass' && { background: '#16a34a', borderColor: '#16a34a', color: '#fff' }),
+                  ...(bStatus === 'Fail' && { background: '#dc2626', borderColor: '#dc2626', color: '#fff' }),
+                  ...(bStatus === 'Pending' && { background: '#d97706', borderColor: '#d97706', color: '#fff' }),
+                }}
+              >
+                {bStatus ? `${bStatus}: Pending Rows` : 'Fill Pending'}
               </button>
-              <button className="btn btn-primary" onClick={() => bulkFill(false)} disabled={bulkLoading} style={{ flex: 1 }}>
-                {selectedIds.size > 0 ? `Fill Selected (${selectedIds.size})` : 'Fill Visible'}
+              <button
+                className="btn btn-primary"
+                onClick={() => bulkFill(false)}
+                disabled={bulkLoading}
+                style={{
+                  flex: 1,
+                  ...(bStatus === 'Pass' && { background: '#16a34a', borderColor: '#16a34a' }),
+                  ...(bStatus === 'Fail' && { background: '#dc2626', borderColor: '#dc2626' }),
+                  ...(bStatus === 'Pending' && { background: '#d97706', borderColor: '#d97706' }),
+                }}
+              >
+                {selectedIds.size > 0
+                  ? `${bStatus || 'Fill'}: Selected (${selectedIds.size})`
+                  : bStatus ? `${bStatus}: All Visible` : 'Fill Visible'}
               </button>
             </div>
           </div>
@@ -644,6 +733,7 @@ export default function TestCasesPage() {
               </label>
               <select className="field-select" value={fTester} onChange={(e) => setFTester(e.target.value)}>
                 <option value="">All</option>
+                <option value="__unassigned__">Unassigned</option>
                 {qaUsers.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
@@ -660,7 +750,7 @@ export default function TestCasesPage() {
         <div className="table-wrap">
           {loading ? (
             <div className="empty-state">Loading test cases…</div>
-          ) : cases.length === 0 ? (
+          ) : totalCount === 0 ? (
             <div className="empty-state">
               <div style={{ fontSize: 32, marginBottom: 8 }}>◎</div>
               <strong>No test cases found</strong>
@@ -679,6 +769,7 @@ export default function TestCasesPage() {
                       title={allPageSelected ? 'Deselect page' : 'Select page'}
                     />
                   </th>
+                  <th style={{ width: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>#</th>
                   {['Platform','Module','Type','Traceability','Test Case ID','Test Case','Preconditions',
                     'Steps','Expected Result','Actual Result','Status','Defects','Tested By','Tested On','Version'].map((h) => (
                     <th key={h}>{h}</th>
@@ -686,10 +777,11 @@ export default function TestCasesPage() {
                 </tr>
               </thead>
               <tbody>
-                {pageData.map((tc) => (
+                {cases.map((tc, index) => (
                   <TestCaseRow
                     key={tc._id}
                     tc={tc}
+                    rowNum={(page - 1) * PAGE_SIZE + index + 1}
                     saving={!!saving[tc._id]}
                     onSave={saveField}
                     selected={selectedIds.has(tc._id)}
@@ -701,32 +793,189 @@ export default function TestCasesPage() {
             </table>
           )}
         </div>
-        {!loading && cases.length > 0 && (
+        {!loading && totalCount > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1px solid var(--line)', fontSize: 13, color: 'var(--muted)' }}>
             <span>
-              Rows {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, cases.length)} of {cases.length}
+              Rows {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
             </span>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => goToPage(Math.max(1, page - 1))}
                 disabled={page === 1}
               >← Prev</button>
               <span style={{ padding: '0 8px' }}>Page {page} of {totalPages}</span>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => goToPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages}
               >Next →</button>
             </div>
           </div>
         )}
       </div>
+
+      {/* Add Test Case Modal */}
+      {showAddModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: 20,
+        }} onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setAddForm(EMPTY_FORM); setNewModuleName(null); } }}>
+          <div style={{
+            background: '#ffffff', borderRadius: 12, width: '100%', maxWidth: 680,
+            maxHeight: '90vh', overflow: 'auto',
+            boxShadow: '0 24px 48px rgba(0,0,0,0.25)',
+          }}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Add Test Case</h2>
+              <button onClick={() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setNewModuleName(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)', lineHeight: 1 }}>×</button>
+            </div>
+            <form onSubmit={addTestCase} style={{ padding: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div className="field-group">
+                  <label className="field-label">Application *</label>
+                  <select className="field-select" required value={addForm.applicationId}
+                    onChange={(e) => setAddForm((f) => ({ ...f, applicationId: e.target.value, moduleId: '' }))}>
+                    <option value="">Select application</option>
+                    {applications.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Module *</label>
+                  <select className="field-select" required value={addForm.moduleId}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        setAddForm((f) => ({ ...f, moduleId: '' }));
+                        setNewModuleName('');
+                        setTimeout(() => document.getElementById('new-module-input')?.focus(), 50);
+                      } else {
+                        setAddForm((f) => ({ ...f, moduleId: e.target.value }));
+                        setNewModuleName(null);
+                      }
+                    }}>
+                    <option value="">Select module</option>
+                    <option value="__new__">+ Add new module…</option>
+                    {modules.filter((m) => !addForm.applicationId || m.applicationId === addForm.applicationId)
+                      .map((m) => <option key={m._id} value={m._id}>{m.name}</option>)}
+                  </select>
+                  {/* Inline new-module creator */}
+                  {newModuleName !== null && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <input
+                        id="new-module-input"
+                        className="field-input"
+                        value={newModuleName}
+                        onChange={(e) => setNewModuleName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createModule(); } }}
+                        placeholder="New module name"
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={createModule}
+                        disabled={creatingModule || !newModuleName.trim()}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        {creatingModule ? '…' : 'Create'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setNewModuleName(null)}
+                        style={{ padding: '0 8px' }}
+                      >×</button>
+                    </div>
+                  )}
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Test Case ID</label>
+                  <input className="field-input" value={addForm.testCaseId} placeholder="e.g. TC-001"
+                    onChange={(e) => setAddForm((f) => ({ ...f, testCaseId: e.target.value }))} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Type</label>
+                  <input className="field-input" value={addForm.type} placeholder="e.g. Functional"
+                    onChange={(e) => setAddForm((f) => ({ ...f, type: e.target.value }))} />
+                </div>
+              </div>
+              <div className="field-group" style={{ marginBottom: 14 }}>
+                <label className="field-label">Test Case *</label>
+                <textarea className="field-input" required rows={2} value={addForm.testCase} placeholder="Describe the test case"
+                  onChange={(e) => setAddForm((f) => ({ ...f, testCase: e.target.value }))}
+                  style={{ resize: 'vertical' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div className="field-group">
+                  <label className="field-label">Preconditions</label>
+                  <textarea className="field-input" rows={2} value={addForm.preconditions}
+                    onChange={(e) => setAddForm((f) => ({ ...f, preconditions: e.target.value }))}
+                    style={{ resize: 'vertical' }} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Steps</label>
+                  <textarea className="field-input" rows={2} value={addForm.steps}
+                    onChange={(e) => setAddForm((f) => ({ ...f, steps: e.target.value }))}
+                    style={{ resize: 'vertical' }} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Expected Result *</label>
+                  <textarea className="field-input" required rows={2} value={addForm.expectedResult}
+                    onChange={(e) => setAddForm((f) => ({ ...f, expectedResult: e.target.value }))}
+                    style={{ resize: 'vertical' }} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Actual Result</label>
+                  <textarea className="field-input" rows={2} value={addForm.actualResult}
+                    onChange={(e) => setAddForm((f) => ({ ...f, actualResult: e.target.value }))}
+                    style={{ resize: 'vertical' }} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+                <div className="field-group">
+                  <label className="field-label">Status</label>
+                  <select className="field-select" value={addForm.status}
+                    onChange={(e) => setAddForm((f) => ({ ...f, status: e.target.value }))}>
+                    <option value="">Pending</option>
+                    <option value="Pass">Pass</option>
+                    <option value="Fail">Fail</option>
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Tested By</label>
+                  <select className="field-select" value={addForm.testedBy}
+                    onChange={(e) => setAddForm((f) => ({ ...f, testedBy: e.target.value }))}>
+                    <option value="">—</option>
+                    {qaUsers.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Tested On</label>
+                  <input className="field-input" type="date" value={addForm.testedOn}
+                    onChange={(e) => setAddForm((f) => ({ ...f, testedOn: e.target.value }))} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Version</label>
+                  <input className="field-input" value={addForm.softwareVersionTested} placeholder={bVersion || ''}
+                    onChange={(e) => setAddForm((f) => ({ ...f, softwareVersionTested: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setNewModuleName(null); }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={addSaving}>
+                  {addSaving ? 'Saving…' : 'Add Test Case'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function TestCaseRow({ tc, saving, onSave, selected, onToggle, qaUsers }) {
+function TestCaseRow({ tc, rowNum, saving, onSave, selected, onToggle, qaUsers }) {
   const [local, setLocal] = useState(tc);
   useEffect(() => { setLocal(tc); }, [tc]);
 
@@ -742,6 +991,7 @@ function TestCaseRow({ tc, saving, onSave, selected, onToggle, qaUsers }) {
       <td style={{ width: 36, textAlign: 'center', padding: '4px 6px' }}>
         <input type="checkbox" checked={selected} onChange={onToggle} />
       </td>
+      <td style={{ width: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12, userSelect: 'none' }}>{rowNum}</td>
       <td style={{ color: 'var(--ink-2)', minWidth: 110 }}>{tc.applicationName}</td>
       <td style={{ minWidth: 110 }}>{tc.moduleName}</td>
       <td>{tc.type}</td>

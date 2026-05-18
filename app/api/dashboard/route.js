@@ -3,10 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 
-function normalizedStatus(status) {
-  return status === 'Pass' || status === 'Fail' ? status : 'Pending';
-}
-
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
@@ -17,59 +13,71 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const applicationId = searchParams.get('applicationId') || '';
 
-    const query = applicationId ? { teamId, applicationId } : { teamId };
-    const testCases = await db.collection('testCases').find(query).toArray();
-    const applications = await db.collection('applications').find({ teamId }).toArray();
-    const modules = await db.collection('modules').find({ teamId }).toArray();
+    const match = applicationId ? { teamId, applicationId } : { teamId };
+
+    // Single aggregation pass — no document loading into Node.js memory
+    const passExpr = { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] };
+    const failExpr = { $cond: [{ $eq: ['$status', 'Fail'] }, 1, 0] };
+
+    const [[agg], applications, modules] = await Promise.all([
+      db.collection('testCases').aggregate([
+        { $match: match },
+        {
+          $facet: {
+            summary: [
+              { $group: { _id: null, total: { $sum: 1 }, passed: { $sum: passExpr }, failed: { $sum: failExpr } } },
+            ],
+            byModule: [
+              { $group: { _id: '$moduleId', total: { $sum: 1 }, passed: { $sum: passExpr }, failed: { $sum: failExpr } } },
+            ],
+            byApp: [
+              { $group: { _id: '$applicationId', total: { $sum: 1 }, passed: { $sum: passExpr }, failed: { $sum: failExpr } } },
+            ],
+            byTester: [
+              { $group: { _id: { $ifNull: ['$testedBy', ''] }, total: { $sum: 1 }, passed: { $sum: passExpr }, failed: { $sum: failExpr } } },
+            ],
+          },
+        },
+      ]).toArray(),
+      db.collection('applications').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
+      db.collection('modules').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
+    ]);
 
     const appMap = Object.fromEntries(applications.map((a) => [a._id.toString(), a.name]));
     const modMap = Object.fromEntries(modules.map((m) => [m._id.toString(), m.name]));
 
-    const enriched = testCases.map((tc) => ({
-      ...tc,
-      _id: tc._id.toString(),
-      applicationName: appMap[tc.applicationId] || 'Unknown',
-      moduleName: modMap[tc.moduleId] || 'Unknown',
-      status: normalizedStatus(tc.status),
-    }));
-
-    const total = enriched.length;
-    const passed = enriched.filter((t) => t.status === 'Pass').length;
-    const failed = enriched.filter((t) => t.status === 'Fail').length;
+    const s = agg.summary[0] ?? { total: 0, passed: 0, failed: 0 };
+    const { total, passed, failed } = s;
     const pending = total - passed - failed;
 
-    // Module breakdown
-    const moduleGroups = {};
-    enriched.forEach((tc) => {
-      const key = tc.moduleName;
-      if (!moduleGroups[key]) moduleGroups[key] = { total: 0, passed: 0, failed: 0, pending: 0 };
-      moduleGroups[key].total++;
-      if (tc.status === 'Pass') moduleGroups[key].passed++;
-      else if (tc.status === 'Fail') moduleGroups[key].failed++;
-      else moduleGroups[key].pending++;
-    });
+    const moduleGroups = Object.fromEntries(
+      agg.byModule.map(({ _id, total: t, passed: p, failed: f }) => [
+        modMap[_id] || 'Unknown',
+        { total: t, passed: p, failed: f, pending: t - p - f },
+      ])
+    );
 
-    // Application breakdown
-    const appGroups = {};
-    enriched.forEach((tc) => {
-      const key = tc.applicationName;
-      if (!appGroups[key]) appGroups[key] = { total: 0, passed: 0, failed: 0, pending: 0 };
-      appGroups[key].total++;
-      if (tc.status === 'Pass') appGroups[key].passed++;
-      else if (tc.status === 'Fail') appGroups[key].failed++;
-      else appGroups[key].pending++;
-    });
+    // Also keyed by module ID for the Modules page (avoids name collisions)
+    const moduleGroupsById = Object.fromEntries(
+      agg.byModule.map(({ _id, total: t, passed: p, failed: f }) => [
+        _id,
+        { total: t, passed: p, failed: f, pending: t - p - f },
+      ])
+    );
 
-    // Tester breakdown
-    const testerGroups = {};
-    enriched.forEach((tc) => {
-      const key = tc.testedBy || 'Unassigned';
-      if (!testerGroups[key]) testerGroups[key] = { total: 0, passed: 0, failed: 0, pending: 0 };
-      testerGroups[key].total++;
-      if (tc.status === 'Pass') testerGroups[key].passed++;
-      else if (tc.status === 'Fail') testerGroups[key].failed++;
-      else testerGroups[key].pending++;
-    });
+    const appGroups = Object.fromEntries(
+      agg.byApp.map(({ _id, total: t, passed: p, failed: f }) => [
+        appMap[_id] || 'Unknown',
+        { total: t, passed: p, failed: f, pending: t - p - f },
+      ])
+    );
+
+    const testerGroups = Object.fromEntries(
+      agg.byTester.map(({ _id, total: t, passed: p, failed: f }) => [
+        _id || 'Unassigned',
+        { total: t, passed: p, failed: f, pending: t - p - f },
+      ])
+    );
 
     return NextResponse.json({
       summary: {
@@ -81,9 +89,10 @@ export async function GET(request) {
         failPercent: total ? Math.round((failed / total) * 100) : 0,
       },
       moduleGroups,
+      moduleGroupsById,
       appGroups,
       testerGroups,
-    });
+    }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' } });
   } catch (error) {
     console.error('Dashboard error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

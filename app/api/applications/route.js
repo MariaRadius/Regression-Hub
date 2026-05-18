@@ -15,7 +15,10 @@ export async function GET() {
       .sort({ name: 1 })
       .toArray();
 
-    return NextResponse.json(applications.map((a) => ({ ...a, _id: a._id.toString() })));
+    return NextResponse.json(
+      applications.map((a) => ({ ...a, _id: a._id.toString() })),
+      { headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=600' } }
+    );
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

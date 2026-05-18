@@ -24,16 +24,30 @@ export default function Sidebar() {
   return (
     <aside className={`sidebar ${open ? 'open' : 'collapsed'}`}>
       <div className="brand">
-        <div className="brand-mark">QA</div>
-        {open && (
-          <div className="brand-text">
-            <h1>Regression Hub</h1>
-            <p>Testing management</p>
-          </div>
+        {open ? (
+          <>
+            <div className="brand-mark">QA</div>
+            <div className="brand-text">
+              <h1>Regression Hub</h1>
+              <p>Testing management</p>
+            </div>
+            <button className="sidebar-toggle" onClick={() => setOpen(false)} aria-label="Collapse sidebar">‹</button>
+          </>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="Expand sidebar"
+            title="Expand"
+            style={{
+              background: 'linear-gradient(135deg, #0d9488, #0891b2)',
+              border: 'none', cursor: 'pointer',
+              width: 36, height: 36, borderRadius: 8,
+              color: '#fff', fontWeight: 700, fontSize: 13,
+              display: 'grid', placeItems: 'center',
+              margin: '0 auto', letterSpacing: '0.5px',
+            }}
+          >QA</button>
         )}
-        <button className="sidebar-toggle" onClick={() => setOpen(!open)} aria-label="Toggle sidebar">
-          {open ? '‹' : '›'}
-        </button>
       </div>
 
       <nav>

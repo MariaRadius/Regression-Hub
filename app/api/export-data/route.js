@@ -11,12 +11,19 @@ export async function GET(request) {
     const db = await getDb();
     const teamId = session.user.teamId;
     const { searchParams } = new URL(request.url);
-    const applicationId = searchParams.get('applicationId') || '';
+    const applicationId    = searchParams.get('applicationId') || '';
+    const testRunId        = searchParams.get('testRunId') || '';
+    const softwareVersion  = searchParams.get('softwareVersion') || '';
 
-    const query = applicationId ? { teamId, applicationId } : { teamId };
-    const testCases = await db.collection('testCases').find(query).sort({ createdAt: 1 }).toArray();
-    const applications = await db.collection('applications').find({ teamId }).toArray();
-    const modules = await db.collection('modules').find({ teamId }).toArray();
+    const query = { teamId };
+    if (applicationId)   query.applicationId = applicationId;
+    if (testRunId)       query.testRunId = testRunId;
+    if (softwareVersion) query.softwareVersionTested = softwareVersion;
+    const [testCases, applications, modules] = await Promise.all([
+      db.collection('testCases').find(query).sort({ createdAt: 1 }).toArray(),
+      db.collection('applications').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
+      db.collection('modules').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
+    ]);
 
     const appMap = Object.fromEntries(applications.map((a) => [a._id.toString(), a.name]));
     const modMap = Object.fromEntries(modules.map((m) => [m._id.toString(), m.name]));
