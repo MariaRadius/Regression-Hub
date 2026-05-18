@@ -2,7 +2,6 @@ import * as XLSX from 'xlsx';
 import { canonicalColumn, normalizeHeader } from './canonicalColumn';
 
 const REQUIRED_COLUMNS = ['Module', 'Test Case ID', 'Test Case', 'Expected Result'];
-const QA_USERS = ['Ammad', 'Maria', 'Sohail'];
 
 function normalizeText(value) {
   if (value === null || value === undefined) return '';
@@ -11,10 +10,6 @@ function normalizeText(value) {
 }
 
 function inferApplication(row, sheetName) {
-  const explicit = normalizeText(row['Application']);
-  if (explicit) return explicit;
-  const type = normalizeText(row['Type']);
-  if (type && !/^(smoke|regression|sanity|functional|e2e|integration)$/i.test(type)) return type;
   return normalizeText(sheetName) || 'Default Application';
 }
 
@@ -22,7 +17,7 @@ function looksLikeDataRow(row) {
   return Object.values(row).some((v) => normalizeText(v));
 }
 
-export function parseWorkbookBuffer(buffer) {
+export function parseWorkbookBuffer(buffer, qaUsers = []) {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const importedRows = [];
   const missingBySheet = [];
@@ -64,7 +59,7 @@ export function parseWorkbookBuffer(buffer) {
         actualResult: row['Actual Result'] || '',
         status: ['Pass', 'Fail'].includes(row['Status']) ? row['Status'] : '',
         defectsImprovements: row['Defects/Improvements'] || '',
-        testedBy: QA_USERS.includes(row['Tested By']) ? row['Tested By'] : '',
+        testedBy: (!qaUsers.length || qaUsers.includes(row['Tested By'])) ? row['Tested By'] : '',
         testedOn: row['Tested On'] || '',
         softwareVersionTested: row['Software Version Tested'] || '',
       });

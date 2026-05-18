@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ToastProvider, { showToast } from '@/components/Toast';
-import { QA_USERS, normalizedStatus, toDateInputValue, dateStamp } from '@/utils/formatters';
+import { normalizedStatus, toDateInputValue, dateStamp } from '@/utils/formatters';
 
 function statusClass(status) {
   if (status === 'Pass') return 'pass';
@@ -24,12 +24,36 @@ export default function TestCasesPage() {
   const [fTester, setFTester] = useState('');
   const [fVersion, setFVersion] = useState('');
 
+  // Team QA users (loaded from settings, team-scoped)
+  const [qaUsers, setQaUsers] = useState([]);
+
   // Bulk fill
   const [bStatus, setBStatus] = useState('');
+  const [bFromTester, setBFromTester] = useState('');
   const [bTester, setBTester] = useState('');
   const [bDate, setBDate] = useState('');
   const [bVersion, setBVersion] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectPage(pageIds, allSelected) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) { pageIds.forEach((id) => next.delete(id)); }
+      else { pageIds.forEach((id) => next.add(id)); }
+      return next;
+    });
+  }
 
   // Pagination
   const PAGE_SIZE = 50;
@@ -37,9 +61,58 @@ export default function TestCasesPage() {
 
   // Sticky context
   const sticky = useRef({ testedBy: '', testedOn: '', softwareVersionTested: '' });
+  const versionSaveTimer = useRef(null);
+
+  // Load saved version from team settings — stored in a ref so fetchData can read it
+  const settingsVersionRef = useRef('');
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((s) => {
+        if (s.softwareVersion) {
+          setBVersion(s.softwareVersion);
+          settingsVersionRef.current = s.softwareVersion;
+        }
+        if (s.qaUsers?.length) setQaUsers(s.qaUsers);
+      })
+      .catch(() => {});
+  }, []);
+
+  // When cases load and bVersion is set, apply it to all rows
+  const casesRef = useRef([]);
+  useEffect(() => { casesRef.current = cases; }, [cases]);
+
+  // Apply version to all visible cases (state + DB) and sync to settings
+  function handleVersionChange(val) {
+    setBVersion(val);
+    clearTimeout(versionSaveTimer.current);
+    versionSaveTimer.current = setTimeout(async () => {
+      // 1. Update team settings
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ softwareVersion: val }),
+      }).catch(() => {});
+
+      // 2. Apply to all visible cases in state immediately
+      if (!val || !casesRef.current.length) return;
+      setCases((prev) => prev.map((tc) => ({ ...tc, softwareVersionTested: val })));
+
+      // 3. Persist to DB for all visible cases
+      fetch('/api/test-cases-bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: casesRef.current.map((t) => t._id),
+          fields: { softwareVersionTested: val },
+        }),
+      }).catch(() => {});
+    }, 800);
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setSelectedIds(new Set());
     try {
       const params = new URLSearchParams();
       if (fApp) params.set('applicationId', fApp);
@@ -48,12 +121,25 @@ export default function TestCasesPage() {
       if (fTester) params.set('testedBy', fTester);
       if (fVersion) params.set('version', fVersion);
 
+      // Ensure settings are loaded before cases so the version ref is populated
+      if (!settingsVersionRef.current) {
+        const s = await fetch('/api/settings').then((r) => r.json()).catch(() => ({}));
+        if (s.softwareVersion) {
+          settingsVersionRef.current = s.softwareVersion;
+          setBVersion(s.softwareVersion);
+        }
+        if (s.qaUsers?.length) setQaUsers(s.qaUsers);
+      }
+
       const [casesRes, appsRes, modsRes] = await Promise.all([
         fetch(`/api/test-cases?${params}`),
         fetch('/api/applications'),
         fetch('/api/modules'),
       ]);
-      setCases(await casesRes.json());
+      const loadedCases = await casesRes.json();
+      const ver = settingsVersionRef.current;
+      // Apply current team version to every row so display is always in sync
+      setCases(ver ? loadedCases.map((tc) => ({ ...tc, softwareVersionTested: ver })) : loadedCases);
       setApplications(await appsRes.json());
       setModules(await modsRes.json());
     } catch (e) {
@@ -104,23 +190,32 @@ export default function TestCasesPage() {
       showToast('Set at least one field', 'info');
       return;
     }
-    const targets = pendingOnly
-      ? cases.filter((tc) => normalizedStatus(tc.status) === 'Pending')
-      : [...cases];
+
+    const hasSelection = selectedIds.size > 0;
+    let targets;
+    if (hasSelection) {
+      targets = cases.filter((tc) => selectedIds.has(tc._id));
+      if (pendingOnly) targets = targets.filter((tc) => normalizedStatus(tc.status) === 'Pending');
+    } else {
+      targets = pendingOnly
+        ? cases.filter((tc) => normalizedStatus(tc.status) === 'Pending')
+        : [...cases];
+      if (bFromTester) targets = targets.filter((tc) => tc.testedBy === bFromTester);
+    }
 
     if (!targets.length) {
-      showToast(pendingOnly ? 'No pending rows' : 'No visible rows', 'info');
+      showToast(pendingOnly ? 'No pending rows' : 'No rows to fill', 'info');
       return;
     }
 
     setBulkLoading(true);
     try {
       const fields = {};
-      if (bStatus) fields.status = bStatus;
+      if (bStatus) fields.status = bStatus === 'Pending' ? '' : bStatus;
       if (bTester) fields.testedBy = bTester;
       if (bDate) fields.testedOn = bDate;
       if (bVersion) fields.softwareVersionTested = bVersion;
-      if (bStatus && !bDate) fields.testedOn = dateStamp();
+      if (bStatus && bStatus !== 'Pending' && !bDate) fields.testedOn = dateStamp();
 
       const res = await fetch('/api/test-cases-bulk', {
         method: 'PATCH',
@@ -129,9 +224,19 @@ export default function TestCasesPage() {
       });
       if (!res.ok) throw new Error('Bulk save failed');
 
+      // Persist the applied version to team settings so dashboard & reports stay in sync
+      if (bVersion) {
+        fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ softwareVersion: bVersion }),
+        }).catch(() => {});
+      }
+
       setCases((prev) => prev.map((tc) =>
         targets.find((t) => t._id === tc._id) ? { ...tc, ...fields } : tc
       ));
+      setSelectedIds(new Set());
       showToast(`${targets.length} rows updated`, 'success');
     } catch (e) {
       showToast(e.message, 'error');
@@ -142,10 +247,19 @@ export default function TestCasesPage() {
 
   async function clearAll() {
     if (!confirm('Delete ALL test cases, applications, modules, and test runs from the database?')) return;
-    await fetch('/api/test-cases', { method: 'DELETE' });
+    await Promise.all([
+      fetch('/api/test-cases', { method: 'DELETE' }),
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testEnvironment: '', softwareVersion: '' }),
+      }),
+    ]);
     setCases([]);
     setApplications([]);
     setModules([]);
+    setBVersion('');
+    settingsVersionRef.current = '';
     showToast('All data cleared', 'info');
   }
 
@@ -185,85 +299,200 @@ export default function TestCasesPage() {
       const { default: jsPDF } = await import('jspdf');
       const { autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const pw = doc.internal.pageSize.width;
+      const ph = doc.internal.pageSize.height;
 
-      const summary = {
-        total: cases.length,
-        passed: cases.filter((t) => normalizedStatus(t.status) === 'Pass').length,
-        failed: cases.filter((t) => normalizedStatus(t.status) === 'Fail').length,
-        pending: cases.filter((t) => normalizedStatus(t.status) === 'Pending').length,
-      };
-      summary.passPercent = summary.total ? Math.round((summary.passed / summary.total) * 100) : 0;
+      // Draw a donut chart using native jsPDF polygon approximation — no canvas needed
+      function drawDonut(cx, cy, outerR, innerR, pass, fail, pend) {
+        const tot = pass + fail + pend;
+        if (!tot) {
+          doc.setFillColor(226, 232, 240);
+          doc.circle(cx, cy, outerR, 'F');
+          doc.setFillColor(255, 255, 255);
+          doc.circle(cx, cy, innerR, 'F');
+          return;
+        }
+        const segs = [
+          { count: pass, color: [22, 163, 74] },
+          { count: fail, color: [220, 38, 38] },
+          { count: pend, color: [217, 119, 6] },
+        ].filter((s) => s.count > 0);
 
-      // Cover header
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, doc.internal.pageSize.width, 80, 'F');
-      doc.setFillColor(13, 148, 136);
-      doc.rect(0, 0, doc.internal.pageSize.width, 4, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Regression Testing Signoff Report', 36, 36);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 36, 56);
-      doc.text(`Total: ${summary.total}  Pass: ${summary.passed}  Fail: ${summary.failed}  Pending: ${summary.pending}  Pass Rate: ${summary.passPercent}%`, 36, 70);
-
-      doc.setTextColor(23, 32, 42);
-      autoTable(doc, {
-        startY: 100,
-        head: [['Application', 'Module', 'ID', 'Test Case', 'Expected', 'Actual', 'Status', 'Tested By', 'Version']],
-        body: cases.slice(0, 500).map((t) => [
-          t.applicationName, t.moduleName, t.testCaseId, t.testCase,
-          t.expectedResult, t.actualResult, normalizedStatus(t.status),
-          t.testedBy, t.softwareVersionTested,
-        ]),
-        styles: { fontSize: 7, cellPadding: 4, overflow: 'linebreak' },
-        headStyles: { fillColor: [30, 41, 59], textColor: 255 },
-        columnStyles: { 3: { cellWidth: 100 }, 4: { cellWidth: 100 }, 5: { cellWidth: 80 } },
-        didParseCell(data) {
-          if (data.section === 'body' && data.column.index === 6) {
-            const v = data.cell.raw;
-            if (v === 'Pass') data.cell.styles.textColor = [22, 163, 74];
-            if (v === 'Fail') data.cell.styles.textColor = [220, 38, 38];
-            if (v === 'Pending') data.cell.styles.textColor = [217, 119, 6];
+        let a0 = -Math.PI / 2;
+        for (const seg of segs) {
+          const sweep = (seg.count / tot) * 2 * Math.PI;
+          const a1 = a0 + sweep;
+          const steps = Math.max(6, Math.ceil(sweep * 18));
+          const sx = cx + outerR * Math.cos(a0);
+          const sy = cy + outerR * Math.sin(a0);
+          const lines = [];
+          let px = sx, py = sy;
+          for (let i = 1; i <= steps; i++) {
+            const a = a0 + sweep * i / steps;
+            const nx = cx + outerR * Math.cos(a); const ny = cy + outerR * Math.sin(a);
+            lines.push([nx - px, ny - py]); px = nx; py = ny;
           }
-        },
-        theme: 'striped',
-      });
-
-      // Failed cases
-      const failed = cases.filter((t) => normalizedStatus(t.status) === 'Fail');
-      if (failed.length) {
-        doc.addPage();
-        doc.setFillColor(15, 23, 42);
-        doc.rect(0, 0, doc.internal.pageSize.width, 32, 'F');
-        doc.setFillColor(220, 38, 38);
-        doc.rect(0, 0, doc.internal.pageSize.width, 3, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(13);
-        doc.text('Bug Report', 36, 22);
-        doc.setTextColor(23, 32, 42);
-        autoTable(doc, {
-          startY: 44,
-          head: [['Application', 'Module', 'Test Case ID', 'Defects/Improvements', 'Actual Result', 'Tested By']],
-          body: failed.map((t) => [t.applicationName, t.moduleName, t.testCaseId, t.defectsImprovements || '—', t.actualResult, t.testedBy]),
-          styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak' },
-          headStyles: { fillColor: [153, 27, 27], textColor: 255 },
-          columnStyles: { 3: { cellWidth: 200 } },
-          theme: 'grid',
-        });
+          for (let i = steps; i >= 0; i--) {
+            const a = a0 + sweep * i / steps;
+            const nx = cx + innerR * Math.cos(a); const ny = cy + innerR * Math.sin(a);
+            lines.push([nx - px, ny - py]); px = nx; py = ny;
+          }
+          doc.setFillColor(...seg.color);
+          doc.lines(lines, sx, sy, [1, 1], 'F', true);
+          a0 = a1;
+        }
+        doc.setFillColor(255, 255, 255);
+        doc.circle(cx, cy, innerR, 'F');
       }
 
-      // Signoff
-      const sy = (doc.lastAutoTable?.finalY || 300) + 36;
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Signoff', 36, sy);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text('QA Lead: ___________________________________', 36, sy + 30);
-      doc.text('Product Owner: ________________________________', 280, sy + 30);
-      doc.text('Date: _______________________________', 560, sy + 30);
+      // Overall stats
+      const total = cases.length;
+      const pass  = cases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
+      const fail  = cases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
+      const pend  = cases.filter((t) => normalizedStatus(t.status) === 'Pending').length;
+      const pct   = total ? Math.round((pass / total) * 100) : 0;
+
+      // ── PAGE 1: Cover ──────────────────────────────────────────
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pw, 80, 'F');
+      doc.setFillColor(13, 148, 136);
+      doc.rect(0, 0, pw, 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22); doc.setFont('helvetica', 'bold');
+      doc.text('Regression Testing Signoff Report', 36, 38);
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 36, 58);
+      doc.text(`Total: ${total}  |  Passed: ${pass}  |  Failed: ${fail}  |  Pending: ${pend}  |  Pass Rate: ${pct}%`, 36, 72);
+
+      // Overall donut centred on cover page
+      drawDonut(pw / 2, 190, 86, 46, pass, fail, pend);
+
+      // Legend below donut
+      const legendY = 292;
+      const legendItems = [
+        [22, 163, 74, `Passed  ${pass}`, pass],
+        [220, 38, 38, `Failed  ${fail}`, fail],
+        [217, 119, 6, `Pending  ${pend}`, pend],
+      ].filter(([,,,,c]) => c > 0);
+      legendItems.forEach(([r, g, b, label], i) => {
+        const lx = pw / 2 - (legendItems.length * 88) / 2 + i * 88;
+        doc.setFillColor(r, g, b); doc.rect(lx, legendY, 10, 10, 'F');
+        doc.setTextColor(23, 32, 42); doc.setFontSize(9);
+        doc.text(label, lx + 14, legendY + 9);
+      });
+
+      // ── PER-APPLICATION pages ──────────────────────────────────
+      const appNames = [...new Set(cases.map((t) => t.applicationName))].sort();
+
+      for (const appName of appNames) {
+        doc.addPage();
+        const appCases = cases.filter((t) => t.applicationName === appName);
+        const ap  = appCases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
+        const af  = appCases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
+        const apd = appCases.filter((t) => normalizedStatus(t.status) === 'Pending').length;
+        const at  = appCases.length;
+        const apct = at ? Math.round((ap / at) * 100) : 0;
+
+        // App header bar
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, pw, 36, 'F');
+        doc.setFillColor(13, 148, 136);
+        doc.rect(0, 0, pw, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+        doc.text(appName, 36, 24);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        doc.text(`${at} test cases  ·  ${apct}% pass rate`, pw - 36, 24, { align: 'right' });
+
+        // Donut (left side)
+        const dCx = 96, dCy = 104;
+        drawDonut(dCx, dCy, 54, 29, ap, af, apd);
+
+        // Stats (right of donut)
+        const sx = 166, sy = 58;
+        doc.setFontSize(10);
+        doc.setTextColor(22, 163, 74);  doc.text(`● Passed   ${ap}`, sx, sy);
+        doc.setTextColor(220, 38, 38);  doc.text(`● Failed   ${af}`, sx, sy + 18);
+        doc.setTextColor(217, 119, 6);  doc.text(`● Pending  ${apd}`, sx, sy + 36);
+        doc.setTextColor(23, 32, 42);
+        doc.setFont('helvetica', 'bold');   doc.text(`${apct}% Pass Rate`, sx, sy + 58);
+        doc.setFont('helvetica', 'normal'); doc.text(`${at} total cases`, sx, sy + 74);
+
+        // Module summary table
+        const modMap = {};
+        for (const tc of appCases) {
+          if (!modMap[tc.moduleName]) modMap[tc.moduleName] = { p: 0, f: 0, d: 0 };
+          const s = normalizedStatus(tc.status);
+          modMap[tc.moduleName][s === 'Pass' ? 'p' : s === 'Fail' ? 'f' : 'd']++;
+        }
+        const modRows = Object.entries(modMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([mod, s]) => {
+            const tot = s.p + s.f + s.d;
+            return [mod, tot, s.p, s.f, s.d, `${tot ? Math.round((s.p / tot) * 100) : 0}%`];
+          });
+
+        autoTable(doc, {
+          startY: 172,
+          head: [['Module', 'Total', 'Pass', 'Fail', 'Pending', 'Pass Rate']],
+          body: modRows,
+          styles: { fontSize: 8, cellPadding: 4 },
+          headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+          columnStyles: {
+            1: { halign: 'center', cellWidth: 50 },
+            2: { halign: 'center', cellWidth: 50, textColor: [22, 163, 74], fontStyle: 'bold' },
+            3: { halign: 'center', cellWidth: 50, textColor: [220, 38, 38], fontStyle: 'bold' },
+            4: { halign: 'center', cellWidth: 60, textColor: [217, 119, 6], fontStyle: 'bold' },
+            5: { halign: 'center', cellWidth: 70 },
+          },
+          theme: 'striped',
+        });
+
+        // Defects summary — compact, only if failures exist
+        const failedCases = appCases.filter((t) => normalizedStatus(t.status) === 'Fail');
+        if (failedCases.length) {
+          let dy = (doc.lastAutoTable?.finalY || 300) + 20;
+          if (dy + 60 > ph - 20) { doc.addPage(); dy = 36; }
+
+          doc.setFillColor(153, 27, 27);
+          doc.rect(0, dy, pw, 22, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+          doc.text(
+            `Defects Summary  —  ${failedCases.length} failure${failedCases.length !== 1 ? 's' : ''}`,
+            36, dy + 15,
+          );
+
+          autoTable(doc, {
+            startY: dy + 26,
+            head: [['Module', 'Test Case ID', 'Defect / Issue']],
+            body: failedCases.map((t) => [
+              t.moduleName || '—',
+              t.testCaseId || '—',
+              t.defectsImprovements || t.actualResult || '—',
+            ]),
+            styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak' },
+            headStyles: { fillColor: [153, 27, 27], textColor: 255 },
+            columnStyles: { 0: { cellWidth: 150 }, 1: { cellWidth: 90 } },
+            theme: 'grid',
+          });
+        }
+      }
+
+      // ── Signoff page ───────────────────────────────────────────
+      doc.addPage();
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pw, 32, 'F');
+      doc.setFillColor(13, 148, 136);
+      doc.rect(0, 0, pw, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+      doc.text('Signoff', 36, 22);
+      doc.setTextColor(23, 32, 42);
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text('QA Lead: ___________________________________', 36, 80);
+      doc.text('Product Owner: ________________________________', 300, 80);
+      doc.text('Date: _______________________________', 580, 80);
 
       const fileName = `regression-signoff-${dateStamp()}.pdf`;
       doc.save(fileName);
@@ -280,6 +509,10 @@ export default function TestCasesPage() {
 
   const totalPages = Math.max(1, Math.ceil(cases.length / PAGE_SIZE));
   const pageData = cases.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageIds = pageData.map((t) => t._id);
+  const selectedOnPage = pageIds.filter((id) => selectedIds.has(id));
+  const allPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length;
+  const somePageSelected = selectedOnPage.length > 0 && !allPageSelected;
 
   return (
     <div>
@@ -300,28 +533,52 @@ export default function TestCasesPage() {
       {/* Bulk fill */}
       <div className="panel" style={{ marginBottom: 16 }}>
         <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3>Bulk Fill</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h3 style={{ margin: 0 }}>Bulk Fill</h3>
+            {selectedIds.size > 0 && (
+              <span style={{ fontSize: 12, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '2px 10px', fontWeight: 600 }}>
+                {selectedIds.size} selected
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, marginLeft: 6, padding: 0, lineHeight: 1, opacity: 0.8 }}
+                  title="Clear selection"
+                >×</button>
+              </span>
+            )}
+          </div>
           <button
-            onClick={() => { setBStatus(''); setBTester(''); setBDate(''); setBVersion(''); }}
+            onClick={() => { setBStatus(''); setBFromTester(''); setBTester(''); setBDate(''); setBVersion(''); }}
             title="Clear bulk fill fields"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}
           >×</button>
         </div>
         <div className="panel-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, alignItems: 'end' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, alignItems: 'end' }}>
             <div className="field-group">
               <label className="field-label">Fill Status</label>
               <select className="field-select" value={bStatus} onChange={(e) => setBStatus(e.target.value)}>
                 <option value="">No change</option>
                 <option value="Pass">Pass</option>
                 <option value="Fail">Fail</option>
+                <option value="Pending">Pending</option>
               </select>
             </div>
             <div className="field-group">
-              <label className="field-label">Fill Tested By</label>
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                From Tester
+                <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>(filter)</span>
+              </label>
+              <select className="field-select" value={bFromTester} onChange={(e) => setBFromTester(e.target.value)}
+                style={{ borderColor: bFromTester ? 'var(--accent)' : undefined }}>
+                <option value="">All visible</option>
+                {qaUsers.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div className="field-group">
+              <label className="field-label">→ Reassign To</label>
               <select className="field-select" value={bTester} onChange={(e) => setBTester(e.target.value)}>
                 <option value="">No change</option>
-                {QA_USERS.map((u) => <option key={u} value={u}>{u}</option>)}
+                {qaUsers.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div className="field-group">
@@ -330,14 +587,14 @@ export default function TestCasesPage() {
             </div>
             <div className="field-group">
               <label className="field-label">Fill Version</label>
-              <input className="field-input" type="text" value={bVersion} onChange={(e) => setBVersion(e.target.value)} placeholder="No change" />
+              <input className="field-input" type="text" value={bVersion} onChange={(e) => handleVersionChange(e.target.value)} placeholder="e.g. 2.4.1" />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-secondary" onClick={() => bulkFill(true)} disabled={bulkLoading} style={{ flex: 1 }}>
                 Fill Pending
               </button>
               <button className="btn btn-primary" onClick={() => bulkFill(false)} disabled={bulkLoading} style={{ flex: 1 }}>
-                Fill Visible
+                {selectedIds.size > 0 ? `Fill Selected (${selectedIds.size})` : 'Fill Visible'}
               </button>
             </div>
           </div>
@@ -387,7 +644,7 @@ export default function TestCasesPage() {
               </label>
               <select className="field-select" value={fTester} onChange={(e) => setFTester(e.target.value)}>
                 <option value="">All</option>
-                {QA_USERS.map((u) => <option key={u} value={u}>{u}</option>)}
+                {qaUsers.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div className="field-group">
@@ -413,6 +670,15 @@ export default function TestCasesPage() {
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: 36, textAlign: 'center', padding: '8px 6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={(el) => { if (el) el.indeterminate = somePageSelected; }}
+                      onChange={() => toggleSelectPage(pageIds, allPageSelected)}
+                      title={allPageSelected ? 'Deselect page' : 'Select page'}
+                    />
+                  </th>
                   {['Platform','Module','Type','Traceability','Test Case ID','Test Case','Preconditions',
                     'Steps','Expected Result','Actual Result','Status','Defects','Tested By','Tested On','Version'].map((h) => (
                     <th key={h}>{h}</th>
@@ -426,6 +692,9 @@ export default function TestCasesPage() {
                     tc={tc}
                     saving={!!saving[tc._id]}
                     onSave={saveField}
+                    selected={selectedIds.has(tc._id)}
+                    onToggle={() => toggleSelect(tc._id)}
+                    qaUsers={qaUsers}
                   />
                 ))}
               </tbody>
@@ -457,7 +726,7 @@ export default function TestCasesPage() {
   );
 }
 
-function TestCaseRow({ tc, saving, onSave }) {
+function TestCaseRow({ tc, saving, onSave, selected, onToggle, qaUsers }) {
   const [local, setLocal] = useState(tc);
   useEffect(() => { setLocal(tc); }, [tc]);
 
@@ -469,7 +738,10 @@ function TestCaseRow({ tc, saving, onSave }) {
   const st = normalizedStatus(local.status);
 
   return (
-    <tr style={{ opacity: saving ? 0.7 : 1, transition: 'opacity 200ms' }}>
+    <tr style={{ opacity: saving ? 0.7 : 1, transition: 'opacity 200ms', background: selected ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
+      <td style={{ width: 36, textAlign: 'center', padding: '4px 6px' }}>
+        <input type="checkbox" checked={selected} onChange={onToggle} />
+      </td>
       <td style={{ color: 'var(--ink-2)', minWidth: 110 }}>{tc.applicationName}</td>
       <td style={{ minWidth: 110 }}>{tc.moduleName}</td>
       <td>{tc.type}</td>
@@ -483,7 +755,8 @@ function TestCaseRow({ tc, saving, onSave }) {
         <input
           className="table-input"
           style={{ minWidth: 140 }}
-          defaultValue={local.actualResult}
+          value={local.actualResult || ''}
+          onChange={(e) => setLocal((prev) => ({ ...prev, actualResult: e.target.value }))}
           onBlur={(e) => { if (e.target.value !== tc.actualResult) handleChange('actualResult', e.target.value); }}
         />
       </td>
@@ -503,7 +776,8 @@ function TestCaseRow({ tc, saving, onSave }) {
         <input
           className="table-input"
           style={{ minWidth: 140 }}
-          defaultValue={local.defectsImprovements}
+          value={local.defectsImprovements || ''}
+          onChange={(e) => setLocal((prev) => ({ ...prev, defectsImprovements: e.target.value }))}
           onBlur={(e) => { if (e.target.value !== tc.defectsImprovements) handleChange('defectsImprovements', e.target.value); }}
         />
       </td>
@@ -515,7 +789,7 @@ function TestCaseRow({ tc, saving, onSave }) {
           style={{ minWidth: 100 }}
         >
           <option value="">—</option>
-          {QA_USERS.map((u) => <option key={u} value={u}>{u}</option>)}
+          {qaUsers.map((u) => <option key={u} value={u}>{u}</option>)}
         </select>
       </td>
       <td>
@@ -531,7 +805,8 @@ function TestCaseRow({ tc, saving, onSave }) {
         <input
           className="table-input"
           style={{ minWidth: 100 }}
-          defaultValue={local.softwareVersionTested}
+          value={local.softwareVersionTested || ''}
+          onChange={(e) => setLocal((prev) => ({ ...prev, softwareVersionTested: e.target.value }))}
           onBlur={(e) => { if (e.target.value !== tc.softwareVersionTested) handleChange('softwareVersionTested', e.target.value); }}
         />
       </td>

@@ -1,99 +1,102 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 import { ensureIndexes } from '@/lib/indexes';
 import { parseWorkbookBuffer } from '@/utils/excelImport';
 
-function makeUniqueKey(applicationName, moduleName, testCaseId) {
-  return [applicationName, moduleName, testCaseId]
-    .map((v) => String(v || '').toLowerCase().trim())
-    .join('::');
-}
+const TEAM_QA_USERS = {
+  radius: ['Ammad', 'Maria', 'Sohail'],
+  cb: ['Ali', 'Nimra', 'Aimen', 'Hamza'],
+};
 
-async function ensureApplication(db, name) {
-  const cleanName = name || 'Default Application';
-  const result = await db.collection('applications').findOneAndUpdate(
-    { name: cleanName },
-    { $setOnInsert: { name: cleanName, createdAt: new Date() } },
-    { upsert: true, returnDocument: 'after' }
-  );
-  return result;
-}
-
-async function ensureModule(db, applicationId, name) {
-  const cleanName = name || 'Unassigned';
-  const result = await db.collection('modules').findOneAndUpdate(
-    { applicationId: applicationId.toString(), name: cleanName },
-    { $setOnInsert: { applicationId: applicationId.toString(), name: cleanName, createdAt: new Date() } },
-    { upsert: true, returnDocument: 'after' }
-  );
-  return result;
+function resolveId(result) {
+  return (result._id ?? result.lastErrorObject?.upserted ?? result.value?._id).toString();
 }
 
 export async function POST(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const teamId = session.user.teamId;
+
     await ensureIndexes();
     const formData = await request.formData();
     const file = formData.get('file');
     const softwareVersion = formData.get('softwareVersion') || '';
-    const testEnvironment = formData.get('testEnvironment') || 'QA';
+    const testEnvironment = formData.get('testEnvironment') || '';
 
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const rows = parseWorkbookBuffer(buffer);
+    const qaUsers = TEAM_QA_USERS[teamId] || [];
+    const rows = parseWorkbookBuffer(buffer, qaUsers);
 
     if (!rows.length) {
       return NextResponse.json({ error: 'No valid test case rows found in the workbook.' }, { status: 400 });
     }
 
     const db = await getDb();
+    const now = new Date();
 
-    // Get existing unique keys to deduplicate
-    const existing = await db.collection('testCases').distinct('uniqueKey');
-    const existingSet = new Set(existing);
+    // ── Step 1: upsert all unique applications in parallel ──
+    const uniqueAppNames = [...new Set(rows.map((r) => r.applicationName || 'Default Application'))];
+    const appResults = await Promise.all(
+      uniqueAppNames.map((name) =>
+        db.collection('applications').findOneAndUpdate(
+          { name, teamId },
+          { $setOnInsert: { name, teamId, createdAt: now } },
+          { upsert: true, returnDocument: 'after' }
+        )
+      )
+    );
+    const appMap = Object.fromEntries(uniqueAppNames.map((name, i) => [name, resolveId(appResults[i])]));
 
-    const newRows = [];
-    const fileKeys = new Set();
-    let duplicateCount = 0;
+    // ── Step 2: upsert all unique modules in parallel ──
+    const uniqueModKeys = [
+      ...new Map(
+        rows.map((r) => {
+          const appName = r.applicationName || 'Default Application';
+          const modName = r.moduleName || 'Unassigned';
+          return [`${appName}::${modName}`, { appId: appMap[appName], modName }];
+        })
+      ).values(),
+    ];
+    const modResults = await Promise.all(
+      uniqueModKeys.map(({ appId, modName }) =>
+        db.collection('modules').findOneAndUpdate(
+          { applicationId: appId, name: modName, teamId },
+          { $setOnInsert: { applicationId: appId, name: modName, teamId, createdAt: now } },
+          { upsert: true, returnDocument: 'after' }
+        )
+      )
+    );
+    const modMap = Object.fromEntries(
+      uniqueModKeys.map(({ appId, modName }, i) => [`${appId}::${modName}`, resolveId(modResults[i])])
+    );
 
-    for (const row of rows) {
-      const uniqueKey = makeUniqueKey(row.applicationName, row.moduleName, row.testCaseId);
-      if (existingSet.has(uniqueKey) || fileKeys.has(uniqueKey)) {
-        duplicateCount++;
-        continue;
-      }
-      fileKeys.add(uniqueKey);
-      newRows.push({ ...row, uniqueKey });
-    }
-
-    if (!newRows.length) {
-      return NextResponse.json({ imported: 0, skipped: duplicateCount, testRunId: null });
-    }
-
-    // Create test run
+    // ── Step 3: create test run ──
     const testRunResult = await db.collection('testRuns').insertOne({
+      teamId,
       uploadedFileName: file.name,
       softwareVersion: softwareVersion || rows.find((r) => r.softwareVersionTested)?.softwareVersionTested || '',
       testEnvironment,
-      createdAt: new Date(),
-      importedCount: newRows.length,
-      skippedDuplicateCount: duplicateCount,
+      createdAt: now,
+      importedCount: rows.length,
     });
     const testRunId = testRunResult.insertedId.toString();
 
-    // Insert test cases
-    let imported = 0;
-    for (const row of newRows) {
-      const application = await ensureApplication(db, row.applicationName);
-      const appId = (application._id || application.lastErrorObject?.upserted || application.value?._id).toString();
-      const module = await ensureModule(db, appId, row.moduleName);
-      const modId = (module._id || module.lastErrorObject?.upserted || module.value?._id).toString();
-
-      await db.collection('testCases').insertOne({
+    // ── Step 4: bulk insert all test cases in one shot ──
+    const docs = rows.map((row) => {
+      const appName = row.applicationName || 'Default Application';
+      const modName = row.moduleName || 'Unassigned';
+      const appId = appMap[appName];
+      const modId = modMap[`${appId}::${modName}`];
+      return {
+        teamId,
         testRunId,
         applicationId: appId,
         moduleId: modId,
-        uniqueKey: row.uniqueKey,
         sourceFileName: file.name,
         sourceSheetName: row.sourceSheetName,
         type: row.type,
@@ -109,13 +112,15 @@ export async function POST(request) {
         testedBy: row.testedBy,
         testedOn: row.testedOn,
         softwareVersionTested: row.softwareVersionTested || softwareVersion,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      imported++;
-    }
+        testEnvironment,
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
 
-    return NextResponse.json({ imported, skipped: duplicateCount, testRunId });
+    await db.collection('testCases').insertMany(docs, { ordered: false });
+
+    return NextResponse.json({ imported: docs.length, skipped: 0, testRunId });
   } catch (error) {
     console.error('Import error:', error);
     return NextResponse.json({ error: error.message || 'Import failed' }, { status: 500 });

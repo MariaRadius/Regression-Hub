@@ -7,7 +7,7 @@ import { normalizedStatus, dateStamp } from '@/utils/formatters';
 export default function ReportsPage() {
   const [applications, setApplications] = useState([]);
   const [selectedApp, setSelectedApp] = useState('');
-  const [environment, setEnvironment] = useState('QA');
+  const [environment, setEnvironment] = useState('');
   const [version, setVersion] = useState('');
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [summary, setSummary] = useState(null);
@@ -15,6 +15,15 @@ export default function ReportsPage() {
   useEffect(() => {
     fetch('/api/applications').then((r) => r.json()).then(setApplications);
     fetchSummary('');
+
+    // Load saved team settings (persists across logout/login)
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((s) => {
+        if (s.testEnvironment !== undefined) setEnvironment(s.testEnvironment);
+        if (s.softwareVersion !== undefined) setVersion(s.softwareVersion);
+      })
+      .catch(() => {});
   }, []);
 
   async function fetchSummary(appId) {
@@ -274,91 +283,129 @@ export default function ReportsPage() {
       doc.setTextColor(50, 50, 50);
       doc.text(`•  Regression Test Cases — ${appName} (v${version || 'N/A'})`, ML, y);
 
-      // ── PAGE 2: Summary Donut + Module Table ───────────────────────
-      doc.addPage();
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, W, 32, 'F');
-      doc.setFillColor(13, 148, 136);
-      doc.rect(0, 0, W, 3, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-      doc.text('Summary', ML, 22);
-
-      // Donut chart title
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-      doc.text(`${appName} — Regression Testing`, W / 2, 56, { align: 'center' });
-
-      const cx = W / 2, cy = 185, outerR = 100, innerR = 58;
-      const segments = [
-        { label: 'Passed', value: passed, color: [22, 163, 74] },
-        { label: 'Failed', value: failed, color: [220, 38, 38] },
-        { label: 'Pending', value: pending, color: [217, 119, 6] },
-      ].filter((s) => s.value > 0);
-
-      let curAngle = 0;
-      for (const seg of segments) {
-        const sweep = (seg.value / total) * 360;
-        drawDonutSegment(cx, cy, outerR, innerR, curAngle, curAngle + sweep, seg.color);
-        curAngle += sweep;
-      }
-
-      // Legend items
-      const legendY = cy + outerR + 18;
-      const legendItemW = 90;
-      const legendTotalW = segments.length * legendItemW;
-      let lx = cx - legendTotalW / 2;
-      for (const seg of segments) {
-        doc.setFillColor(seg.color[0], seg.color[1], seg.color[2]);
-        doc.rect(lx, legendY, 9, 9, 'F');
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-        doc.text(`${seg.label}`, lx + 13, legendY + 7.5);
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
-        doc.text(`${seg.value}`, lx + 13 + doc.getTextWidth(`${seg.label}`) + 4, legendY + 7.5);
-        lx += legendItemW;
-      }
-
-      // Stats text
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-      doc.setTextColor(40, 40, 40);
-      const statsY = legendY + 22;
-      doc.text(`Total Test Cases: ${total}`, cx, statsY, { align: 'center' });
-      doc.text(`Total Passed: ${passed}`, cx, statsY + 14, { align: 'center' });
-      doc.text(`Total Failed: ${failed}`, cx, statsY + 28, { align: 'center' });
-      if (pending > 0) doc.text(`Total Pending: ${pending}`, cx, statsY + 42, { align: 'center' });
-
-      // Module summary table
-      const modTableY = statsY + (pending > 0 ? 58 : 44);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      doc.text('Module Summary', ML, modTableY);
-
-      autoTable(doc, {
-        startY: modTableY + 8,
-        head: [['Module', 'Application', 'Total', 'Pass', 'Fail', 'Pending', 'Pass Rate']],
-        body: moduleRows.map((m) => {
-          const pct = m.total ? Math.round((m.pass / m.total) * 100) : 0;
-          return [m.module, m.app, m.total, m.pass, m.fail, m.pending, `${pct}%`];
-        }),
-        margin: { left: ML, right: MR },
-        styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak', halign: 'center' },
-        headStyles: { fillColor: [30, 41, 59], textColor: 255, halign: 'center' },
-        columnStyles: {
-          0: { cellWidth: 155, halign: 'left' }, 1: { cellWidth: 120, halign: 'left' },
-          2: { cellWidth: 46 }, 3: { cellWidth: 46 },
-          4: { cellWidth: 46 }, 5: { cellWidth: 56 },
-          6: { cellWidth: 54 },
-        },
-        didParseCell(data) {
-          if (data.section === 'body') {
-            if (data.column.index === 3) data.cell.styles.textColor = [22, 163, 74];
-            if (data.column.index === 4) data.cell.styles.textColor = [220, 38, 38];
-            if (data.column.index === 5) data.cell.styles.textColor = [217, 119, 6];
-          }
-        },
-        theme: 'striped',
+      // ── Summary pages: one per application ────────────────────────
+      // Group all cases by application name
+      const appGroups = {};
+      cases.forEach((tc) => {
+        const an = tc.applicationName || 'Unknown';
+        if (!appGroups[an]) appGroups[an] = [];
+        appGroups[an].push(tc);
       });
+      const appGroupNames = Object.keys(appGroups).sort();
+
+      for (const aName of appGroupNames) {
+        const appCases = appGroups[aName];
+        const aPassed  = appCases.filter((t) => normalizedStatus(t.status) === 'Pass').length;
+        const aFailed  = appCases.filter((t) => normalizedStatus(t.status) === 'Fail').length;
+        const aPending = appCases.length - aPassed - aFailed;
+        const aTotal   = appCases.length;
+        const aPassPct = aTotal ? Math.round((aPassed / aTotal) * 100) : 0;
+
+        // Per-application module breakdown
+        const aModMap = {};
+        appCases.forEach((tc) => {
+          const key = tc.moduleId || tc.moduleName || '—';
+          if (!aModMap[key]) aModMap[key] = { module: tc.moduleName || '—', total: 0, pass: 0, fail: 0, pending: 0 };
+          aModMap[key].total++;
+          const st = normalizedStatus(tc.status);
+          if (st === 'Pass') aModMap[key].pass++;
+          else if (st === 'Fail') aModMap[key].fail++;
+          else aModMap[key].pending++;
+        });
+        const aModRows = Object.values(aModMap).sort((a, b) => a.module.localeCompare(b.module));
+
+        // New page for each application
+        doc.addPage();
+
+        // Dark header bar
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, W, 32, 'F');
+        doc.setFillColor(13, 148, 136);
+        doc.rect(0, 0, W, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Summary', ML, 22);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        doc.text(`${aTotal} cases  ·  ${aPassPct}% pass rate`, W - MR, 22, { align: 'right' });
+
+        // Application title
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+        doc.text(`${aName} — Regression Testing`, W / 2, 58, { align: 'center' });
+
+        // Donut chart
+        const cx = W / 2, cy = 178, outerR = 85, innerR = 46;
+        const dSegs = [
+          { label: 'Passed',  value: aPassed,  color: [22, 163, 74] },
+          { label: 'Failed',  value: aFailed,  color: [220, 38, 38] },
+          { label: 'Pending', value: aPending, color: [217, 119, 6] },
+        ].filter((s) => s.value > 0);
+
+        let curAngle = 0;
+        for (const seg of dSegs) {
+          const sweep = (seg.value / aTotal) * 360;
+          drawDonutSegment(cx, cy, outerR, innerR, curAngle, curAngle + sweep, seg.color);
+          curAngle += sweep;
+        }
+
+        // Legend
+        const legendY = cy + outerR + 14;
+        const legendItemW = 88;
+        let lx = cx - (dSegs.length * legendItemW) / 2;
+        for (const seg of dSegs) {
+          doc.setFillColor(seg.color[0], seg.color[1], seg.color[2]);
+          doc.rect(lx, legendY, 9, 9, 'F');
+          doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+          doc.text(seg.label, lx + 13, legendY + 7.5);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+          doc.text(`${seg.value}`, lx + 13 + doc.getTextWidth(seg.label) + 4, legendY + 7.5);
+          lx += legendItemW;
+        }
+
+        // Stats
+        const statsY = legendY + 22;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Total Test Cases: ${aTotal}`, cx, statsY, { align: 'center' });
+        doc.text(`Total Passed: ${aPassed}`, cx, statsY + 14, { align: 'center' });
+        doc.text(`Total Failed: ${aFailed}`, cx, statsY + 28, { align: 'center' });
+        if (aPending > 0) doc.text(`Total Pending: ${aPending}`, cx, statsY + 42, { align: 'center' });
+
+        // Module summary table
+        const modTableY = statsY + (aPending > 0 ? 58 : 44);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Module Summary', ML, modTableY);
+
+        autoTable(doc, {
+          startY: modTableY + 8,
+          head: [['Module', 'Total', 'Pass', 'Fail', 'Pending', 'Pass Rate']],
+          body: aModRows.map((m) => {
+            const pct = m.total ? Math.round((m.pass / m.total) * 100) : 0;
+            return [m.module, m.total, m.pass, m.fail, m.pending, `${pct}%`];
+          }),
+          margin: { left: ML, right: MR },
+          styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak', halign: 'center' },
+          headStyles: { fillColor: [30, 41, 59], textColor: 255, halign: 'center' },
+          columnStyles: {
+            0: { halign: 'left' },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 50 },
+            3: { cellWidth: 50 },
+            4: { cellWidth: 60 },
+            5: { cellWidth: 60 },
+          },
+          didParseCell(data) {
+            if (data.section === 'body') {
+              if (data.column.index === 2) data.cell.styles.textColor = [22, 163, 74];
+              if (data.column.index === 3) data.cell.styles.textColor = [220, 38, 38];
+              if (data.column.index === 4) data.cell.styles.textColor = [217, 119, 6];
+            }
+          },
+          theme: 'striped',
+        });
+      }
 
       // ── PAGE 3: Bug Report ─────────────────────────────────────────
       doc.addPage();
@@ -440,11 +487,11 @@ export default function ReportsPage() {
             </div>
             <div className="field-group">
               <label className="field-label">Test Environment</label>
-              <input className="field-input" value={environment} onChange={(e) => setEnvironment(e.target.value)} placeholder="QA" />
+              <input className="field-input" value={environment} onChange={(e) => setEnvironment(e.target.value)} onBlur={() => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testEnvironment: environment, softwareVersion: version }) }).catch(() => {})} placeholder="e.g. QA, Staging" />
             </div>
             <div className="field-group">
               <label className="field-label">Software Version</label>
-              <input className="field-input" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. 2.4.1" />
+              <input className="field-input" value={version} onChange={(e) => setVersion(e.target.value)} onBlur={() => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testEnvironment: environment, softwareVersion: version }) }).catch(() => {})} placeholder="e.g. 2.4.1" />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
