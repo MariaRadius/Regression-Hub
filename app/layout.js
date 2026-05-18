@@ -1,4 +1,5 @@
 import Sidebar from '@/components/Sidebar';
+import SessionWrapper from '@/components/SessionWrapper';
 import './globals.css';
 
 export const metadata = {
@@ -15,12 +16,14 @@ export default function RootLayout({ children }) {
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       </head>
       <body suppressHydrationWarning>
-        <div className="app-shell">
-          <Sidebar />
-          <main className="workspace">
-            {children}
-          </main>
-        </div>
+        <SessionWrapper>
+          <div className="app-shell">
+            <Sidebar />
+            <main className="workspace">
+              {children}
+            </main>
+          </div>
+        </SessionWrapper>
       </body>
     </html>
   );

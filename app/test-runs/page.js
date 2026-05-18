@@ -47,7 +47,7 @@ export default function TestRunsPage() {
                   <td style={{ fontWeight: 500 }}>{run.uploadedFileName}</td>
                   <td>
                     <span style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 5, padding: '2px 8px', fontSize: 12 }}>
-                      {run.testEnvironment || 'QA'}
+                      {run.testEnvironment || '—'}
                     </span>
                   </td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{run.softwareVersion || '—'}</td>

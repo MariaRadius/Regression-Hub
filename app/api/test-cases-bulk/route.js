@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 export async function PATCH(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { ids, fields } = await request.json();
     if (!ids?.length || !fields) {
       return NextResponse.json({ error: 'ids and fields required' }, { status: 400 });
@@ -22,7 +27,7 @@ export async function PATCH(request) {
     update.updatedAt = new Date();
 
     await db.collection('testCases').updateMany(
-      { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+      { _id: { $in: ids.map((id) => new ObjectId(id)) }, teamId: session.user.teamId },
       { $set: update }
     );
 

@@ -60,6 +60,10 @@ a { text-decoration: none; color: inherit; }
   grid-template-columns: var(--sidebar-collapsed-w) minmax(0, 1fr);
 }
 
+.app-shell:not(:has(.sidebar)) {
+  grid-template-columns: 1fr;
+}
+
 /* ── Sidebar ── */
 .sidebar {
   position: sticky;

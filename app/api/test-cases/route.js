@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 
 function normalizedStatus(status) {
@@ -7,24 +9,28 @@ function normalizedStatus(status) {
 
 export async function GET(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const db = await getDb();
+    const teamId = session.user.teamId;
     const { searchParams } = new URL(request.url);
 
-    const filterApp = searchParams.get('applicationId') || '';
-    const filterMod = searchParams.get('moduleId') || '';
+    const filterApp    = searchParams.get('applicationId') || '';
+    const filterMod    = searchParams.get('moduleId') || '';
     const filterStatus = searchParams.get('status') || '';
     const filterTestedBy = searchParams.get('testedBy') || '';
-    const filterVersion = searchParams.get('version') || '';
+    const filterVersion  = searchParams.get('version') || '';
 
-    const query = {};
+    const query = { teamId };
     if (filterApp) query.applicationId = filterApp;
     if (filterMod) query.moduleId = filterMod;
     if (filterTestedBy) query.testedBy = filterTestedBy;
     if (filterVersion) query.softwareVersionTested = { $regex: filterVersion, $options: 'i' };
 
-    const testCases = await db.collection('testCases').find(query).sort({ createdAt: 1 }).toArray();
-    const applications = await db.collection('applications').find({}).toArray();
-    const modules = await db.collection('modules').find({}).toArray();
+    const testCases    = await db.collection('testCases').find(query).sort({ createdAt: 1 }).toArray();
+    const applications = await db.collection('applications').find({ teamId }).toArray();
+    const modules      = await db.collection('modules').find({ teamId }).toArray();
 
     const appMap = Object.fromEntries(applications.map((a) => [a._id.toString(), a.name]));
     const modMap = Object.fromEntries(modules.map((m) => [m._id.toString(), m.name]));
@@ -36,7 +42,6 @@ export async function GET(request) {
       moduleName: modMap[tc.moduleId] || 'Unknown',
     }));
 
-    // Status filter (after enrichment since it uses normalizedStatus)
     if (filterStatus) {
       enriched = enriched.filter((tc) => normalizedStatus(tc.status) === filterStatus);
     }
@@ -48,15 +53,27 @@ export async function GET(request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const db = await getDb();
+    const teamId = session.user.teamId;
+
+    // Only deletes data belonging to the current team
+    const apps = await db.collection('applications').find({ teamId }).toArray();
+    const appIds = apps.map((a) => a._id.toString());
+    const mods = await db.collection('modules').find({ teamId }).toArray();
+    const modIds = mods.map((m) => m._id.toString());
+
     await Promise.all([
-      db.collection('testCases').deleteMany({}),
-      db.collection('testRuns').deleteMany({}),
-      db.collection('modules').deleteMany({}),
-      db.collection('applications').deleteMany({}),
+      db.collection('testCases').deleteMany({ teamId }),
+      db.collection('testRuns').deleteMany({ teamId }),
+      db.collection('modules').deleteMany({ teamId }),
+      db.collection('applications').deleteMany({ teamId }),
     ]);
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

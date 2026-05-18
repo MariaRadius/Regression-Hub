@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 
 function normalizedStatus(status) {
@@ -7,14 +9,18 @@ function normalizedStatus(status) {
 
 export async function GET(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const db = await getDb();
+    const teamId = session.user.teamId;
     const { searchParams } = new URL(request.url);
     const applicationId = searchParams.get('applicationId') || '';
 
-    const query = applicationId ? { applicationId } : {};
+    const query = applicationId ? { teamId, applicationId } : { teamId };
     const testCases = await db.collection('testCases').find(query).toArray();
-    const applications = await db.collection('applications').find({}).toArray();
-    const modules = await db.collection('modules').find({}).toArray();
+    const applications = await db.collection('applications').find({ teamId }).toArray();
+    const modules = await db.collection('modules').find({ teamId }).toArray();
 
     const appMap = Object.fromEntries(applications.map((a) => [a._id.toString(), a.name]));
     const modMap = Object.fromEntries(modules.map((m) => [m._id.toString(), m.name]));
