@@ -160,9 +160,9 @@ export default function DashboardPage() {
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--line)' }}
                 />
                 <Legend verticalAlign="top" height={32} formatter={(value) => <span style={{ fontSize: 12 }}>{value}</span>} />
-                <Bar dataKey="Pass" fill={COLORS.Pass} radius={[3,3,0,0]} />
-                <Bar dataKey="Fail" fill={COLORS.Fail} radius={[3,3,0,0]} />
-                <Bar dataKey="Pending" fill={COLORS.Pending} radius={[3,3,0,0]} />
+                <Bar dataKey="Pass" stackId="a" fill={COLORS.Pass} radius={[0,0,0,0]} />
+                <Bar dataKey="Fail" stackId="a" fill={COLORS.Fail} radius={[0,0,0,0]} />
+                <Bar dataKey="Pending" stackId="a" fill={COLORS.Pending} radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
