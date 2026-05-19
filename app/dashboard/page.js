@@ -32,6 +32,17 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
+  // Auto-refresh settings every 20 seconds so Current Version badge stays in sync
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetch('/api/settings', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((s) => setLatestVersion(s.softwareVersion || ''))
+        .catch(() => {});
+    }, 20000);
+    return () => clearInterval(id);
+  }, []);
+
   const summary = data?.summary || { total: 0, passed: 0, failed: 0, pending: 0, passPercent: 0, failPercent: 0 };
 
   const donutData = [

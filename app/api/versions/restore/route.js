@@ -15,29 +15,37 @@ export async function POST(request) {
     const teamId = session.user.teamId;
     const now = new Date();
 
-    // Fetch all test cases that have this version in their history
-    const testCases = await db.collection('testCases')
+    // Fetch every test case for this team so no case is left behind
+    const allTestCases = await db.collection('testCases')
       .find(
-        { teamId, 'history.version': version },
+        { teamId },
         { projection: { _id: 1, softwareVersionTested: 1, status: 1, testedBy: 1, testedOn: 1, actualResult: 1, defectsImprovements: 1, testRunId: 1, history: 1 } }
       )
       .toArray();
 
-    if (!testCases.length) {
-      return NextResponse.json({ error: 'No test cases found for this version in history' }, { status: 404 });
+    if (!allTestCases.length) {
+      return NextResponse.json({ error: 'No test cases found' }, { status: 404 });
     }
 
-    const bulkOps = testCases.map((tc) => {
-      // Find the specific history entry to restore from
-      const histEntry = tc.history.find((h) => h.version === version);
-      if (!histEntry) return null;
+    // Which live versions will be displaced?
+    const displacedVersions = [...new Set(
+      allTestCases.map((tc) => tc.softwareVersionTested).filter((v) => v && v !== version)
+    )];
 
-      // Build new history array: remove the entry being restored, save the current state
-      const newHistory = tc.history.filter((h) => h.version !== version);
-
-      // Only snapshot current state if there's something worth preserving
+    const bulkOps = allTestCases.map((tc) => {
       const currentVer = tc.softwareVersionTested || '';
-      if (currentVer || tc.status || tc.testedBy) {
+
+      // Already on the target version — nothing to change
+      if (currentVer === version) return null;
+
+      // Find this version's snapshot in history (if any)
+      const histEntry = (tc.history || []).find((h) => h.version === version);
+
+      // Build new history: remove all entries for the target version, keep the rest
+      const newHistory = (tc.history || []).filter((h) => h.version !== version);
+
+      // Snapshot the current live state before overwriting
+      if (currentVer && (tc.status || tc.testedBy || tc.actualResult)) {
         newHistory.push({
           version: currentVer,
           status: tc.status || '',
@@ -56,11 +64,12 @@ export async function POST(request) {
           update: {
             $set: {
               softwareVersionTested: version,
-              status: histEntry.status || '',
-              testedBy: histEntry.testedBy || '',
-              testedOn: histEntry.testedOn || '',
-              actualResult: histEntry.actualResult || '',
-              defectsImprovements: histEntry.defectsImprovements || '',
+              // Restore from snapshot if we have one; otherwise reset to Pending (no data)
+              status: histEntry?.status ?? '',
+              testedBy: histEntry?.testedBy ?? '',
+              testedOn: histEntry?.testedOn ?? '',
+              actualResult: histEntry?.actualResult ?? '',
+              defectsImprovements: histEntry?.defectsImprovements ?? '',
               history: newHistory,
               updatedAt: now,
             },
@@ -69,13 +78,29 @@ export async function POST(request) {
       };
     }).filter(Boolean);
 
-    if (!bulkOps.length) {
-      return NextResponse.json({ error: 'Nothing to restore' }, { status: 400 });
+    let restoredCount = 0;
+    if (bulkOps.length) {
+      const result = await db.collection('testCases').bulkWrite(bulkOps, { ordered: false });
+      restoredCount = result.modifiedCount;
     }
 
-    const result = await db.collection('testCases').bulkWrite(bulkOps, { ordered: false });
+    // Swap version states in teamSettings:
+    // restored version → active (remove from completedVersions, update softwareVersion)
+    // displaced versions → completed (add to completedVersions)
+    await db.collection('teamSettings').updateOne(
+      { teamId },
+      { $set: { softwareVersion: version }, $pull: { completedVersions: version } },
+      { upsert: true }
+    );
+    for (const v of displacedVersions) {
+      await db.collection('teamSettings').updateOne(
+        { teamId },
+        { $addToSet: { completedVersions: v } },
+        { upsert: true }
+      );
+    }
 
-    return NextResponse.json({ ok: true, restored: result.modifiedCount });
+    return NextResponse.json({ ok: true, restored: restoredCount });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

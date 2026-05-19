@@ -74,7 +74,7 @@ export async function GET() {
       .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
 
     return NextResponse.json(versions, {
-      headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' },
+      headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

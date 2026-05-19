@@ -15,38 +15,42 @@ export async function POST(request) {
     const teamId = session.user.teamId;
     const now = new Date();
 
-    // Snapshot all test cases currently tagged with this version into their history[]
+    // Snapshot all test cases currently tagged with this version
     const testCases = await db.collection('testCases')
       .find(
         { teamId, softwareVersionTested: version },
-        { projection: { _id: 1, status: 1, testedBy: 1, testedOn: 1, actualResult: 1, defectsImprovements: 1, testRunId: 1 } }
+        { projection: { _id: 1, status: 1, testedBy: 1, testedOn: 1, actualResult: 1, defectsImprovements: 1, testRunId: 1, history: 1 } }
       )
       .toArray();
 
     if (testCases.length) {
-      const bulkOps = testCases.map((tc) => ({
-        updateOne: {
-          filter: { _id: tc._id, teamId },
-          update: {
-            $push: {
-              history: {
-                version,
-                status: tc.status || '',
-                testedBy: tc.testedBy || '',
-                testedOn: tc.testedOn || '',
-                actualResult: tc.actualResult || '',
-                defectsImprovements: tc.defectsImprovements || '',
-                testRunId: tc.testRunId || '',
-                snapshotAt: now,
-              },
-            },
+      const bulkOps = testCases.map((tc) => {
+        const snapshot = {
+          version,
+          status: tc.status || '',
+          testedBy: tc.testedBy || '',
+          testedOn: tc.testedOn || '',
+          actualResult: tc.actualResult || '',
+          defectsImprovements: tc.defectsImprovements || '',
+          testRunId: tc.testRunId || '',
+          snapshotAt: now,
+        };
+
+        // Replace any existing entry for this version to avoid duplicates, then append fresh snapshot
+        const newHistory = [...(tc.history || []).filter((h) => h.version !== version), snapshot];
+
+        return {
+          updateOne: {
+            filter: { _id: tc._id, teamId },
+            update: { $set: { history: newHistory } },
           },
-        },
-      }));
+        };
+      });
+
       await db.collection('testCases').bulkWrite(bulkOps, { ordered: false });
     }
 
-    // Record in teamSettings so the versions API knows this version is completed
+    // Record in teamSettings so the versions API marks this version as completed
     await db.collection('teamSettings').updateOne(
       { teamId },
       { $addToSet: { completedVersions: version } },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ToastProvider, { showToast } from '@/components/Toast';
 import { normalizedStatus, dateStamp } from '@/utils/formatters';
 
@@ -24,11 +24,17 @@ export default function ReportsPage() {
   const [viewLoading, setViewLoading] = useState('');
   const [summary, setSummary] = useState(null);
 
+  const fetchVersions = useCallback(() => {
+    fetch('/api/versions', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((v) => setVersions(Array.isArray(v) ? v : []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch('/api/applications').then((r) => r.json()).then(setApplications);
-    fetch('/api/versions').then((r) => r.json()).then((v) => setVersions(Array.isArray(v) ? v : []));
+    fetchVersions();
     fetchSummary('');
-
     fetch('/api/settings')
       .then((r) => r.json())
       .then((s) => {
@@ -36,7 +42,13 @@ export default function ReportsPage() {
         if (s.softwareVersion !== undefined) setVersion(s.softwareVersion);
       })
       .catch(() => {});
-  }, []);
+  }, [fetchVersions]);
+
+  // Auto-refresh versions every 15 seconds so new versions appear without a page reload
+  useEffect(() => {
+    const id = setInterval(fetchVersions, 15000);
+    return () => clearInterval(id);
+  }, [fetchVersions]);
 
   async function fetchSummary(appId) {
     const params = appId ? `?applicationId=${appId}` : '';
@@ -119,7 +131,9 @@ export default function ReportsPage() {
         if (!res.ok) throw new Error(data.error);
         showToast(`Restored ${data.restored} test cases to v${ver}`, 'success');
       }
-      fetch('/api/versions').then((r) => r.json()).then((v) => setVersions(Array.isArray(v) ? v : []));
+      // Sync the active version across the UI immediately
+      setVersion(ver);
+      fetchVersions();
       fetchSummary(selectedApp);
     } catch (e) {
       showToast(e.message || 'Restore failed', 'error');
@@ -140,7 +154,7 @@ export default function ReportsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       showToast(`v${ver} marked as completed — ${data.snapshotted} test cases snapshotted`, 'success');
-      fetch('/api/versions').then((r) => r.json()).then((v) => setVersions(Array.isArray(v) ? v : []));
+      fetchVersions();
     } catch (e) {
       showToast(e.message || 'Failed to complete version', 'error');
     } finally {
@@ -212,7 +226,7 @@ export default function ReportsPage() {
             filter: { applicationId: selectedApp || undefined },
             fields: { softwareVersionTested: version },
           }),
-        }).then(() => fetch('/api/versions').then((r) => r.json()).then((v) => setVersions(Array.isArray(v) ? v : []))).catch(() => {});
+        }).then(() => fetchVersions()).catch(() => {});
       }
     } catch (e) {
       console.error(e);
@@ -598,7 +612,7 @@ export default function ReportsPage() {
             filter: { applicationId: selectedApp || undefined },
             fields: { softwareVersionTested: version },
           }),
-        }).then(() => fetch('/api/versions').then((r) => r.json()).then((v) => setVersions(Array.isArray(v) ? v : []))).catch(() => {});
+        }).then(() => fetchVersions()).catch(() => {});
       }
     } catch (e) {
       console.error(e);
