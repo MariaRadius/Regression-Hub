@@ -995,8 +995,8 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {viewModal.byModule.map((m) => (
-                        <tr key={m.module} style={{ borderTop: '1px solid var(--line)' }}>
+                      {viewModal.byModule.map((m, i) => (
+                        <tr key={`${m.module}-${i}`} style={{ borderTop: '1px solid var(--line)' }}>
                           <td style={{ padding: '8px 10px', fontWeight: 500 }}>{m.module}</td>
                           <td style={{ textAlign: 'center', padding: '8px 10px' }}>{m.total}</td>
                           <td style={{ textAlign: 'center', padding: '8px 10px', color: '#16a34a', fontWeight: 600 }}>{m.passed}</td>

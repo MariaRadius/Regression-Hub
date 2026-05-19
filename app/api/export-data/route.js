@@ -15,18 +15,46 @@ export async function GET(request) {
     const testRunId        = searchParams.get('testRunId') || '';
     const softwareVersion  = searchParams.get('softwareVersion') || '';
 
-    const query = { teamId };
-    if (applicationId)   query.applicationId = applicationId;
-    if (testRunId)       query.testRunId = testRunId;
-    if (softwareVersion) query.softwareVersionTested = softwareVersion;
-    const [testCases, applications, modules] = await Promise.all([
-      db.collection('testCases').find(query).sort({ createdAt: 1 }).toArray(),
+    const liveQuery = { teamId };
+    if (applicationId) liveQuery.applicationId = applicationId;
+    if (testRunId)     liveQuery.testRunId = testRunId;
+    if (softwareVersion) liveQuery.softwareVersionTested = softwareVersion;
+
+    const [liveTestCases, applications, modules] = await Promise.all([
+      db.collection('testCases').find(liveQuery).sort({ createdAt: 1 }).toArray(),
       db.collection('applications').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
       db.collection('modules').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
     ]);
 
     const appMap = Object.fromEntries(applications.map((a) => [a._id.toString(), a.name]));
     const modMap = Object.fromEntries(modules.map((m) => [m._id.toString(), m.name]));
+
+    let testCases = liveTestCases;
+
+    // If exporting a specific version and live results are empty, check history snapshots
+    if (softwareVersion && liveTestCases.length === 0) {
+      const histQuery = { teamId, 'history.version': softwareVersion };
+      if (applicationId) histQuery.applicationId = applicationId;
+
+      const historicalDocs = await db.collection('testCases')
+        .find(histQuery)
+        .sort({ createdAt: 1 })
+        .toArray();
+
+      // Reconstruct rows: base fields + matching history snapshot fields
+      testCases = historicalDocs.map((tc) => {
+        const snap = (tc.history || []).find((h) => h.version === softwareVersion) || {};
+        return {
+          ...tc,
+          status: snap.status ?? tc.status,
+          testedBy: snap.testedBy ?? tc.testedBy,
+          testedOn: snap.testedOn ?? tc.testedOn,
+          actualResult: snap.actualResult ?? tc.actualResult,
+          defectsImprovements: snap.defectsImprovements ?? tc.defectsImprovements,
+          softwareVersionTested: softwareVersion,
+        };
+      });
+    }
 
     const enriched = testCases.map((tc) => ({
       ...tc,
