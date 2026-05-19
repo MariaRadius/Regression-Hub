@@ -1,4 +1,4 @@
-/**
+run /**
  * Run once to create the two team accounts in MongoDB.
  * Usage: node scripts/seed-users.mjs
  */
