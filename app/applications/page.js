@@ -1,37 +1,53 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useApplications } from '@/hooks/useSharedData';
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { getDb } from '@/lib/mongodb';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 
-export default function ApplicationsPage() {
-  const { data: apps = [], isLoading: appsLoading } = useApplications();
-  const [appGroups, setAppGroups] = useState({});
-  const [dashLoading, setDashLoading] = useState(true);
-  const loading = appsLoading || dashLoading;
+export default async function ApplicationsPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect('/login');
 
-  useEffect(() => {
-    fetch('/api/dashboard').then((r) => r.json()).then((dash) => {
-      setAppGroups(dash.appGroups || {});
-      setDashLoading(false);
-    }).catch(() => setDashLoading(false));
-  }, []);
+  const db = await getDb();
+  const teamId = session.user.teamId;
+
+  const [applications, dash] = await Promise.all([
+    db.collection('applications').find({ teamId }).sort({ name: 1 }).toArray(),
+    db.collection('testCases').aggregate([
+      { $match: { teamId } },
+      {
+        $group: {
+          _id: '$applicationId',
+          total: { $sum: 1 },
+          passed: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
+          failed: { $sum: { $cond: [{ $eq: ['$status', 'Fail'] }, 1, 0] } },
+        },
+      },
+    ]).toArray(),
+  ]);
+
+  const appGroups = Object.fromEntries(
+    dash.map(({ _id, total, passed, failed }) => [
+      _id,
+      { total, passed, failed, pending: total - passed - failed },
+    ])
+  );
+
+  const apps = applications.map((a) => ({ _id: a._id.toString(), name: a.name }));
 
   return (
     <div>
       <PageHeader eyebrow="Registry" title="Applications" sub={`Auto-created from imported Excel files. ${apps.length} total.`} />
 
-      {loading ? (
-        <EmptyState>Loading…</EmptyState>
-      ) : apps.length === 0 ? (
+      {apps.length === 0 ? (
         <EmptyState icon="▣" title="No applications yet">
           <p>Applications are created automatically when you import an Excel file.</p>
         </EmptyState>
       ) : (
         <div className="grid-3">
           {apps.map((app) => {
-            const g = appGroups[app.name] || { total: 0, passed: 0, failed: 0, pending: 0 };
+            const g = appGroups[app._id] || { total: 0, passed: 0, failed: 0, pending: 0 };
             const pct = g.total ? Math.round((g.passed / g.total) * 100) : 0;
             return (
               <div key={app._id} className="panel">
