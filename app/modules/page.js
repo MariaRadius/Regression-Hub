@@ -1,22 +1,51 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useModules } from '@/hooks/useSharedData';
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { getDb } from '@/lib/mongodb';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 
-export default function ModulesPage() {
-  const { data: modules = [], isLoading: modulesLoading } = useModules();
-  const [moduleGroupsById, setModuleGroupsById] = useState({});
-  const [dashLoading, setDashLoading] = useState(true);
-  const loading = modulesLoading || dashLoading;
+export default async function ModulesPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect('/login');
 
-  useEffect(() => {
-    fetch('/api/dashboard').then((r) => r.json()).then((dash) => {
-      setModuleGroupsById(dash.moduleGroupsById || {});
-      setDashLoading(false);
-    }).catch(() => setDashLoading(false));
-  }, []);
+  const db = await getDb();
+  const teamId = session.user.teamId;
+
+  const [rawModules, applications, dashModules] = await Promise.all([
+    db.collection('modules').find({ teamId }).toArray(),
+    db.collection('applications').find({ teamId }, { projection: { _id: 1, name: 1 } }).toArray(),
+    db.collection('testCases').aggregate([
+      { $match: { teamId } },
+      {
+        $group: {
+          _id: '$moduleId',
+          total: { $sum: 1 },
+          passed: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
+          failed: { $sum: { $cond: [{ $eq: ['$status', 'Fail'] }, 1, 0] } },
+        },
+      },
+    ]).toArray(),
+  ]);
+
+  const appMap = Object.fromEntries(applications.map((a) => [a._id.toString(), a.name]));
+  const moduleGroupsById = Object.fromEntries(
+    dashModules.map(({ _id, total, passed, failed }) => [
+      _id,
+      { total, passed, failed, pending: total - passed - failed },
+    ])
+  );
+
+  const modules = rawModules
+    .map((m) => ({
+      _id: m._id.toString(),
+      name: m.name,
+      applicationName: appMap[m.applicationId] || 'Unknown',
+    }))
+    .sort((a, b) => {
+      const appCmp = a.applicationName.localeCompare(b.applicationName);
+      return appCmp !== 0 ? appCmp : a.name.localeCompare(b.name);
+    });
 
   const grouped = modules.reduce((acc, mod) => {
     const key = mod.applicationName;
@@ -31,9 +60,7 @@ export default function ModulesPage() {
     <div>
       <PageHeader eyebrow="Registry" title="Modules" sub={`${modules.length} modules across ${appNames.length} application${appNames.length !== 1 ? 's' : ''}`} />
 
-      {loading ? (
-        <EmptyState>Loading…</EmptyState>
-      ) : modules.length === 0 ? (
+      {modules.length === 0 ? (
         <EmptyState icon="⊞" title="No modules yet">
           <p>Modules are created automatically from the Module column in your Excel file.</p>
         </EmptyState>
