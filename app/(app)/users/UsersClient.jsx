@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import ToastProvider, { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import PageHeader from '@/components/PageHeader';
@@ -43,9 +44,9 @@ const EMPTY_FORM = { name: '', username: '', password: '', confirmPassword: '', 
 const EMPTY_EDIT = { name: '', role: 'qa' };
 const EMPTY_PWD  = { password: '', confirmPassword: '' };
 
-export default function UsersClient({ user }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function UsersClient({ user, initialUsers }) {
+  const router = useRouter();
+  const users = initialUsers;
 
   const [showAdd, setShowAdd]       = useState(false);
   const [addForm, setAddForm]       = useState(EMPTY_FORM);
@@ -58,23 +59,6 @@ export default function UsersClient({ user }) {
   const [pwdId, setPwdId]           = useState(null);
   const [pwdForm, setPwdForm]       = useState(EMPTY_PWD);
   const [pwdSaving, setPwdSaving]   = useState(false);
-
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      setUsers(Array.isArray(data) ? data : []);
-    } catch {
-      showToast('Failed to load users', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
 
   async function createUser(e) {
     e.preventDefault();
@@ -91,7 +75,7 @@ export default function UsersClient({ user }) {
       showToast(`User "${addForm.name}" created`, 'success');
       setShowAdd(false);
       setAddForm(EMPTY_FORM);
-      fetchUsers();
+      router.refresh();
     } catch (err) {
       showToast(err.message || 'Failed to create user', 'error');
     } finally {
@@ -111,7 +95,7 @@ export default function UsersClient({ user }) {
       if (!res.ok) throw new Error(data.error);
       showToast('User updated', 'success');
       setEditId(null);
-      fetchUsers();
+      router.refresh();
     } catch (err) {
       showToast(err.message || 'Update failed', 'error');
     } finally {
@@ -152,7 +136,8 @@ export default function UsersClient({ user }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       showToast(`User ${action}d`, 'success');
-      fetchUsers();
+      setEditId(null);
+      router.refresh();
     } catch (err) {
       showToast(err.message || 'Action failed', 'error');
     }
@@ -215,10 +200,7 @@ export default function UsersClient({ user }) {
       </div>
 
       {/* Users Table */}
-      {loading ? (
-        <div className='empty-state'>Loading users…</div>
-      ) : (
-        <div className='panel'>
+      <div className='panel'>
           <div className='table-wrap'>
             <table>
               <thead>
@@ -333,7 +315,6 @@ export default function UsersClient({ user }) {
             </table>
           </div>
         </div>
-      )}
 
       {/* Add User Modal */}
       {showAdd && (
@@ -398,15 +379,15 @@ export default function UsersClient({ user }) {
 
       {/* Change Password Modal */}
       {pwdId && (
-        <Modal title={`Change Password — ${users.find((u) => u._id === pwdId)?.name}`} onClose={() => { setPwdId(null); setPwdForm(EMPTY_PWD); }}>
+        <Modal title={`Change Password — ${users.find((u) => u._id === pwdId)?.name ?? 'Unknown'}`} onClose={() => { setPwdId(null); setPwdForm(EMPTY_PWD); }}>
           <div style={{ display: 'grid', gap: 14 }}>
             <div className='field-group'>
               <label className='field-label'>New password</label>
-              <input className='field-input' type='password' value={pwdForm.password} onChange={(e) => setPwdForm((f) => ({ ...f, password: e.target.value }))} placeholder='Min. 8 characters' />
+              <input className='field-input' type='password' value={pwdForm.password} onChange={(e) => setPwdForm((f) => ({ ...f, password: e.target.value }))} placeholder='Min. 8 characters' required minLength={8} />
             </div>
             <div className='field-group'>
               <label className='field-label'>Confirm password</label>
-              <input className='field-input' type='password' value={pwdForm.confirmPassword} onChange={(e) => setPwdForm((f) => ({ ...f, confirmPassword: e.target.value }))} placeholder='Repeat password' />
+              <input className='field-input' type='password' value={pwdForm.confirmPassword} onChange={(e) => setPwdForm((f) => ({ ...f, confirmPassword: e.target.value }))} placeholder='Repeat password' required />
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className='btn btn-secondary' onClick={() => { setPwdId(null); setPwdForm(EMPTY_PWD); }}>Cancel</button>
