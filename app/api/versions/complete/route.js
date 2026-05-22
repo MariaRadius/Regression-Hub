@@ -1,18 +1,11 @@
+import { completeVersion } from '@/lib/db/versionsData';
+import { ApiError } from '@/lib/errors';
+import { withAdmin } from '@/lib/server/withTeam';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { completeVersion } from '@/lib/versionsData';
 
-export async function POST(request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    const { version } = await request.json();
-    if (!version) return NextResponse.json({ error: 'version required' }, { status: 400 });
-    const result = await completeVersion({ teamId: session.user.teamId, version });
-    return NextResponse.json({ ok: true, ...result });
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export const POST = withAdmin(async (request, _ctx, { teamId, db }) => {
+  const { version } = await request.json();
+  if (!version) throw new ApiError(400, 'version required');
+  const result = await completeVersion(db, teamId, version);
+  return NextResponse.json({ ok: true, ...result });
+});
