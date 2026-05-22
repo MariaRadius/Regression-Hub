@@ -1,10 +1,12 @@
 # Regression Hub Rules
 
+> **"Clean as you go"** — rules marked with this tag require opportunistic cleanup: whenever a task touches a file that violates that rule, fix the violation in the same commit. No separate cleanup pass needed; just don't leave the old practice in files you're already editing.
+
 ## Auth and Session
 
-- auth and role checks MUST happen server-side in `page.js`, before any render or data fetch — unauthorized users are redirected at the server level, never filtered client-side
-- session data flows one way: server reads the session, passes `user` as a prop to the client leaf — client components never read the session directly
-- role-dependent UI and access decisions are driven by the `user` prop passed from the server, not by client-side session state
+- auth and role checks MUST happen server-side in `page.js`, before any render or data fetch — unauthorized users are redirected at the server level, never filtered client-side. Clean as you go
+- session data flows one way: server reads the session, passes `user` as a prop to the client leaf — client components never read the session directly. Clean as you go
+- role-dependent UI and access decisions are driven by the `user` prop passed from the server, not by client-side session state. Clean as you go
 
 ## Documentation and Spec Discipline
 
@@ -22,8 +24,8 @@
 
 ## Reuse and Code Organization
 
-- DO NOT duplicate a DB query between an RSC page and its API route; extract to `lib/[name]Data.js` — both page and route import from the shared module
-- DO NOT inline JSX blocks, hook logic, or utility patterns that duplicate an existing implementation in another page file; extract to `components/`, `hooks/`, or `utils/` before the second use
+- DO NOT write DB queries inline in `page.js` or API route files — always extract to `lib/[name]Data.js` and import from there, even when only one caller exists today. Clean as you go
+- DO NOT inline JSX blocks, hook logic, or utility patterns that duplicate an existing implementation in another page file; extract to `components/`, `hooks/`, or `utils/` before the second use. Clean as you go
 - DO NOT redefine a function locally if it is already exported from utils/; import from the shared module instead
 - DO NOT set font-family outside app/globals.css; self-host via app/fonts.js (next/font/google), no CDN links, no inline fontFamily props
 

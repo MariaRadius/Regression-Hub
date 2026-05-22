@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import ToastProvider, { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
-import { useQaUsers, useModules } from '@/hooks/useSharedData';
 import PriorityBadge from '@/components/PriorityBadge';
 
 function ProgressBar({ completed, total }) {
@@ -52,16 +52,8 @@ const EMPTY_FORM = {
   assignedTo: '', priority: 'Medium', dueDate: '', notes: '',
 };
 
-export default function AssignmentsClient({ user }) {
+export default function AssignmentsClient({ user, view, assignments, modules, moduleCounts, qaUsers }) {
   const router = useRouter();
-
-  const [view, setView] = useState('mine');
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const { data: modules = [] } = useModules();
-  const [moduleCounts, setModuleCounts] = useState({});
-  const qaUsers = useQaUsers();
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -69,39 +61,6 @@ export default function AssignmentsClient({ user }) {
 
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
-
-  const fetchAssignments = useCallback(async (v) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/assignments?view=${v}`);
-      const data = await res.json();
-      setAssignments(Array.isArray(data) ? data : []);
-    } catch {
-      showToast('Failed to load assignments', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAssignments(view);
-  }, [view, fetchAssignments]);
-
-  // Load module test-case counts for the create modal
-  useEffect(() => {
-    if (!modules.length) return;
-    const ids = modules.map((m) => m._id);
-    Promise.all(
-      ids.map((id) =>
-        fetch(`/api/test-cases?moduleId=${id}&limit=1`)
-          .then((r) => r.json())
-          .then((d) => [id, d.total || 0])
-          .catch(() => [id, 0])
-      )
-    ).then((pairs) => {
-      setModuleCounts(Object.fromEntries(pairs));
-    });
-  }, [modules]);
 
   async function createAssignment(e) {
     e.preventDefault();
@@ -120,7 +79,7 @@ export default function AssignmentsClient({ user }) {
       showToast(`Assignment created — ${data.testCaseCount} test cases`, 'success');
       setShowModal(false);
       setForm(EMPTY_FORM);
-      fetchAssignments(view);
+      router.refresh();
     } catch (err) {
       showToast(err.message || 'Failed to create', 'error');
     } finally {
@@ -134,7 +93,7 @@ export default function AssignmentsClient({ user }) {
       const res = await fetch(`/api/assignments/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('Assignment cancelled', 'info');
-      setAssignments((prev) => prev.filter((a) => a._id !== id));
+      router.refresh();
     } catch (err) {
       showToast(err.message || 'Failed to cancel', 'error');
     }
@@ -150,7 +109,7 @@ export default function AssignmentsClient({ user }) {
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('Updated', 'success');
       setEditId(null);
-      fetchAssignments(view);
+      router.refresh();
     } catch (err) {
       showToast(err.message || 'Failed to update', 'error');
     }
@@ -178,15 +137,16 @@ export default function AssignmentsClient({ user }) {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--line)', paddingBottom: 0 }}>
         {[
-          { key: 'mine', label: `Assigned to Me` },
-          { key: 'sent', label: `Assigned by Me` },
+          { key: 'mine', label: 'Assigned to Me' },
+          { key: 'sent', label: 'Assigned by Me' },
         ].map(({ key, label }) => (
-          <button
+          <Link
             key={key}
-            onClick={() => setView(key)}
+            href={`?view=${key}`}
             style={{
               padding: '8px 18px',
-              border: 'none',
+              display: 'inline-block',
+              textDecoration: 'none',
               borderBottom: view === key ? '2px solid var(--accent)' : '2px solid transparent',
               background: 'none',
               cursor: 'pointer',
@@ -198,14 +158,12 @@ export default function AssignmentsClient({ user }) {
             }}
           >
             {label}
-          </button>
+          </Link>
         ))}
       </div>
 
       {/* Cards */}
-      {loading ? (
-        <EmptyState>Loading…</EmptyState>
-      ) : active.length === 0 ? (
+      {active.length === 0 ? (
         <EmptyState icon='◷' title={view === 'mine' ? 'No assignments for you yet' : "You haven't assigned anything yet"}>
           <p style={{ marginTop: 6, color: 'var(--muted)' }}>
             {view === 'mine' ? 'Ask a team member to assign test cases to you.' : 'Click "New Assignment" to assign a module or test cases.'}
@@ -227,7 +185,6 @@ export default function AssignmentsClient({ user }) {
               onCancelEdit={() => setEditId(null)}
               onCancel={() => cancelAssignment(a._id)}
               onViewCases={() => viewCases(a)}
-              currentUser={user.name}
             />
           ))}
         </div>
