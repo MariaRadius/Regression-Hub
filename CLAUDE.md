@@ -4,6 +4,8 @@
 
 ## Auth and Session
 
+- DO NOT add login/session auth guards outside `middleware.js`; unauthenticated redirect logic lives only in `middleware.js`
+- API authentication (401) is enforced in `middleware.js`; route handlers MUST NOT re-check `!session`. Handlers still call `getServerSession` to read `session.user` for role/team checks.
 - auth and role checks MUST happen server-side in `page.js`, before any render or data fetch — unauthorized users are redirected at the server level, never filtered client-side. Clean as you go
 - session data flows one way: server reads the session, passes `user` as a prop to the client leaf — client components never read the session directly. Clean as you go
 - role-dependent UI and access decisions are driven by the `user` prop passed from the server, not by client-side session state. Clean as you go

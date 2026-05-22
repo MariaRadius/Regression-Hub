@@ -24,7 +24,6 @@ function contentKey(teamId, appName, modName, testCaseId, testCase) {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     const teamId = session.user.teamId;
 

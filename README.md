@@ -98,6 +98,8 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 ### Reports
 
+> Initial page data (version history, summary metrics, export settings, applications) is server-rendered; the application filter updates summary server-side via URL searchParam; exports and version mutations remain client-driven API calls.
+
 - PDF: cover page, summary, detailed results, bug report, signoff block
 - Excel export: summary sheet + full results sheet
 

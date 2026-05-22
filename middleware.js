@@ -6,11 +6,17 @@ export async function middleware(req) {
   const token = await getToken({ req });
   const isLoggedIn = !!token;
   const isLoginPage = pathname === '/login';
+  const isApi = pathname.startsWith('/api/');
 
-  if (!isLoggedIn && !isLoginPage) {
-    const url = new URL('/login', req.url);
-    url.searchParams.set('redirectTo', pathname);
-    return NextResponse.redirect(url);
+  if (!isLoggedIn) {
+    if (isApi) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isLoginPage) {
+      const url = new URL('/login', req.url);
+      url.searchParams.set('redirectTo', pathname);
+      return NextResponse.redirect(url);
+    }
   }
 
   if (isLoggedIn && isLoginPage) {

@@ -7,7 +7,6 @@ import { ObjectId } from 'mongodb';
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
 
     const db = await getDb();
     const teamId = session.user.teamId;
@@ -51,7 +50,6 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
 
     const body = await request.json();
     const { title, type, moduleIds, testCaseIds: rawIds, assignedTo, priority, dueDate, notes } = body;

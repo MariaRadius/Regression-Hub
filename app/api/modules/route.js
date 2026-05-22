@@ -7,7 +7,6 @@ import { ObjectId } from 'mongodb';
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const db = await getDb();
     const teamId = session.user.teamId;
@@ -38,7 +37,6 @@ export async function GET() {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { name, applicationId } = await request.json();
     if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });

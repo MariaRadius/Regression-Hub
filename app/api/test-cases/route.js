@@ -6,7 +6,6 @@ import { getDb } from '@/lib/mongodb';
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const db = await getDb();
     const teamId = session.user.teamId;
@@ -83,7 +82,6 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const { applicationId, moduleId, applicationName, moduleName, ...fields } = body;
@@ -133,7 +131,6 @@ export async function POST(request) {
 export async function DELETE(_request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     const db = await getDb();

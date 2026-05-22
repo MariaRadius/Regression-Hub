@@ -14,7 +14,6 @@ const ALLOWED_FIELDS = [
 export async function PATCH(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Rate limit: 60 bulk operations per user per minute
     const rl = checkRateLimit(`bulk:${session.user.id}`, 60, 60_000);

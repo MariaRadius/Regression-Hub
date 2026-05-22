@@ -7,7 +7,6 @@ import { checkRateLimit } from '@/lib/rateLimit';
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
     const db = await getDb();
     const teamId = session.user.teamId;
 
@@ -36,7 +35,6 @@ export async function GET() {
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     // Rate limit: 30 settings updates per admin per minute

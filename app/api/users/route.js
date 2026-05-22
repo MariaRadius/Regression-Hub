@@ -14,7 +14,6 @@ const LOCATIONS = {
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     if (!session.user.teamId) return NextResponse.json({ error: 'Account has no team assigned' }, { status: 400 });
 
@@ -28,7 +27,6 @@ export async function GET() {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     // Rate limit: max 10 user-creations per admin per minute

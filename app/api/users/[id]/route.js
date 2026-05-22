@@ -8,7 +8,6 @@ import { hash } from 'bcryptjs';
 export async function PATCH(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     const { id } = await params;
@@ -52,7 +51,6 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     const { id } = await params;
