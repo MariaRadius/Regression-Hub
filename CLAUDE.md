@@ -4,14 +4,16 @@
 
 ## Auth and Session
 
-- DO NOT add login/session auth guards outside `middleware.js`; unauthenticated redirect logic lives only in `middleware.js`
-- API authentication (401) is enforced in `middleware.js`; route handlers MUST NOT re-check `!session`. Handlers still call `getServerSession` to read `session.user` for role/team checks.
+- DO NOT add login/session auth guards outside `middleware.js`; unauthenticated redirect logic lives only in `middleware.js`. Clean as you go
+- API authentication (401) is enforced in `middleware.js`; route handlers MUST NOT re-check `!session`. Handlers still call `getServerSession` to read `session.user` for role/team checks. Clean as you go
+- DO NOT alter `middleware.js` matcher's `api/auth` exclusion; NextAuth's own endpoints (`/api/auth/*`) MUST bypass middleware or signin breaks
 - auth and role checks MUST happen server-side in `page.js`, before any render or data fetch — unauthorized users are redirected at the server level, never filtered client-side. Clean as you go
 - session data flows one way: server reads the session, passes `user` as a prop to the client leaf — client components never read the session directly. Clean as you go
 - role-dependent UI and access decisions are driven by the `user` prop passed from the server, not by client-side session state. Clean as you go
 
 ## Documentation and Spec Discipline
 
+- when adding, changing, or removing a feature that affects routes, role gating, mutations, exports, or polling, update `.claude/skills/smoke-test/SKILL.md` in the same commit
 - DO NOT bloat README.md — every line must prevent a concrete mistake; cut anything that doesn't
 - DO NOT implement a feature before updating README.md — treat it as the spec-first feature list
 
