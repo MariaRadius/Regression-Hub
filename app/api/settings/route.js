@@ -1,31 +1,25 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getTeamSettings, updateTeamSettings } from '@/lib/db/settingsData';
+import { ApiError } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { getTeamSettings, updateTeamSettings } from '@/lib/settingsData';
+import { updateSettingsBodySchema } from '@/lib/schemas/settings';
+import { withAdmin, withTeam } from '@/lib/server/withTeam';
+import { NextResponse } from 'next/server';
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const settings = await getTeamSettings({ teamId: session.user.teamId });
-    return NextResponse.json(settings);
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export const GET = withTeam(async (_req, _ctx, { teamId, db }) => {
+  const settings = await getTeamSettings(db, teamId);
+  return NextResponse.json(settings);
+});
 
-export async function PUT(request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    const rl = checkRateLimit(`settings:put:${session.user.id}`, 30, 60_000);
-    if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
-    const body = await request.json();
-    await updateTeamSettings({ teamId: session.user.teamId, patch: body });
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+export const PUT = withAdmin(async (request, _ctx, { teamId, db, session }) => {
+  const rl = checkRateLimit(`settings:put:${session.user.id}`, 30, 60_000);
+  if (!rl.ok)
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
+  const body = await request.json();
+  const parsed = updateSettingsBodySchema.safeParse(body);
+  if (!parsed.success) {
+    throw new ApiError(400, 'Invalid settings body');
   }
-}
+  await updateTeamSettings(db, teamId, parsed.data);
+  return NextResponse.json({ ok: true });
+});
