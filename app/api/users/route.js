@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 import { hash } from 'bcryptjs';
+import { getUsers } from '@/lib/usersData';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 const LOCATIONS = {
@@ -13,18 +14,12 @@ const LOCATIONS = {
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!session.user.teamId) return NextResponse.json({ error: 'Account has no team assigned' }, { status: 400 });
 
-    const db = await getDb();
-    const teamId = session.user.teamId;
-
-    const users = await db.collection('users')
-      .find({ teamId }, { projection: { passwordHash: 0 } })
-      .sort({ role: 1, name: 1 })
-      .toArray();
-
-    return NextResponse.json(users.map((u) => ({ ...u, _id: u._id.toString() })));
+    const users = await getUsers({ teamId: session.user.teamId });
+    return NextResponse.json(users);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -33,7 +28,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({}, { status: 401 });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     // Rate limit: max 10 user-creations per admin per minute
