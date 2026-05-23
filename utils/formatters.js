@@ -1,9 +1,10 @@
-export const QA_USERS = ['Ammad', 'Maria', 'Sohail'];
-export const STATUSES = ['', 'Pass', 'Fail'];
+import { STATUS } from '@/lib/constants';
 
 /** @see {@link __tests__/formatters.test.js} */
 export function normalizedStatus(status) {
-  return status === 'Pass' || status === 'Fail' ? status : 'Pending';
+  return status === STATUS.PASS || status === STATUS.FAIL
+    ? status
+    : STATUS.PENDING;
 }
 
 /** @see {@link __tests__/formatters.test.js} */
