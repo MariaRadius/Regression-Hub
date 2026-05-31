@@ -1,4 +1,4 @@
-import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 
 /**
@@ -13,14 +13,17 @@ import Typography from '@mui/material/Typography';
  */
 export default function EmptyState({ icon, title, children }) {
   return (
-    <Box sx={{ py: 5, textAlign: 'center' }}>
-      {icon && <Box sx={{ mb: 1 }}>{icon}</Box>}
+    <Stack
+      spacing={1}
+      sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
+    >
+      {icon}
       {title && (
         <Typography variant='emptyStateTitle' color='text.disabled'>
           {title}
         </Typography>
       )}
       {children}
-    </Box>
+    </Stack>
   );
 }

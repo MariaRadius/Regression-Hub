@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createTestCase, listTestCases } from '@/lib/db/testCasesData';
 import { ApiError } from '@/lib/errors';
@@ -17,6 +18,7 @@ export const GET = withTeam(async (request, _ctx, { teamId, db }) => {
     jiraStory: searchParams.get('jiraStory') || '',
     page: searchParams.get('page') || '1',
     limit: searchParams.get('limit') || '50',
+    includeMeta: searchParams.get('includeMeta') === 'true',
   });
   return NextResponse.json(result);
 });
@@ -28,5 +30,6 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
     throw new ApiError(400, parsed.error.issues[0]?.message || 'Invalid body');
   }
   const result = await createTestCase(db, teamId, parsed.data);
+  revalidatePath('/(app)/dashboard', 'page');
   return NextResponse.json(result);
 });

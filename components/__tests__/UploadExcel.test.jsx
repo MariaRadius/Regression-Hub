@@ -14,9 +14,18 @@ function mockJsonResponse(data, { ok = true, status = 200 } = {}) {
   };
 }
 
+/** Stage a file in the hidden input and click the Import button. */
+function stageAndImport(file) {
+  const input = document.querySelector('input[type="file"]');
+  Object.defineProperty(input, 'files', { value: [file] });
+  fireEvent.change(input);
+  fireEvent.click(screen.getByRole('button', { name: /^import$/i }));
+}
+
 beforeEach(() => {
   vi.stubGlobal('fetch', mockFetch);
-  mockFetch.mockResolvedValue(mockJsonResponse({ qaUsers: [] }));
+  // Default fallback for putSettings debounced saves.
+  mockFetch.mockResolvedValue(mockJsonResponse({}));
 });
 
 afterEach(() => {
@@ -24,7 +33,7 @@ afterEach(() => {
 });
 
 describe('UploadExcel', () => {
-  it('renders the upload zone and environment/version inputs', () => {
+  it('renders the upload zone, environment/version inputs, and a disabled Import button', () => {
     render(<UploadExcel />);
     expect(
       screen.getByText(/Drop \.xlsx file or click to upload/i),
@@ -33,95 +42,78 @@ describe('UploadExcel', () => {
       screen.getByPlaceholderText(/QA, Staging, Production/i),
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/2\.4\.1/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
   });
 
   it('shows an error when a non-.xlsx file is dropped', () => {
     render(<UploadExcel />);
     const zone = screen.getByTestId('upload-dropzone');
-
     const file = new File(['content'], 'test.csv', { type: 'text/csv' });
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
-
     expect(
-      screen.getByText(/Please upload a \.xlsx file\./i),
+      screen.getByText(/Invalid file type\. Upload a \.xlsx Excel workbook\./i),
     ).toBeInTheDocument();
   });
 
-  it('loads saved settings from /api/settings on mount', async () => {
-    mockFetch.mockResolvedValueOnce(
-      mockJsonResponse({
-        testEnvironment: 'QA',
-        softwareVersion: '1.2.3',
-        qaUsers: [],
-      }),
-    );
-    render(<UploadExcel />);
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('QA')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('1.2.3')).toBeInTheDocument();
-    });
+  it('renders initialEnv and initialVersion props in the text fields', () => {
+    render(<UploadExcel initialEnv='QA' initialVersion='1.2.3' />);
+    expect(screen.getByDisplayValue('QA')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('1.2.3')).toBeInTheDocument();
   });
 
-  it('shows importing status and then success after a valid xlsx upload', async () => {
-    mockFetch
-      .mockResolvedValueOnce(mockJsonResponse({ qaUsers: [] }))
-      .mockResolvedValueOnce(
-        mockJsonResponse({ imported: 5, updated: 0, testRunId: 'run1' }),
-      );
-
+  it('stages a file and enables the Import button before submitting', () => {
     render(<UploadExcel />);
-
     const input = document.querySelector('input[type="file"]');
     const file = new File(['fake'], 'test.xlsx', {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     Object.defineProperty(input, 'files', { value: [file] });
     fireEvent.change(input);
+    expect(screen.getByText('test.xlsx')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /^import$/i }),
+    ).not.toBeDisabled();
+  });
 
+  it('shows importing status and then success after clicking Import', async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ imported: 5, updated: 0, testRunId: 'run1' }),
+    );
+    render(<UploadExcel />);
+    const file = new File(['fake'], 'test.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    stageAndImport(file);
     await waitFor(() => {
       expect(screen.getByText(/Imported 5 test cases/i)).toBeInTheDocument();
     });
   });
 
   it('calls onImported callback after a successful import', async () => {
-    mockFetch
-      .mockResolvedValueOnce(mockJsonResponse({ qaUsers: [] }))
-      .mockResolvedValueOnce(
-        mockJsonResponse({ imported: 3, updated: 0, testRunId: 'run1' }),
-      );
-
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ imported: 3, updated: 0, testRunId: 'run1' }),
+    );
     const onImported = vi.fn();
     render(<UploadExcel onImported={onImported} />);
-
-    const input = document.querySelector('input[type="file"]');
     const file = new File(['fake'], 'test.xlsx', {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
-    Object.defineProperty(input, 'files', { value: [file] });
-    fireEvent.change(input);
-
+    stageAndImport(file);
     await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
   });
 
   it('shows an error message when the import API returns an error', async () => {
-    mockFetch
-      .mockResolvedValueOnce(mockJsonResponse({ qaUsers: [] }))
-      .mockResolvedValueOnce(
-        mockJsonResponse(
-          { error: 'Sheet missing required columns' },
-          { ok: false, status: 400 },
-        ),
-      );
-
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(
+        { error: 'Sheet missing required columns' },
+        { ok: false, status: 400 },
+      ),
+    );
     render(<UploadExcel />);
-
-    const input = document.querySelector('input[type="file"]');
     const file = new File(['fake'], 'report.xlsx', {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
-    Object.defineProperty(input, 'files', { value: [file] });
-    fireEvent.change(input);
-
+    stageAndImport(file);
     await waitFor(() => {
       expect(
         screen.getByText(/Sheet missing required columns/i),

@@ -4,6 +4,12 @@ import { getReportsPageData } from '@/lib/db/reportsData';
 import { getDb } from '@/lib/mongodb';
 import ReportsClient from './ReportsClient';
 
+export const metadata = {
+  title: 'Reports | Regression Hub',
+  description:
+    'Generate PDF signoff reports and Excel exports for version history.',
+};
+
 export const dynamic = 'force-dynamic';
 
 export default async function ReportsPage({ searchParams }) {
@@ -16,7 +22,6 @@ export default async function ReportsPage({ searchParams }) {
 
   return (
     <ReportsClient
-      user={session.user}
       initialVersions={data.versions}
       initialSettings={data.settings}
       initialApplications={data.applications}

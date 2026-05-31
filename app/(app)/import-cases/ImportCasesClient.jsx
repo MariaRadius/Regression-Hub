@@ -1,21 +1,21 @@
 'use client';
 
-import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider from '@/components/Toast';
 import UploadExcel from '@/components/UploadExcel';
 
 /** @see {@link __tests__/ImportCasesClient.test.jsx} */
-export default function ImportCasesClient() {
+export default function ImportCasesClient({ initialEnv, initialVersion }) {
   return (
-    <Box>
+    <Stack>
       <ToastProvider />
       <PageHeader
         eyebrow='QA Regression Control Center'
         title='Import Test Cases'
         sub='Upload an Excel workbook to create or update test cases'
       />
-      <UploadExcel />
-    </Box>
+      <UploadExcel initialEnv={initialEnv} initialVersion={initialVersion} />
+    </Stack>
   );
 }

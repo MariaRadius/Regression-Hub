@@ -1,9 +1,9 @@
-import Panel from '@/components/Panel';
-import SummaryRow from '@/components/SummaryRow';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import Panel from '@/components/Panel';
+import SummaryRow from '@/components/SummaryRow';
 
 /**
  * A Panel containing a sorted list of SummaryRow entries for a group map.

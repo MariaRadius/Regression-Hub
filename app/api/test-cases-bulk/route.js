@@ -1,4 +1,7 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
+import { ROLES } from '@/lib/constants';
+import { getTeamSettings } from '@/lib/db/settingsData';
 import { bulkUpdateTestCases } from '@/lib/db/testCasesBulkData';
 import { ApiError } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -24,7 +27,28 @@ export const PATCH = withTeam(
       );
     }
 
-    const result = await bulkUpdateTestCases(db, teamId, parsed.data);
+    // BR-15 — QA users can only record themselves as the tester
+    // @see app/api/test-cases-bulk/__tests__/route.test.js
+    if (session.user.role === ROLES.QA && parsed.data.fields.testedBy) {
+      parsed.data.fields.testedBy = session.user.name;
+    }
+
+    // R21 — testedBy must be a registered QA user
+    if (parsed.data.fields.testedBy) {
+      const settings = await getTeamSettings(db, teamId);
+      if (!settings.qaUsers.includes(parsed.data.fields.testedBy))
+        throw new ApiError(
+          400,
+          `"${parsed.data.fields.testedBy}" is not a registered QA user for this team`,
+        );
+    }
+
+    const result = await bulkUpdateTestCases(db, teamId, {
+      ...parsed.data,
+      actor: session.user.name,
+    });
+    revalidatePath('/(app)/dashboard', 'page');
+    revalidatePath('/(app)/reports', 'page');
     return NextResponse.json(result);
   },
 );

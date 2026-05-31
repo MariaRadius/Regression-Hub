@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { getTeamSettings, updateTeamSettings } from '@/lib/db/settingsData';
 import { ApiError } from '@/lib/errors';
@@ -21,5 +22,7 @@ export const PUT = withAdmin(async (request, _ctx, { teamId, db, session }) => {
     throw new ApiError(400, 'Invalid settings body');
   }
   await updateTeamSettings(db, teamId, parsed.data);
+  revalidatePath('/(app)/dashboard', 'page');
+  revalidatePath('/(app)/reports', 'page');
   return NextResponse.json({ ok: true });
 });

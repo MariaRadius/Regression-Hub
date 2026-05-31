@@ -1,5 +1,5 @@
 # https://editorconfig.org
-# Quote style: single (enforced by ESLint quotes / jsx-quotes rules)
+# Quote style: single (enforced by Biome quotes / jsx-quotes rules)
 
 root = true
 

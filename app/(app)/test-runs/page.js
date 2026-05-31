@@ -1,41 +1,56 @@
 import RefreshOutlined from '@mui/icons-material/RefreshOutlined';
-import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
+import Button from '@mui/material/Button';
+import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import Typography from '@mui/material/Typography';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import DownloadPdfButton from '@/components/DownloadPdfButton';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
+import TestRunRow from '@/components/TestRunRow';
 import { authOptions } from '@/lib/auth';
 import { listTestRuns } from '@/lib/db/testRunsData';
 import { getDb } from '@/lib/mongodb';
 
-export default async function TestRunsPage() {
-  const session = await getServerSession(authOptions);
-  const db = await getDb();
-  const testRuns = await listTestRuns(db, session.user.teamId);
+export const dynamic = 'force-dynamic';
 
-  const runs = testRuns.map((r) => ({
-    _id: r._id.toString(),
+export const metadata = {
+  title: 'Test Runs',
+  description: 'History of Excel import test runs for your team.',
+};
+
+export default async function TestRunsPage() {
+  const [session, db] = await Promise.all([
+    getServerSession(authOptions),
+    getDb(),
+  ]);
+
+  const teamId = session?.user?.teamId;
+  if (!teamId) redirect('/');
+
+  const rawRuns = await listTestRuns(db, teamId);
+
+  const runs = rawRuns.map((r) => ({
+    _id: String(r._id),
     uploadedFileName: r.uploadedFileName,
     testEnvironment: r.testEnvironment,
     softwareVersion: r.softwareVersion,
     importedCount: r.importedCount,
     totalInFile: r.totalInFile,
-    updatedCount: r.updatedCount,
-    duplicatesSkipped: r.duplicatesSkipped,
+    refreshedCount: r.updatedCount ?? r.duplicatesSkipped ?? 0,
     createdAt:
       r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
   }));
 
   return (
-    <>
+    <Stack spacing={3}>
       <PageHeader
         eyebrow='History'
         title='Test Runs'
@@ -44,12 +59,17 @@ export default async function TestRunsPage() {
 
       {runs.length === 0 ? (
         <EmptyState icon={<RefreshOutlined />} title='No test runs yet'>
-          <p>Each Excel file you import will appear here as a test run.</p>
+          <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+            Each Excel file you import will appear here as a test run.
+          </Typography>
+          <Button variant='contained' component={Link} href='/import-cases'>
+            Import Excel File
+          </Button>
         </EmptyState>
       ) : (
         <Panel title='Import History'>
-          <TableContainer>
-            <Table size='small' stickyHeader>
+          <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
+            <Table size='small' stickyHeader aria-label='Import history'>
               <TableHead
                 sx={{
                   '& th': {
@@ -60,89 +80,24 @@ export default async function TestRunsPage() {
                 }}
               >
                 <TableRow>
-                  <TableCell>File Name</TableCell>
-                  <TableCell>Environment</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Imported</TableCell>
-                  <TableCell>Refreshed</TableCell>
-                  <TableCell>Created At</TableCell>
-                  <TableCell>Report</TableCell>
+                  <TableCell scope='col'>File Name</TableCell>
+                  <TableCell scope='col'>Environment</TableCell>
+                  <TableCell scope='col'>Version</TableCell>
+                  <TableCell scope='col'>Imported</TableCell>
+                  <TableCell scope='col'>Updated</TableCell>
+                  <TableCell scope='col'>Imported On</TableCell>
+                  <TableCell scope='col'>Report</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {runs.map((run) => (
-                  <TableRow key={run._id} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>
-                      {run.uploadedFileName}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={run.testEnvironment || '—'}
-                        size='small'
-                        variant='outlined'
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {run.softwareVersion ? (
-                        <Chip
-                          label={`v${run.softwareVersion}`}
-                          size='small'
-                          color='primary'
-                          variant='outlined'
-                          sx={{ fontFamily: 'monospace', fontWeight: 700 }}
-                        />
-                      ) : (
-                        '—'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Box
-                        component='span'
-                        sx={{ color: 'success.main', fontWeight: 600 }}
-                      >
-                        {run.importedCount || 0}
-                      </Box>
-                      {run.totalInFile ? (
-                        <Box
-                          component='span'
-                          sx={{
-                            color: 'text.disabled',
-                            fontWeight: 400,
-                            fontSize: 11,
-                            ml: 0.5,
-                          }}
-                        >
-                          / {run.totalInFile}
-                        </Box>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      {(run.updatedCount || run.duplicatesSkipped || 0) > 0 ? (
-                        <Box
-                          component='span'
-                          sx={{ color: 'primary.main', fontWeight: 600 }}
-                        >
-                          {run.updatedCount || run.duplicatesSkipped}
-                        </Box>
-                      ) : (
-                        <Box component='span' sx={{ color: 'text.disabled' }}>
-                          0
-                        </Box>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.disabled', fontSize: 12 }}>
-                      {new Date(run.createdAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <DownloadPdfButton run={run} />
-                    </TableCell>
-                  </TableRow>
+                  <TestRunRow key={run._id} run={run} />
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
         </Panel>
       )}
-    </>
+    </Stack>
   );
 }

@@ -21,3 +21,21 @@ export function buildModuleSummaryTable({ rows, includeApplication }) {
 
   return { head, body, columns, headFillColor: PDF_COLORS.headSlate };
 }
+
+export const FAILED_CASES_COLUMNS = [
+  { header: '#', halign: 'center', headerHalign: 'center', width: 4 },
+  { header: 'Application', width: 14 },
+  { header: 'Module', width: 17 },
+  { header: 'Test Case', width: 30 },
+  { header: 'Notes', width: 23 },
+  { header: 'Tested By', width: 12 },
+];
+
+export const failedCasesRow = (t, i) => [
+  i + 1,
+  t.applicationName || '—',
+  t.moduleName || '—',
+  t.testCaseId ? `${t.testCaseId} — ${t.testCase || ''}` : t.testCase || '—',
+  t.notes || '—',
+  t.testedBy || '—',
+];

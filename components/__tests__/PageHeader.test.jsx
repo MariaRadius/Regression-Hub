@@ -13,7 +13,13 @@ describe('PageHeader', () => {
   });
 
   it('renders an actions slot beside the header when provided', () => {
-    render(<PageHeader title='x' sub='y' actions={<button>New</button>} />);
+    render(
+      <PageHeader
+        title='x'
+        sub='y'
+        actions={<button type='button'>New</button>}
+      />,
+    );
     expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
   });
 

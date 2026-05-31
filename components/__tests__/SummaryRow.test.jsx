@@ -1,3 +1,4 @@
+// components/__tests__/SummaryRow.test.jsx
 import { ThemeProvider } from '@mui/material/styles';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -26,19 +27,24 @@ describe('SummaryRow', () => {
     expect(screen.getByText('Unassigned')).toBeInTheDocument();
   });
 
-  it('renders the recharts container for the stacked bar', () => {
+  it('renders three coloured segments when total > 0', () => {
+    renderRow({ name: 'x', passed: 6, failed: 2, pending: 2, total: 10 });
+    expect(screen.getByTestId('progress-segment-pass')).toBeInTheDocument();
+    expect(screen.getByTestId('progress-segment-fail')).toBeInTheDocument();
+    expect(screen.getByTestId('progress-segment-pending')).toBeInTheDocument();
+  });
+
+  it('renders nothing when total is 0', () => {
     const { container } = renderRow({
       name: 'x',
-      passed: 5,
+      passed: 0,
       failed: 0,
-      pending: 5,
-      total: 10,
+      pending: 0,
+      total: 0,
     });
-    // ResponsiveContainer always renders its wrapper div in jsdom (SVG is not
-    // painted without real layout dimensions)
     expect(
-      container.querySelector('.recharts-responsive-container'),
-    ).toBeInTheDocument();
+      container.querySelector('[data-testid="progress-bar"]'),
+    ).not.toBeInTheDocument();
   });
 
   it('does not crash when total is 0', () => {

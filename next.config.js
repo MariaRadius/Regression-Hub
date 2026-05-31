@@ -28,25 +28,12 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  reactStrictMode: true,
   serverExternalPackages: ['mongodb'],
-  transpilePackages: ['jspdf', 'jspdf-autotable'],
   experimental: {
-    // Rewrite MUI barrel imports to direct subpath imports at build time.
-    // Without this, Next's __barrel_optimize__ loader hits "conflicting star
-    // exports" against MUI v9's dual ESM/CJS bundles on Linux (Vercel).
     optimizePackageImports: ['@mui/material', '@mui/icons-material'],
   },
-
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
-  },
-
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.alias = { ...config.resolve.alias, canvas: false };
-    }
-    return config;
   },
 };
 

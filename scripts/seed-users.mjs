@@ -5,8 +5,9 @@
  * Each person gets their own login. Passwords are shown in the output.
  * Admin accounts can manage users; QA accounts can fill test results and assignments.
  */
+
+import { readFileSync } from 'node:fs';
 import { hash } from 'bcryptjs';
-import { readFileSync } from 'fs';
 import { MongoClient } from 'mongodb';
 
 const env = Object.fromEntries(

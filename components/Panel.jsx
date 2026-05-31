@@ -1,5 +1,5 @@
-import PanelHeader from '@/components/PanelHeader';
 import Paper from '@mui/material/Paper';
+import PanelHeader from '@/components/PanelHeader';
 
 /**
  * Outlined Paper panel with a standardised header.

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { CACHE_CONTROL } from '@/lib/constants';
 import { createModule, listModules } from '@/lib/db/modulesData';
 import { ApiError } from '@/lib/errors';
 import { createModuleBodySchema } from '@/lib/schemas/modules';
@@ -10,7 +11,7 @@ export const GET = withTeam(async (request, _ctx, { teamId, db }) => {
   const enriched = await listModules(db, teamId, { applicationId });
   return NextResponse.json(enriched, {
     headers: {
-      'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+      'Cache-Control': CACHE_CONTROL.LONG,
     },
   });
 });

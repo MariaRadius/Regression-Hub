@@ -9,8 +9,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
-    "lint:fix": "prettier --write . && eslint . --fix",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "dup": "jscpd .",
+    "prepare": "node -e \"const {execSync}=require('child_process'); process.env.CI||process.env.VERCEL||execSync('simple-git-hooks',{stdio:'inherit'})\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -24,29 +27,48 @@
     "@tiptap/pm": "^3.23.5",
     "@tiptap/react": "^3.23.5",
     "@tiptap/starter-kit": "^3.23.5",
+    "@visx/axis": "^3.12.0",
+    "@visx/grid": "^3.12.0",
+    "@visx/group": "^3.12.0",
+    "@visx/legend": "^3.12.0",
+    "@visx/responsive": "^3.12.0",
+    "@visx/scale": "^3.12.0",
+    "@visx/shape": "^3.12.0",
+    "@visx/tooltip": "^3.12.0",
     "bcryptjs": "^3.0.3",
+    "html-react-parser": "^6.1.2",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "mongodb": "^6.5.0",
-    "next": "^15.2.6",
+    "next": "^16.2.6",
     "next-auth": "^4.24.14",
     "nextjs-toploader": "^3.9.17",
     "notistack": "^3.0.2",
-    "react": "^18",
-    "react-dom": "^18",
-    "recharts": "^2.12.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
+    "@biomejs/biome": "^2.4.15",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@vitest/coverage-v8": "^4.1.7",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "~15.2.6",
+    "jscpd": "^4.2.4",
     "jsdom": "^29.1.1",
+    "lint-staged": "^17.0.5",
+    "playwright": "^1.60.0",
+    "simple-git-hooks": "^2.13.1",
     "vitest": "^4.1.7"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged && npm run lint && npx jscpd ."
+  },
+  "lint-staged": {
+    "*.{js,jsx,mjs,cjs,json,css}": [
+      "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
+    ]
   }
 }

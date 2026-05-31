@@ -21,6 +21,7 @@ vi.mock('@/lib/server/withTeam', () => ({
     }),
 }));
 
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/db/importExcelData', () => ({ importExcelWorkbook }));
 
 import { POST } from '../route';
@@ -32,12 +33,14 @@ beforeEach(() => {
 
 function makeRequest({
   fileName = 'cases.xlsx',
+  mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   softwareVersion = '1.0',
   testEnvironment = 'QA',
 } = {}) {
   const mockFile = {
     arrayBuffer: async () => Buffer.from('xlsx-content').buffer,
     name: fileName,
+    type: mimeType,
   };
   const fields = { file: mockFile, softwareVersion, testEnvironment };
   return { formData: async () => ({ get: (k) => fields[k] ?? null }) };

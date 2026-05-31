@@ -22,6 +22,7 @@ vi.mock('@/lib/server/withTeam', () => ({
     }),
 }));
 
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/db/testCasesData', () => ({ listTestCases, createTestCase }));
 
 import { GET, POST } from '../route';

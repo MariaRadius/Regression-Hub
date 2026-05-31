@@ -1,0 +1,21 @@
+{
+  "threshold": 2,
+  "minLines": 10,
+  "minTokens": 70,
+  "reporters": ["consoleFull"],
+  "absolute": true,
+  "gitignore": true,
+  "path": ["."],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/public/**",
+    "**/docs/**",
+    "**/*.md",
+    "**/*.test.js",
+    "**/*.test.jsx"
+  ]
+}

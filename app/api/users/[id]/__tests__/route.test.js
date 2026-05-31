@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
 const { db, reset } = createMockDb();
-const { updateUser, deactivateUser } = vi.hoisted(() => ({
+const { updateUser } = vi.hoisted(() => ({
   updateUser: vi.fn(),
-  deactivateUser: vi.fn(),
 }));
 
 vi.mock('@/lib/server/withTeam', () => ({
@@ -22,9 +21,13 @@ vi.mock('@/lib/server/withTeam', () => ({
     }),
 }));
 
-vi.mock('@/lib/db/usersData', () => ({ updateUser, deactivateUser }));
+vi.mock('@/lib/db/usersData', () => ({ updateUser }));
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
 
-import { DELETE, PATCH } from '../route';
+import { PATCH } from '../route';
 
 beforeEach(() => {
   reset();
@@ -47,18 +50,5 @@ describe('PATCH /api/users/[id]', () => {
       { name: 'New' },
       { sessionUserId: 'u1' },
     );
-  });
-});
-
-describe('DELETE /api/users/[id]', () => {
-  it('deactivates user', async () => {
-    deactivateUser.mockResolvedValue({ ok: true });
-    const res = await DELETE(new Request('http://x'), {
-      params: Promise.resolve({ id: 'abc' }),
-    });
-    expect(res.status).toBe(200);
-    expect(deactivateUser).toHaveBeenCalledWith(db, 't1', 'abc', {
-      sessionUserId: 'u1',
-    });
   });
 });

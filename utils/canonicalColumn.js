@@ -41,6 +41,10 @@ export function canonicalColumn(header) {
     date: 'Tested On',
     softwareversiontested: 'Software Version Tested',
     version: 'Software Version Tested',
+    notes: 'Notes',
+    note: 'Notes',
+    comments: 'Notes',
+    comment: 'Notes',
   };
   return map[key] || header;
 }

@@ -5,7 +5,9 @@ node_modules/
 .env.local
 .claude/worktrees/
 .claude/settings.local.json
-AGENTS.md
 debug.log
 .playwright-mcp/
 .screenshots/
+e2e/.auth/
+playwright-report/
+e2e/test-results/

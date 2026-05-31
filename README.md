@@ -17,14 +17,19 @@ Free MongoDB M0 cluster: <https://cloud.mongodb.com>
 
 Next.js 15 · React 18 · MongoDB 6 · NextAuth 4 · React Query 5 · TipTap 3 · Recharts · jsPDF · xlsx · bcryptjs · Tailwind CSS 3
 
-## Linting
+## Linting & Duplication
 
-ESLint 9 (flat config) with `next/core-web-vitals` + strict correctness rules (`no-unused-vars`, `eqeqeq`, `prefer-const`, `no-var`, `no-console` warn). Config lives in `eslint.config.mjs`.
+[Biome](https://biomejs.dev) for lint + format; [jscpd](https://github.com/kucherenko/jscpd) for copy-paste detection. Pre-commit hook runs both automatically via `simple-git-hooks` + `lint-staged` (installed by `npm install`).
 
 ```bash
-npm run lint        # report violations
-npm run lint:fix    # auto-fix what can be fixed
+npm run lint        # biome check — report violations
+npm run lint:fix    # biome check --write — auto-fix
+npm run dup         # jscpd . — report duplicates
 ```
+
+Global install (optional, for IDE integration): `npm i -g @biomejs/biome jscpd`
+
+To (re)install the pre-commit hook after cloning: `npx simple-git-hooks`
 
 ## Testing
 
@@ -69,12 +74,19 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 ### Test Cases
 
-- Inline editing: actual result, status, tester, date, version, defects, priority, Jira ID
-- Rich text editing (TipTap) for steps / expected / actual / defects
-- Bulk fill: apply status / tester / date / version across all pending or all visible rows in one click
-- Sticky defaults: set tester + version once, auto-applied on next status change
-- Filters by application, module, status, tester
-- Priority and Jira ID columns
+Master·Detail layout: scannable list (left 46%) + detail panel (right 54%).
+
+**Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
+
+**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Reassign / Edit modals. Single-row actions are also available from the detail panel's Mark Pass/Fail/Pending buttons.
+
+**Test-case business rules (enforcement is server-side; UI reflects these constraints):**
+
+- **BR-15 — Tester ≠ Assignee (by design).** `testedBy` = whoever performs the mark; `assignedTo` = who owns the assignment. They may differ (anyone can pitch in under another's assignment). Reports must label the two distinctly — never conflate "assigned to" with "tested by."
+
+**Detail panel:** Shows full editable fields via TestCaseRow. `testedOn` saves on blur (not on every keystroke).
+
+**Pagination:** URL-persisted (`?page=`, `?size=`). Defaults: page 1, 50 rows. Options: 10 / 50 / 100.
 
 ### Excel Import
 
@@ -92,9 +104,14 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 - Assign test cases to QA users
 - Track who owns what
 
+### Audit Log
+
+Every Pass / Fail / reset-to-Pending and every assign / unassign appends an immutable entry to the `events` collection — actor name and timestamp included — so no result or ownership change is ever anonymous or losable.
+
 ### Test Runs
 
 - History of every import with timestamp and counts
+- Software version is set only by import or version restore — never editable on an individual test case
 
 ### Reports
 
@@ -122,11 +139,10 @@ Auto-detected (case-insensitive, spaces/punctuation ignored):
 | Test Case            | testcase, testcasename         |
 | Steps                | steps, teststeps               |
 | Expected Result      | expectedresult, expected       |
-| Actual Result        | actualresult, actual           |
+| Notes                | notes, note, comments, comment, actualresult, actual, defectsimprovements, defects |
 | Status               | status                         |
 | Tested By            | testedby, tester               |
 | Tested On            | testedon, testdate, date       |
 | Version              | softwareversiontested, version |
-| Defects              | defectsimprovements, defects   |
 | Priority             | priority                       |
 | Jira ID              | jiraid, jira                   |

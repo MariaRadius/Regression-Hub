@@ -25,6 +25,7 @@ vi.mock('@/lib/server/withTeam', () => ({
     }),
 }));
 
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/db/settingsData', () => ({
   getTeamSettings,
   updateTeamSettings,

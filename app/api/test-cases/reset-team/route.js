@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { resetTeamData } from '@/lib/db/testCasesData';
 import { ApiError } from '@/lib/errors';
@@ -11,5 +12,6 @@ export const POST = withAdmin(async (request, _ctx, { teamId, db }) => {
     throw new ApiError(400, 'Type RESET to confirm');
   }
   const deleted = await resetTeamData(db, teamId);
+  revalidatePath('/(app)/dashboard', 'page');
   return NextResponse.json({ ok: true, deleted });
 });

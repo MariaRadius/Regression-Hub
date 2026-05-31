@@ -32,14 +32,20 @@ describe('DownloadPdfButton', () => {
     generateTestRunReport.mockResolvedValue({ save: vi.fn() });
   });
 
-  it('renders the PDF button', () => {
-    render(<DownloadPdfButton run={mockRun} />);
-    expect(screen.getByRole('button', { name: /PDF/i })).toBeInTheDocument();
+  function renderButton() {
+    return render(<DownloadPdfButton run={mockRun} />);
+  }
+
+  it('renders the Download PDF button', () => {
+    renderButton();
+    expect(
+      screen.getByRole('button', { name: /Download PDF/i }),
+    ).toBeInTheDocument();
   });
 
   it('disables the button while downloading (MUI loading prop)', async () => {
     exportData.mockImplementation(() => new Promise(() => {}));
-    render(<DownloadPdfButton run={mockRun} />);
+    renderButton();
     fireEvent.click(screen.getByRole('button'));
     // MUI <Button loading> sets aria-disabled and disabled on the root element
     await waitFor(() => expect(screen.getByRole('button')).toBeDisabled());
@@ -47,7 +53,7 @@ describe('DownloadPdfButton', () => {
 
   it('calls showToast with info when no cases returned', async () => {
     exportData.mockResolvedValue([]);
-    render(<DownloadPdfButton run={mockRun} />);
+    renderButton();
     fireEvent.click(screen.getByRole('button'));
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(
@@ -59,10 +65,13 @@ describe('DownloadPdfButton', () => {
 
   it('calls showToast with error when fetch throws', async () => {
     exportData.mockRejectedValue(new Error('Network error'));
-    render(<DownloadPdfButton run={mockRun} />);
+    renderButton();
     fireEvent.click(screen.getByRole('button'));
     await waitFor(() =>
-      expect(showToast).toHaveBeenCalledWith('Download failed', 'error'),
+      expect(showToast).toHaveBeenCalledWith(
+        'Download failed — try again',
+        'error',
+      ),
     );
   });
 
@@ -77,22 +86,29 @@ describe('DownloadPdfButton', () => {
         moduleName: 'Mod',
         testCaseId: 'TC1',
         testCase: 'Test',
-        defectsImprovements: '',
+        notes: '',
       },
     ]);
 
-    render(<DownloadPdfButton run={mockRun} />);
+    renderButton();
     fireEvent.click(screen.getByRole('button'));
 
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith('Report downloaded', 'success'),
     );
     expect(generateTestRunReport).toHaveBeenCalledWith({
-      run: mockRun,
+      run: {
+        _id: mockRun._id,
+        softwareVersion: mockRun.softwareVersion,
+        uploadedFileName: mockRun.uploadedFileName,
+        testEnvironment: mockRun.testEnvironment,
+        createdAt: mockRun.createdAt,
+      },
       cases: expect.any(Array),
     });
     expect(save).toHaveBeenCalled();
-    // MUI Button label is static "PDF" (Unicode arrow replaced by DownloadIcon)
-    expect(screen.getByRole('button', { name: /PDF/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Download PDF/i }),
+    ).toBeInTheDocument();
   });
 });
