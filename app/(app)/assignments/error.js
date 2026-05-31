@@ -1,24 +1,32 @@
 'use client';
 
-import { Alert, Box, Button, Typography } from '@mui/material';
+import { Alert, Button, Stack, Typography } from '@mui/material';
+import { useEffect } from 'react';
 
 export default function AssignmentsError({ error, reset }) {
+  useEffect(() => {
+    // Log digest (not message) to avoid leaking server internals to console
+    if (error?.digest) console.error('Assignments error digest:', error.digest);
+  }, [error]);
+
   return (
-    <Box sx={{ p: 5, textAlign: 'center' }}>
-      <Alert severity='error' sx={{ mb: 2, textAlign: 'left' }}>
-        {error?.message || 'Something went wrong. Try refreshing the page.'}
+    <Stack spacing={2} sx={{ p: 5, alignItems: 'center' }}>
+      <Alert severity='error' sx={{ width: '100%', maxWidth: 480 }}>
+        {error?.digest
+          ? 'Something went wrong loading assignments.'
+          : error?.message || 'Something went wrong. Try refreshing the page.'}
       </Alert>
-      <Typography
-        variant='panelTitle'
-        component='h2'
-        gutterBottom
-        display='block'
-      >
-        Failed to load assignments
+      <Typography variant='panelTitle' component='h2'>
+        Failed to Load Assignments
       </Typography>
-      <Button variant='contained' onClick={reset} sx={{ mt: 1 }}>
-        Try again
+      <Button variant='contained' onClick={reset}>
+        Try Again
       </Button>
-    </Box>
+      {error?.digest && (
+        <Typography variant='tableCell' color='text.disabled'>
+          Error ID: {error.digest}
+        </Typography>
+      )}
+    </Stack>
   );
 }

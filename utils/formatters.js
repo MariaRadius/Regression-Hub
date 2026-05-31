@@ -25,3 +25,15 @@ export function normalizeText(value) {
   if (value === null || value === undefined) return '';
   return String(value).trim();
 }
+
+/**
+ * Format a test case record's display ID as `TC0001`.
+ * Uses `testCaseId` when present, falls back to `_id`.
+ *
+ * @param {{ testCaseId?: string | number, _id?: string | number }} tc
+ * @returns {string}
+ * @see {@link __tests__/formatters.test.js}
+ */
+export function formatTcId(tc) {
+  return `TC${String(tc.testCaseId || tc._id).padStart(4, '0')}`;
+}

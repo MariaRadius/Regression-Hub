@@ -1,6 +1,6 @@
 ---
 name: smoke-test
-description: Use when verifying regression-hub pages render correctly end-to-end with no console or network errors — runs automated DevTools walk for both admin and QA roles, checks downloads, and emits a structured JSON report.
+description: Use when verifying regression-hub pages render correctly end-to-end with no console or network errors — runs automated DevTools walk for both admin and QA roles and emits a structured JSON report. Download checks (PDF and Excel) are opt-in and only run when explicitly requested.
 ---
 
 # Smoke Test — regression-hub (automated)
@@ -16,7 +16,7 @@ After `npm test` passes and before opening a PR. Run the full recipe below — d
 ### 1 — Load deferred tools (do this first, before any navigation)
 
 ```
-ToolSearch: "select:mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests,mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_snapshot,mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill,mcp__plugin_chrome-devtools-mcp_chrome-devtools__click,mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for,mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script,mcp__plugin_chrome-devtools-mcp_chrome-devtools__select_page"
+ToolSearch: "select:mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests,mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill,mcp__plugin_chrome-devtools-mcp_chrome-devtools__click,mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for,mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script,mcp__plugin_chrome-devtools-mcp_chrome-devtools__select_page"
 ```
 
 ### 2 — Verify tests pass
@@ -63,23 +63,25 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 **All-role routes (5)** — both admin and QA walks visit these:
 `/dashboard`, `/test-cases`, `/assignments`, `/test-runs`, `/reports`
 
-**Admin-only routes (2)** — admin walk only:
-`/users`, `/import-cases`
+**Admin-only routes (3)** — admin walk only:
+`/admin`, `/users`, `/import-cases`
 
-**QA redirect assertions (2)** — QA walk must confirm these redirect:
-`/users` → `/dashboard`, `/import-cases` → `/dashboard`
+**QA redirect assertions (3)** — QA walk must confirm these redirect:
+`/admin` → `/dashboard`, `/users` → `/dashboard`, `/import-cases` → `/dashboard`
 
 ---
 
-## Download surfaces (all 3 are checked during admin walk)
+## Download surfaces — **all opt-in, skip by default**
+
+> **Do not run any download check unless the user explicitly asked** (e.g. "also test downloads", "run download checks", "test the PDF/Excel export").
+
+All downloads are generated **client-side** (no HTTP download response). Use the Blob interceptor below to capture file sizes.
 
 | ID  | Page       | Button text          | What it generates     |
 | --- | ---------- | -------------------- | --------------------- |
 | A   | /test-runs | "PDF" (first row)    | jsPDF test-run report |
 | B   | /reports   | "Export PDF Signoff" | jsPDF sign-off report |
 | C   | /reports   | "Export Excel"       | xlsx workbook         |
-
-All three are generated **client-side** (no HTTP download response). Use the Blob interceptor below to capture file sizes.
 
 ---
 
@@ -123,18 +125,18 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="admin-smoke"
 
 #### Sign in as admin
 
-1. `take_snapshot` → find `textbox "USERNAME"` and `textbox "PASSWORD"` and `button "SIGN IN"`
+1. `wait_for` text=`["USERNAME"]` timeout=5000 `includeSnapshot: true` → confirm login form; note `textbox "USERNAME"`, `textbox "PASSWORD"`, `button "SIGN IN"`
 2. `fill` USERNAME field → `maria`
 3. `fill` PASSWORD field → `Maria@Radius1`
-4. `click` SIGN IN button
+4. `click` SIGN IN button `includeSnapshot: true`
 5. `wait_for` text `["Dashboard"]` timeout=10000
 
 Confirm URL is `/dashboard`. If still on `/login`, fail with "Admin sign-in failed".
 
-#### Walk all 8 admin routes
+#### Walk all 9 admin routes
 
 For each route in order:
-`/dashboard`, `/test-cases`, `/assignments`, `/test-runs`, `/reports`, `/users`, `/import-cases`
+`/dashboard`, `/test-cases`, `/assignments`, `/test-runs`, `/reports`, `/admin`, `/users`, `/import-cases`
 
 Per route:
 
@@ -158,48 +160,62 @@ Record result:
 
 **Do not stop on FAIL** — continue walking all routes and collect results.
 
-#### Download A — Test Run PDF (on /test-runs)
+#### Download A — Test Run PDF (on /test-runs) — **opt-in only**
 
-After navigating to `/test-runs` (already done in the walk above — navigate again if needed):
+> **Skip unless the user explicitly asked to test downloads.**
 
-1. `take_snapshot` → find the first `button "PDF"` in the table (it is rendered by DownloadPdfButton)
+After navigating to `/test-runs` (already done above — navigate again if needed):
+
+1. `wait_for` text=`["PDF"]` timeout=5000 `includeSnapshot: true` → confirm first `button "PDF"` is visible in the table (rendered by DownloadPdfButton)
 2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
 3. `click` the PDF button
 4. `wait_for` text `["Report downloaded"]` timeout=15000
 5. `evaluate_script` → read `window.__smokeBlobs[0]`
 6. Record: `{ name: "Test Run PDF", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
 
-If `/test-runs` shows "No test runs yet" (EmptyState), mark download A as `SKIPPED` with reason "no test runs".
+If `/test-runs` shows "No test runs yet" (EmptyState), mark A as `SKIPPED` with reason "no test runs".
 
-#### Download B — Signoff PDF + Download C — Excel (on /reports)
+#### Download B — Signoff PDF (on /reports) — **opt-in only**
 
-Navigate to `/reports`:
+> **Skip unless the user explicitly asked to test downloads.**
+
+Navigate to `/reports` (reuse if already there for Download C):
 
 ```
 navigate_page type=url url="http://localhost:$SMOKE_PORT/reports" timeout=15000
 ```
 
-Wait for the page to load (`wait_for` text `["Version History", "Export Excel"]` timeout=10000).
+Wait for the page to load (`wait_for` text=`["Version History", "Export Excel"]` timeout=10000 `includeSnapshot: true`).
 
-**Download B — Signoff PDF:**
-
-1. `take_snapshot` → find `button "Export PDF Signoff"` (in Custom Export panel)
+1. From the snapshot, find `button "Export PDF Signoff"` (in Custom Export panel)
 2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
-3. `click` the Export PDF Signoff button
+3. `click` the Export PDF Signoff button `includeSnapshot: true`
 4. `wait_for` text `["Export PDF Signoff"]` timeout=20000 (button text reverts after generating)
 5. `evaluate_script` → read `window.__smokeBlobs[0]`
 6. Record: `{ name: "Signoff PDF", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
 
-**Download C — Excel:**
+If `/reports` shows no version history (empty table), mark B as `SKIPPED` with reason "no data".
 
-1. `take_snapshot` → find `button "Export Excel"`
+#### Download C — Excel (on /reports) — **opt-in only**
+
+> **Skip unless the user explicitly asked to test downloads.**
+
+Navigate to `/reports` (reuse if already there for Download B):
+
+```
+navigate_page type=url url="http://localhost:$SMOKE_PORT/reports" timeout=15000
+```
+
+Wait for the page to load (`wait_for` text=`["Version History", "Export Excel"]` timeout=10000 `includeSnapshot: true`).
+
+1. From the snapshot, find `button "Export Excel"`
 2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
 3. `click` the Export Excel button
 4. `evaluate_script` after 2 s → read `window.__smokeBlobs[0]` (xlsx is synchronous — no loading state)
    - If `__smokeBlobs` is still empty after 2 s, retry once more after 2 s.
 5. Record: `{ name: "Excel", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
 
-If `/reports` shows no version history (empty table), mark B and C as `SKIPPED` with reason "no data".
+If `/reports` shows no version history (empty table), mark C as `SKIPPED` with reason "no data".
 
 #### Font check (run once, on any already-loaded page)
 
@@ -223,10 +239,10 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="qa-smoke"
 
 #### Sign in as QA
 
-1. `take_snapshot` → find USERNAME / PASSWORD / SIGN IN (same labels as admin login)
+1. `wait_for` text=`["USERNAME"]` timeout=5000 `includeSnapshot: true` → confirm login form; note USERNAME / PASSWORD / SIGN IN fields
 2. `fill` USERNAME → `ammad`
 3. `fill` PASSWORD → `Ammad@Radius1`
-4. `click` SIGN IN
+4. `click` SIGN IN `includeSnapshot: true`
 5. `wait_for` text `["Dashboard"]` timeout=10000
 
 Confirm URL is `/dashboard`. If not, fail "QA sign-in failed".
@@ -238,20 +254,18 @@ Same per-route check as admin walk (navigate → console errors → HTTP 200):
 
 Record same fields as admin walk.
 
-#### Assert 2 QA redirect checks
+#### Assert 3 QA redirect checks
 
-For each restricted route:
+For each restricted route (`/admin`, `/users`, `/import-cases`):
 
 ```
-navigate_page type=url url="http://localhost:$SMOKE_PORT/users" timeout=10000
+navigate_page type=url url="http://localhost:$SMOKE_PORT/<route>" timeout=10000
 ```
 
 After navigation, the current URL must be `http://localhost:$SMOKE_PORT/dashboard`.
 
 - PASS: URL ends with `/dashboard`
-- FAIL: URL ends with `/users` (page rendered — auth guard broken)
-
-Repeat for `/import-cases`.
+- FAIL: URL ends with the route (page rendered — auth guard broken)
 
 Record:
 
@@ -284,6 +298,7 @@ Assemble and print the following JSON (fill in real values):
     { "route": "/assignments",  "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-runs",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
+    { "route": "/admin",        "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/users",        "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/import-cases", "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" }
   ],
@@ -295,14 +310,11 @@ Assemble and print the following JSON (fill in real values):
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" }
   ],
   "redirectChecks": [
+    { "route": "/admin",        "expectedRedirect": "/dashboard", "actualUrl": "<url>", "status": "PASS" },
     { "route": "/users",        "expectedRedirect": "/dashboard", "actualUrl": "<url>", "status": "PASS" },
     { "route": "/import-cases", "expectedRedirect": "/dashboard", "actualUrl": "<url>", "status": "PASS" }
   ],
-  "downloadChecks": [
-    { "name": "Test Run PDF",  "blobSizeBytes": 0, "blobType": "application/pdf",               "status": "PASS" },
-    { "name": "Signoff PDF",   "blobSizeBytes": 0, "blobType": "application/pdf",               "status": "PASS" },
-    { "name": "Excel",         "blobSizeBytes": 0, "blobType": "application/octet-stream",      "status": "PASS" }
-  ],
+  "downloadChecks": "<omit this key entirely when downloads were not requested; include array below only when explicitly run>",
   "fontCheck": {
     "selfHostedOnly": true,
     "cdnHits": [],
@@ -318,6 +330,16 @@ Assemble and print the following JSON (fill in real values):
 }
 ```
 
+When download checks **were** explicitly run, include `downloadChecks` as an array:
+
+```json
+"downloadChecks": [
+  { "name": "Test Run PDF", "blobSizeBytes": 0, "blobType": "application/pdf",          "status": "PASS" },
+  { "name": "Signoff PDF",  "blobSizeBytes": 0, "blobType": "application/pdf",          "status": "PASS" },
+  { "name": "Excel",        "blobSizeBytes": 0, "blobType": "application/octet-stream", "status": "PASS" }
+]
+```
+
 `verdict` is `"PASS"` only when `failed === 0`. Any failure sets verdict to `"FAIL"`.
 
 For FAIL entries, add a `"detail"` field with the error text, HTTP code, or console message verbatim.
@@ -330,7 +352,7 @@ For FAIL entries, add a `"detail"` field with the error text, HTTP code, or cons
 | ------------- | ----------------------------------------------------------------- |
 | Route render  | HTTP 200 AND zero `[error]` console messages                      |
 | QA redirect   | Final URL is `/dashboard` after navigating to restricted route    |
-| Download blob | `size > 1024` bytes (at least 1 KB)                               |
+| Download blob | `size > 1024` bytes (at least 1 KB) — only checked when opted in  |
 | Fonts         | No `fonts.googleapis.com` or `fonts.gstatic.com` in font requests |
 
 Warnings (`[warn]`) do **not** cause FAIL — include them in the report for visibility.
@@ -357,3 +379,5 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - `utils/__tests__/smoke.test.js` is a `1+1` sanity test — ignore it.
 - The download interceptor patches `URL.createObjectURL` for the lifetime of the page tab. If multiple downloads are tested on the same page, reset `window.__smokeBlobs = []` before each click (the injector script above already does this).
 - Port may be 3000–3099 depending on what is already running. Always parse from the server log.
+- `softwareVersionTested` is **not** settable via the single-record create (`POST /api/test-cases`) or update (`PATCH /api/test-cases/[id]`). It is written only by Excel import or version restore. R12 (Pass/Fail requires a software version) validates against the stored value.
+- Result mutations (`PATCH /api/test-cases/[id]`, `PATCH /api/test-cases-bulk`) and assignment mutations (`POST /api/assignments`, `DELETE /api/assignments`) each append one or more entries to the `events` collection (audit log). A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`, with actor and timestamp populated.

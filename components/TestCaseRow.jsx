@@ -87,7 +87,7 @@ export default function TestCaseRow({
           value={local.priority || ''}
           onChange={(e) => handleChange('priority', e.target.value)}
           sx={{ minWidth: 85, ...INPUT_FONT }}
-          inputProps={{ 'data-testid': 'priority-select' }}
+          slotProps={{ htmlInput: { 'data-testid': 'priority-select' } }}
         >
           <MenuItem value=''>—</MenuItem>
           <MenuItem value={PRIORITIES.HIGH}>High</MenuItem>
@@ -145,20 +145,20 @@ export default function TestCaseRow({
         <RichTextDisplay value={tc.expectedResult} />
       </TableCell>
 
-      {/* Actual result */}
+      {/* Notes */}
       <TableCell>
         <TextField
           variant='standard'
           size='small'
           sx={{ minWidth: 140 }}
           slotProps={{ input: { sx: INPUT_FONT } }}
-          value={local.actualResult || ''}
+          value={local.notes || ''}
           onChange={(e) =>
-            setLocal((prev) => ({ ...prev, actualResult: e.target.value }))
+            setLocal((prev) => ({ ...prev, notes: e.target.value }))
           }
           onBlur={(e) => {
-            if (e.target.value !== tc.actualResult)
-              handleChange('actualResult', e.target.value);
+            if (e.target.value !== tc.notes)
+              handleChange('notes', e.target.value);
           }}
         />
       </TableCell>
@@ -168,36 +168,15 @@ export default function TestCaseRow({
         <Select
           variant='standard'
           size='small'
-          value={local.status || ''}
+          value={normalizedStatus(local.status)}
           onChange={(e) => handleChange('status', e.target.value)}
           sx={{ minWidth: 85, color: STATUS_COLOR[st], ...INPUT_FONT }}
-          inputProps={{ 'data-testid': 'status-select' }}
+          slotProps={{ htmlInput: { 'data-testid': 'status-select' } }}
         >
-          <MenuItem value=''>Pending</MenuItem>
+          <MenuItem value={STATUS.PENDING}>Pending</MenuItem>
           <MenuItem value={STATUS.PASS}>Pass</MenuItem>
           <MenuItem value={STATUS.FAIL}>Fail</MenuItem>
         </Select>
-      </TableCell>
-
-      {/* Defects / improvements */}
-      <TableCell>
-        <TextField
-          variant='standard'
-          size='small'
-          sx={{ minWidth: 140 }}
-          slotProps={{ input: { sx: INPUT_FONT } }}
-          value={local.defectsImprovements || ''}
-          onChange={(e) =>
-            setLocal((prev) => ({
-              ...prev,
-              defectsImprovements: e.target.value,
-            }))
-          }
-          onBlur={(e) => {
-            if (e.target.value !== tc.defectsImprovements)
-              handleChange('defectsImprovements', e.target.value);
-          }}
-        />
       </TableCell>
 
       {/* Tested by */}
@@ -225,30 +204,15 @@ export default function TestCaseRow({
           size='small'
           type='date'
           value={toDateInputValue(local.testedOn)}
-          onChange={(e) => handleChange('testedOn', e.target.value)}
-          sx={{ minWidth: 130 }}
-          slotProps={{ input: { sx: INPUT_FONT } }}
-        />
-      </TableCell>
-
-      {/* Software version tested */}
-      <TableCell>
-        <TextField
-          variant='standard'
-          size='small'
-          sx={{ minWidth: 100 }}
-          slotProps={{ input: { sx: INPUT_FONT } }}
-          value={local.softwareVersionTested || ''}
           onChange={(e) =>
-            setLocal((prev) => ({
-              ...prev,
-              softwareVersionTested: e.target.value,
-            }))
+            setLocal((prev) => ({ ...prev, testedOn: e.target.value }))
           }
           onBlur={(e) => {
-            if (e.target.value !== tc.softwareVersionTested)
-              handleChange('softwareVersionTested', e.target.value);
+            if (e.target.value !== toDateInputValue(tc.testedOn))
+              handleChange('testedOn', e.target.value);
           }}
+          sx={{ minWidth: 130 }}
+          slotProps={{ input: { sx: INPUT_FONT } }}
         />
       </TableCell>
 

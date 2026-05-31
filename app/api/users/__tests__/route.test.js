@@ -35,6 +35,10 @@ vi.mock('@/lib/server/withTeam', () => ({
 
 vi.mock('@/lib/db/usersData', () => ({ getUsers, createUser }));
 vi.mock('@/lib/rateLimit', () => ({ checkRateLimit }));
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
 
 import { GET, POST } from '../route';
 

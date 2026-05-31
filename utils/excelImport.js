@@ -15,12 +15,28 @@ function normalizeText(value) {
   return String(value).trim();
 }
 
-function inferApplication(row, sheetName) {
+function inferApplication(_row, sheetName) {
   return normalizeText(sheetName) || 'Default Application';
 }
 
 function looksLikeDataRow(row) {
   return Object.values(row).some((v) => normalizeText(v));
+}
+
+/**
+ * Concatenate non-empty Excel source columns into a single labeled notes string.
+ * Sections are joined by a blank line. All-empty returns ''.
+ * @see {@link __tests__/excelImport.test.js}
+ * @param {{ actualResult: string, defectsImprovements: string, notes: string }} parts
+ * @returns {string}
+ */
+export function mergeImportNotes({ actualResult, defectsImprovements, notes }) {
+  const sections = [
+    actualResult && `Actual Result: ${actualResult}`,
+    defectsImprovements && `Defects/Improvements: ${defectsImprovements}`,
+    notes && `Notes: ${notes}`,
+  ].filter(Boolean);
+  return sections.join('\n\n');
 }
 
 /** @see {@link __tests__/excelImport.test.js} */
@@ -52,22 +68,25 @@ export function parseWorkbookBuffer(buffer, qaUsers = []) {
         row[canonicalHeaders.get(h)] = normalizeText(v);
       });
 
-      if (!row['Module'] || !row['Test Case ID'] || !row['Test Case']) return;
+      if (!row.Module || !row['Test Case ID'] || !row['Test Case']) return;
 
       importedRows.push({
         sourceSheetName: sheetName,
         applicationName: inferApplication(row, sheetName),
-        moduleName: row['Module'],
-        type: row['Type'] || '',
-        traceability: row['Traceability'] || '',
+        moduleName: row.Module,
+        type: row.Type || '',
+        traceability: row.Traceability || '',
         testCaseId: row['Test Case ID'],
         testCase: row['Test Case'],
-        preconditions: row['Preconditions'] || '',
-        steps: row['Steps'] || '',
+        preconditions: row.Preconditions || '',
+        steps: row.Steps || '',
         expectedResult: row['Expected Result'] || '',
-        actualResult: row['Actual Result'] || '',
-        status: COMPLETED_STATUSES.includes(row['Status']) ? row['Status'] : '',
-        defectsImprovements: row['Defects/Improvements'] || '',
+        notes: mergeImportNotes({
+          actualResult: row['Actual Result'] || '',
+          defectsImprovements: row['Defects/Improvements'] || '',
+          notes: row.Notes || '',
+        }),
+        status: COMPLETED_STATUSES.includes(row.Status) ? row.Status : '',
         testedBy:
           !qaUsers.length || qaUsers.includes(row['Tested By'])
             ? row['Tested By']

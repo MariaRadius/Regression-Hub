@@ -4,6 +4,7 @@ import { getAssignmentsPageData } from '@/lib/db/assignmentsData';
 import { getDb } from '@/lib/mongodb';
 import AssignmentsClient from './AssignmentsClient';
 
+// Required: router.refresh() in AssignmentsClient re-fetches after mutations — must not cache
 export const dynamic = 'force-dynamic';
 
 export default async function AssignmentsPage({ searchParams }) {
@@ -19,7 +20,6 @@ export default async function AssignmentsPage({ searchParams }) {
 
   return (
     <AssignmentsClient
-      user={session.user}
       view={view}
       assignments={data.assignments}
       modules={data.modules}

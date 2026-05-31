@@ -1,5 +1,5 @@
-import { PRIORITIES, ROLES, TEAMS } from '@/lib/constants';
 import { createTheme } from '@mui/material/styles';
+import { PRIORITIES, ROLES, TEAMS } from '@/lib/constants';
 
 // CSS variable references for fonts set by app/fonts.js
 const fontBody = 'var(--font-body)';
@@ -32,6 +32,9 @@ const theme = createTheme({
     grey: {
       100: '#f3f4f6', // --surface-3
       300: '#d1d5db', // --line-2
+      500: '#9ca3af', // --ink-3
+      600: '#4b5563', // --ink-3
+      700: '#374151', // --ink-2
     },
     success: {
       main: '#16a34a', // --pass
@@ -180,6 +183,7 @@ const theme = createTheme({
       fontWeight: 500,
       textTransform: 'uppercase',
       letterSpacing: '0.05em',
+      color: '#4b5563',
     },
     emptyStateTitle: {
       fontSize: 14,
@@ -243,6 +247,14 @@ const theme = createTheme({
         },
         body: {
           fontSize: 13,
+        },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: {
+          // MUI default is 8px; match DialogContent's 24px horizontal inset
+          padding: '16px 24px',
         },
       },
     },

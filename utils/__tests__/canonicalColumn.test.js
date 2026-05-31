@@ -57,8 +57,14 @@ describe('canonicalColumn', () => {
   });
 
   it('returns the original header for unknown columns', () => {
-    expect(canonicalColumn('Notes')).toBe('Notes');
     expect(canonicalColumn('Custom Field')).toBe('Custom Field');
+  });
+
+  it('maps Notes aliases to Notes', () => {
+    expect(canonicalColumn('Notes')).toBe('Notes');
+    expect(canonicalColumn('Note')).toBe('Notes');
+    expect(canonicalColumn('Comments')).toBe('Notes');
+    expect(canonicalColumn('Comment')).toBe('Notes');
   });
 
   it('maps Platform Application compound header', () => {

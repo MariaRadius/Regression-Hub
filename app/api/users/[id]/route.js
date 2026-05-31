@@ -1,5 +1,6 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
-import { deactivateUser, updateUser } from '@/lib/db/usersData';
+import { updateUser } from '@/lib/db/usersData';
 import { ApiError } from '@/lib/errors';
 import { updateUserBodySchema } from '@/lib/schemas/users';
 import { withAdmin } from '@/lib/server/withTeam';
@@ -13,16 +14,7 @@ export const PATCH = withAdmin(
     const result = await updateUser(db, teamId, id, parsed.data, {
       sessionUserId: session.user.id,
     });
-    return NextResponse.json(result);
-  },
-);
-
-export const DELETE = withAdmin(
-  async (_request, { params }, { teamId, db, session }) => {
-    const { id } = await params;
-    const result = await deactivateUser(db, teamId, id, {
-      sessionUserId: session.user.id,
-    });
+    revalidatePath('/users');
     return NextResponse.json(result);
   },
 );

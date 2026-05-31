@@ -1,9 +1,9 @@
-import TopNav from '@/components/TopNav';
-import { authOptions } from '@/lib/auth';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Toolbar from '@mui/material/Toolbar';
 import { getServerSession } from 'next-auth';
+import TopNav from '@/components/TopNav';
+import { authOptions } from '@/lib/auth';
 
 export default async function AppLayout({ children }) {
   const session = await getServerSession(authOptions);

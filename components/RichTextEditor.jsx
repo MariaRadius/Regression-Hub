@@ -40,7 +40,7 @@ export default function RichTextEditor({
     if (value !== current) {
       editor.commands.setContent(value || '', false);
     }
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [value, editor]);
 
   if (!editor) return null;
 

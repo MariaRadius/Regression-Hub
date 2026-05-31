@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createUser, getUsers } from '@/lib/db/usersData';
 import { ApiError } from '@/lib/errors';
@@ -27,6 +28,7 @@ export const POST = withAdmin(
       createdBy: session.user.username,
       teamName: session.user.teamName,
     });
+    revalidatePath('/users');
     return NextResponse.json(result, { status: 201 });
   },
 );

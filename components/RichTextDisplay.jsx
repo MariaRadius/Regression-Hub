@@ -1,3 +1,5 @@
+import parseHtml from 'html-react-parser';
+
 /**
  * @see {@link __tests__/components/RichTextDisplay.test.jsx}
  */
@@ -8,11 +10,9 @@ export default function RichTextDisplay({ value, className, style }) {
 
   if (isHtml) {
     return (
-      <div
-        className={`rte-display ${className || ''}`}
-        style={style}
-        dangerouslySetInnerHTML={{ __html: value }}
-      />
+      <div className={`rte-display ${className || ''}`} style={style}>
+        {parseHtml(value)}
+      </div>
     );
   }
 
@@ -29,8 +29,8 @@ export default function RichTextDisplay({ value, className, style }) {
     const Tag = listType === 'ol' ? 'ol' : 'ul';
     elements.push(
       <Tag key={elements.length} style={{ margin: '2px 0', paddingLeft: 18 }}>
-        {listItems.map((item, i) => (
-          <li key={i}>{item}</li>
+        {listItems.map((item) => (
+          <li key={item}>{item}</li>
         ))}
       </Tag>,
     );

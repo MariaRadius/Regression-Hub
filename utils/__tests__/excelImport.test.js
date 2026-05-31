@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseWorkbookBuffer } from '../excelImport';
+import { mergeImportNotes, parseWorkbookBuffer } from '../excelImport';
 
 function makeBuffer(sheetData) {
   const wb = XLSX.utils.book_new();
@@ -19,6 +19,70 @@ const VALID_ROW = {
   Status: 'Pass',
 };
 
+describe('mergeImportNotes', () => {
+  it('returns empty string when all inputs are empty', () => {
+    expect(
+      mergeImportNotes({
+        actualResult: '',
+        defectsImprovements: '',
+        notes: '',
+      }),
+    ).toBe('');
+  });
+
+  it('returns labeled section for actualResult only', () => {
+    expect(
+      mergeImportNotes({
+        actualResult: 'it crashed',
+        defectsImprovements: '',
+        notes: '',
+      }),
+    ).toBe('Actual Result: it crashed');
+  });
+
+  it('returns labeled section for defectsImprovements only', () => {
+    expect(
+      mergeImportNotes({
+        actualResult: '',
+        defectsImprovements: 'bug-123',
+        notes: '',
+      }),
+    ).toBe('Defects/Improvements: bug-123');
+  });
+
+  it('returns labeled section for notes only', () => {
+    expect(
+      mergeImportNotes({
+        actualResult: '',
+        defectsImprovements: '',
+        notes: 'looks good',
+      }),
+    ).toBe('Notes: looks good');
+  });
+
+  it('concatenates all three non-empty sections in order, joined by blank lines', () => {
+    expect(
+      mergeImportNotes({
+        actualResult: 'failed login',
+        defectsImprovements: 'DEF-42',
+        notes: 'retested ok',
+      }),
+    ).toBe(
+      'Actual Result: failed login\n\nDefects/Improvements: DEF-42\n\nNotes: retested ok',
+    );
+  });
+
+  it('omits empty sections when only two are non-empty', () => {
+    expect(
+      mergeImportNotes({
+        actualResult: 'crash',
+        defectsImprovements: '',
+        notes: 'see log',
+      }),
+    ).toBe('Actual Result: crash\n\nNotes: see log');
+  });
+});
+
 describe('parseWorkbookBuffer', () => {
   it('parses a valid sheet and returns imported rows', () => {
     const buffer = makeBuffer({ Sheet1: [VALID_ROW] });
@@ -31,6 +95,36 @@ describe('parseWorkbookBuffer', () => {
       expectedResult: 'User is redirected to dashboard',
       status: 'Pass',
     });
+    expect(rows[0]).not.toHaveProperty('actualResult');
+    expect(rows[0]).not.toHaveProperty('defectsImprovements');
+    expect(rows[0]).toHaveProperty('notes');
+  });
+
+  it('merges legacy Actual Result + Defects/Improvements + Notes columns into notes', () => {
+    const buffer = makeBuffer({
+      Sheet1: [
+        {
+          ...VALID_ROW,
+          'Actual Result': 'screen went blank',
+          'Defects/Improvements': 'DEF-99',
+          Notes: 'works after reboot',
+        },
+      ],
+    });
+    const rows = parseWorkbookBuffer(buffer);
+    expect(rows[0].notes).toBe(
+      'Actual Result: screen went blank\n\nDefects/Improvements: DEF-99\n\nNotes: works after reboot',
+    );
+    expect(rows[0]).not.toHaveProperty('actualResult');
+    expect(rows[0]).not.toHaveProperty('defectsImprovements');
+  });
+
+  it('reads standalone Notes column with no legacy columns', () => {
+    const buffer = makeBuffer({
+      Sheet1: [{ ...VALID_ROW, Notes: 'all good' }],
+    });
+    const rows = parseWorkbookBuffer(buffer);
+    expect(rows[0].notes).toBe('Notes: all good');
   });
 
   it('infers applicationName from sheet name', () => {

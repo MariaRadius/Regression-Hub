@@ -15,25 +15,11 @@ import {
 } from '../pdfHelpers';
 import { groupCasesByApplication, summarizeCases } from '../testCaseStats';
 import { drawDonutWithLegend } from './pdfCharts';
-import { buildModuleSummaryTable } from './reportTables';
-
-const FAILED_CASES_COLUMNS = [
-  { header: '#', halign: 'center', headerHalign: 'center', width: 4 },
-  { header: 'Application', width: 14 },
-  { header: 'Module', width: 17 },
-  { header: 'Test Case', width: 40 },
-  { header: 'Defects / Improvements', width: 13 },
-  { header: 'Tested By', width: 12 },
-];
-
-const failedCasesRow = (t, i) => [
-  i + 1,
-  t.applicationName || '—',
-  t.moduleName || '—',
-  t.testCaseId ? `${t.testCaseId} — ${t.testCase || ''}` : t.testCase || '—',
-  t.defectsImprovements || '—',
-  t.testedBy || '—',
-];
+import {
+  buildModuleSummaryTable,
+  FAILED_CASES_COLUMNS,
+  failedCasesRow,
+} from './reportTables';
 
 /**
  * @see utils/pdf/__tests__/generateSignoffReport.test.js

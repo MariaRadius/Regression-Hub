@@ -1,17 +1,14 @@
 'use client';
 
-import { locationToChipColor, roleToChipColor } from '@/app/theme';
-import { ROLES } from '@/lib/constants';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
-import PeopleIcon from '@mui/icons-material/People';
 import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
 import {
   AppBar,
   Avatar,
@@ -31,12 +28,12 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-
-const DRAWER_WIDTH = 240;
+import { signOut } from 'next-auth/react';
+import { Fragment, useState } from 'react';
+import { locationToChipColor, roleToChipColor } from '@/app/theme';
+import { ROLES } from '@/lib/constants';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
@@ -44,17 +41,25 @@ const NAV = [
   { href: '/assignments', label: 'Assignments', Icon: AssignmentIcon },
   { href: '/test-runs', label: 'Test Runs', Icon: PlaylistPlayIcon },
   { href: '/reports', label: 'Reports', Icon: AssessmentIcon },
+  {
+    href: '/admin',
+    label: 'Admin Panel',
+    Icon: AdminPanelSettingsIcon,
+    adminOnly: true,
+  },
 ];
 
-const ADMIN_NAV = [
-  { href: '/users', label: 'Users', Icon: PeopleIcon },
-  { href: '/import-cases', label: 'Import Test Cases', Icon: UploadFileIcon },
-];
+const DRAWER_ITEM_SX = {
+  mx: 1,
+  borderRadius: 1,
+  mb: 0.25,
+  '&.Mui-selected': { bgcolor: 'rgba(255,255,255,0.12)' },
+  '&:hover': { bgcolor: 'rgba(255,255,255,0.07)' },
+};
 
 /** @see {@link __tests__/TopNav.test.jsx} */
 export default function TopNav({ user }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [adminAnchor, setAdminAnchor] = useState(null);
   const [profileAnchor, setProfileAnchor] = useState(null);
 
   const userInitials =
@@ -67,10 +72,12 @@ export default function TopNav({ user }) {
 
   const pathname = usePathname();
   const isActive = (href) =>
-    pathname === href || pathname.startsWith(href + '/');
+    pathname === href || pathname.startsWith(`${href}/`);
+
+  const isAdmin = user?.role === ROLES.ADMIN;
 
   const drawerContent = (
-    <Box sx={{ width: DRAWER_WIDTH, bgcolor: 'nav.main', minHeight: '100%' }}>
+    <Box sx={{ width: '100%', bgcolor: 'nav.main', minHeight: '100%' }}>
       {/* Brand header */}
       <Stack
         direction='row'
@@ -92,7 +99,7 @@ export default function TopNav({ user }) {
             QA
           </Typography>
         </Stack>
-        <Box>
+        <Box sx={{ flex: 1 }}>
           <Typography
             variant='navBrand'
             sx={{ color: 'white', display: 'block' }}
@@ -106,84 +113,59 @@ export default function TopNav({ user }) {
             Testing management
           </Typography>
         </Box>
+        <IconButton
+          onClick={() => setMobileOpen(false)}
+          aria-label='close navigation'
+          sx={{ color: 'rgba(255,255,255,0.6)' }}
+        >
+          <CloseIcon />
+        </IconButton>
       </Stack>
 
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
 
       <List dense sx={{ py: 1 }}>
-        {NAV.map(({ href, label, Icon }) => (
-          <ListItemButton
-            key={href}
-            component={Link}
-            href={href}
-            selected={isActive(href)}
-            onClick={() => setMobileOpen(false)}
-            sx={{
-              mx: 1,
-              borderRadius: 1,
-              mb: 0.25,
-              '&.Mui-selected': { bgcolor: 'rgba(255,255,255,0.12)' },
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.07)' },
-            }}
-          >
-            <ListItemIcon
-              sx={{ color: 'rgba(255,255,255,0.75)', minWidth: 36 }}
-            >
-              <Icon fontSize='small' />
-            </ListItemIcon>
-            <ListItemText
-              primary={label}
-              slotProps={{
-                primary: { variant: 'navItem', sx: { color: 'white' } },
-              }}
-            />
-          </ListItemButton>
-        ))}
-
-        {user?.role === ROLES.ADMIN && (
-          <>
-            <Typography
-              variant='metricLabel'
-              sx={{
-                display: 'block',
-                px: 2,
-                pt: 1.5,
-                pb: 0.5,
-                color: 'rgba(255,255,255,0.3)',
-              }}
-            >
-              Admin
-            </Typography>
-            {ADMIN_NAV.map(({ href, label, Icon }) => (
+        {NAV.map((n, i) => {
+          if (n.adminOnly && !isAdmin) return null;
+          const showSectionLabel = n.adminOnly && !NAV[i - 1]?.adminOnly;
+          return (
+            <Fragment key={n.href}>
+              {showSectionLabel && (
+                <Typography
+                  variant='metricLabel'
+                  sx={{
+                    display: 'block',
+                    px: 2,
+                    pt: 1.5,
+                    pb: 0.5,
+                    color: 'rgba(255,255,255,0.3)',
+                  }}
+                >
+                  Admin
+                </Typography>
+              )}
               <ListItemButton
-                key={href}
                 component={Link}
-                href={href}
-                selected={isActive(href)}
+                href={n.href}
+                selected={isActive(n.href)}
                 onClick={() => setMobileOpen(false)}
-                sx={{
-                  mx: 1,
-                  borderRadius: 1,
-                  mb: 0.25,
-                  '&.Mui-selected': { bgcolor: 'rgba(255,255,255,0.12)' },
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.07)' },
-                }}
+                sx={DRAWER_ITEM_SX}
               >
                 <ListItemIcon
                   sx={{ color: 'rgba(255,255,255,0.75)', minWidth: 36 }}
                 >
-                  <Icon fontSize='small' />
+                  <n.Icon fontSize='small' />
                 </ListItemIcon>
                 <ListItemText
-                  primary={label}
+                  primary={n.label}
                   slotProps={{
                     primary: { variant: 'navItem', sx: { color: 'white' } },
                   }}
                 />
               </ListItemButton>
-            ))}
-          </>
-        )}
+            </Fragment>
+          );
+        })}
       </List>
     </Box>
   );
@@ -244,63 +226,29 @@ export default function TopNav({ user }) {
 
           <Box sx={{ flex: 1 }} />
 
-          {/* Desktop nav */}
+          {/* Desktop nav — public + admin (admin items hidden for non-admins) */}
           <Stack
             direction='row'
             spacing={0.5}
             sx={{ display: { xs: 'none', md: 'flex' } }}
           >
-            {NAV.map(({ href, label, Icon }) => (
-              <Tooltip key={href} title={label}>
-                <IconButton
-                  component={Link}
-                  href={href}
-                  color={isActive(href) ? 'primary' : 'inherit'}
-                  size='large'
-                  aria-label={label}
-                >
-                  <Icon />
-                </IconButton>
-              </Tooltip>
-            ))}
-          </Stack>
-
-          {/* Admin menu — desktop only; mobile uses the Drawer */}
-          <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-            {user?.role === ROLES.ADMIN && (
-              <>
-                <Tooltip title='Admin'>
+            {NAV.map(({ href, label, Icon, adminOnly }) => {
+              if (adminOnly && !isAdmin) return null;
+              return (
+                <Tooltip key={href} title={label}>
                   <IconButton
-                    color='inherit'
+                    component={Link}
+                    href={href}
+                    color={isActive(href) ? 'primary' : 'inherit'}
                     size='large'
-                    onClick={(e) => setAdminAnchor(e.currentTarget)}
-                    aria-label='admin menu'
+                    aria-label={label}
                   >
-                    <AdminPanelSettingsIcon />
+                    <Icon />
                   </IconButton>
                 </Tooltip>
-                <Menu
-                  anchorEl={adminAnchor}
-                  open={Boolean(adminAnchor)}
-                  onClose={() => setAdminAnchor(null)}
-                >
-                  {ADMIN_NAV.map(({ href, label, Icon }) => (
-                    <MenuItem
-                      key={href}
-                      component={Link}
-                      href={href}
-                      onClick={() => setAdminAnchor(null)}
-                    >
-                      <ListItemIcon>
-                        <Icon fontSize='small' />
-                      </ListItemIcon>
-                      <ListItemText>{label}</ListItemText>
-                    </MenuItem>
-                  ))}
-                </Menu>
-              </>
-            )}
-          </Box>
+              );
+            })}
+          </Stack>
 
           {/* Profile menu */}
           <Tooltip title='Account'>
@@ -369,7 +317,7 @@ export default function TopNav({ user }) {
         sx={{
           display: { xs: 'block', md: 'none' },
           '& .MuiDrawer-paper': {
-            width: DRAWER_WIDTH,
+            width: '100%',
             boxSizing: 'border-box',
           },
         }}

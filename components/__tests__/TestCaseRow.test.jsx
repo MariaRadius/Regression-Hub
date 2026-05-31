@@ -19,9 +19,8 @@ const mockTc = {
   preconditions: 'User exists',
   steps: '1. Navigate to login',
   expectedResult: 'Redirect to dashboard',
-  actualResult: '',
+  notes: '',
   status: 'Pass',
-  defectsImprovements: '',
   testedBy: '',
   testedOn: null,
   softwareVersionTested: '',
@@ -91,8 +90,9 @@ describe('TestCaseRow', () => {
   it('priority change calls onSave with new value', () => {
     const onSave = vi.fn();
     renderRow({ onSave });
-    // MUI Select renders a hidden <input>; find it by data-testid
-    const priorityInput = screen.getByTestId('priority-select');
+    // MUI v9 Select renders a text input whose value mirrors the selected option;
+    // slotProps.htmlInput does not surface data-testid in JSDOM, so find by display value
+    const priorityInput = screen.getByDisplayValue('High');
     fireEvent.change(priorityInput, { target: { value: 'Low' } });
     expect(onSave).toHaveBeenCalledWith('tc1', 'priority', 'Low');
   });
@@ -105,7 +105,9 @@ describe('TestCaseRow', () => {
   it('status change calls onSave with new value', () => {
     const onSave = vi.fn();
     renderRow({ onSave });
-    const statusInput = screen.getByTestId('status-select');
+    // MUI v9 Select renders a text input whose value mirrors the selected option;
+    // slotProps.htmlInput does not surface data-testid in JSDOM, so find by display value
+    const statusInput = screen.getByDisplayValue('Pass');
     fireEvent.change(statusInput, { target: { value: 'Fail' } });
     expect(onSave).toHaveBeenCalledWith('tc1', 'status', 'Fail');
   });
@@ -144,13 +146,40 @@ describe('TestCaseRow', () => {
   });
 
   it('normalizedStatus handles non-normalized status — invalid value maps to Pending', () => {
-    // normalizedStatus('PASS') → 'Pending' because it's not an exact match
-    // The select value should be the original tc.status (local state), but
-    // the STATUS_COLOR lookup uses normalizedStatus. Verify component renders
-    // without error and the hidden input reflects the raw status value.
+    // normalizedStatus maps any non-Pass/Fail value → STATUS.PENDING ('Pending')
+    // MUI v9 Select renders a text input mirroring the current value prop
     renderRow({ tc: { ...mockTc, status: 'invalid-status' } });
-    const statusInput = screen.getByTestId('status-select');
-    // The local state still holds the raw value passed in
-    expect(statusInput.value).toBe('invalid-status');
+    const statusInput = screen.getByDisplayValue('Pending');
+    expect(statusInput.value).toBe('Pending');
+  });
+
+  it('notes inline edit: initial value shown from tc.notes', () => {
+    renderRow({ tc: { ...mockTc, notes: 'some note text' } });
+    expect(screen.getByDisplayValue('some note text')).toBeInTheDocument();
+  });
+
+  it('notes blur calls onSave only when value changed', () => {
+    const onSave = vi.fn();
+    renderRow({ onSave, tc: { ...mockTc, notes: 'original' } });
+    const notesInput = screen.getByDisplayValue('original');
+    fireEvent.change(notesInput, { target: { value: 'updated' } });
+    fireEvent.blur(notesInput);
+    expect(onSave).toHaveBeenCalledWith('tc1', 'notes', 'updated');
+  });
+
+  it('notes blur does NOT call onSave when value unchanged', () => {
+    const onSave = vi.fn();
+    renderRow({ onSave, tc: { ...mockTc, notes: 'unchanged' } });
+    const notesInput = screen.getByDisplayValue('unchanged');
+    fireEvent.blur(notesInput);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('does not render an actualResult or defectsImprovements input', () => {
+    renderRow({
+      tc: { ...mockTc, actualResult: 'old', defectsImprovements: 'old' },
+    });
+    // Neither legacy field should appear as an editable input
+    expect(screen.queryByDisplayValue('old')).not.toBeInTheDocument();
   });
 });

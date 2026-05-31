@@ -1,7 +1,14 @@
 'use client';
 
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import AddIcon from '@mui/icons-material/Add';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined';
+import ChecklistIcon from '@mui/icons-material/Checklist';
+import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import GridViewIcon from '@mui/icons-material/GridView';
 import {
   Accordion,
   AccordionDetails,
@@ -9,12 +16,15 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   LinearProgress,
   MenuItem,
   Paper,
@@ -24,11 +34,13 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { priorityToColor } from '@/app/theme';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider, { showToast } from '@/components/Toast';
@@ -49,11 +61,14 @@ function ProgressBar({ completed, total }) {
   return (
     <Box>
       <Stack direction='row' sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-        <Typography variant='caption' color='text.disabled'>
+        <Typography
+          variant='metricSub'
+          sx={{ fontVariantNumeric: 'tabular-nums' }}
+        >
           {completed} / {total} tested
         </Typography>
         <Typography
-          variant='caption'
+          variant='tableCell'
           fontWeight={600}
           color={
             pct === 100
@@ -62,6 +77,7 @@ function ProgressBar({ completed, total }) {
                 ? 'info.main'
                 : 'warning.main'
           }
+          sx={{ fontVariantNumeric: 'tabular-nums' }}
         >
           {pct}%
         </Typography>
@@ -79,7 +95,7 @@ function ProgressBar({ completed, total }) {
 function DueDate({ dueDate }) {
   if (!dueDate)
     return (
-      <Typography component='span' variant='caption' color='text.disabled'>
+      <Typography component='span' variant='tableCell' color='text.disabled'>
         No due date
       </Typography>
     );
@@ -94,16 +110,25 @@ function DueDate({ dueDate }) {
       : diff === 1
         ? 'Due tomorrow'
         : `Due in ${diff}d`;
+  const formatted = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(due);
   return (
     <Typography
       component='span'
-      variant='caption'
+      variant='tableCell'
       fontWeight={600}
       color={
         isOverdue ? 'error.main' : diff <= 2 ? 'warning.main' : 'text.disabled'
       }
     >
-      ◷ {due.toLocaleDateString()} — {label}
+      <AccessTimeIcon
+        sx={{ fontSize: 'inherit', verticalAlign: 'middle', mr: 0.5 }}
+        aria-hidden='true'
+      />
+      {formatted} — {label}
     </Typography>
   );
 }
@@ -120,7 +145,6 @@ const EMPTY_FORM = {
 };
 
 export default function AssignmentsClient({
-  user,
   view,
   assignments,
   modules,
@@ -141,6 +165,29 @@ export default function AssignmentsClient({
     message: '',
     onConfirm: null,
   });
+
+  function handleModalClose() {
+    const isDirty =
+      form.title ||
+      form.moduleIds.length > 0 ||
+      form.notes ||
+      form.assignedTo ||
+      form.dueDate;
+    if (isDirty) {
+      setConfirmDialog({
+        open: true,
+        message: 'Discard this assignment? Your changes will be lost.',
+        onConfirm: () => {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+          setShowModal(false);
+          setForm(EMPTY_FORM);
+        },
+      });
+    } else {
+      setShowModal(false);
+      setForm(EMPTY_FORM);
+    }
+  }
 
   async function createAssignment(e) {
     e.preventDefault();
@@ -211,7 +258,7 @@ export default function AssignmentsClient({
   );
 
   return (
-    <Box>
+    <Stack spacing={3}>
       <ToastProvider />
 
       {/* Header */}
@@ -222,12 +269,14 @@ export default function AssignmentsClient({
         actions={
           <Button
             variant='contained'
+            size='small'
+            startIcon={<AddIcon />}
             onClick={() => {
               setForm(EMPTY_FORM);
               setShowModal(true);
             }}
           >
-            + New Assignment
+            New Assignment
           </Button>
         }
       />
@@ -252,7 +301,11 @@ export default function AssignmentsClient({
               : "You haven't assigned anything yet"
           }
         >
-          <Typography variant='body2' color='text.disabled' sx={{ mt: 0.75 }}>
+          <Typography
+            variant='tableCell'
+            color='text.disabled'
+            sx={{ mt: 0.75 }}
+          >
             {view === 'mine'
               ? 'Ask a team member to assign test cases to you.'
               : 'Click "New Assignment" to assign a module or test cases.'}
@@ -264,8 +317,7 @@ export default function AssignmentsClient({
             <AssignmentCard
               key={a._id}
               assignment={a}
-              isMine={view === 'mine'}
-              isSent={view === 'sent'}
+              view={view}
               isEditing={editId === a._id}
               editForm={editForm}
               onEdit={() => {
@@ -295,7 +347,7 @@ export default function AssignmentsClient({
           sx={{ mt: 3 }}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant='body2'>
+            <Typography variant='tableCell'>
               Cancelled ({cancelled.length})
             </Typography>
           </AccordionSummary>
@@ -305,28 +357,33 @@ export default function AssignmentsClient({
                 <Paper
                   key={a._id}
                   variant='outlined'
-                  sx={{
-                    opacity: 0.55,
-                    px: 2.25,
-                    py: 1.75,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
+                  sx={{ opacity: 0.55, px: 2.25, py: 1.75 }}
                 >
-                  <Box>
-                    <Typography variant='body2' fontWeight={600}>
-                      {a.title}
-                    </Typography>
-                    <Typography
-                      variant='caption'
-                      color='text.disabled'
-                      sx={{ mt: 0.25, display: 'block' }}
-                    >
-                      {a.assignedBy} → {a.assignedTo} · {a.testCaseCount} cases
-                      · Cancelled
-                    </Typography>
-                  </Box>
+                  <Stack
+                    direction='row'
+                    sx={{
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Stack spacing={0.25}>
+                      <Typography variant='panelTitle' component='h2'>
+                        {a.title}
+                      </Typography>
+                      <Typography variant='tableCell' color='text.disabled'>
+                        {a.assignedBy}{' '}
+                        <ArrowForwardIcon
+                          sx={{
+                            fontSize: 'inherit',
+                            verticalAlign: 'middle',
+                            mx: 0.5,
+                          }}
+                          aria-hidden='true'
+                        />{' '}
+                        {a.assignedTo} · {a.testCaseCount} cases · Cancelled
+                      </Typography>
+                    </Stack>
+                  </Stack>
                 </Paper>
               ))}
             </Stack>
@@ -335,79 +392,40 @@ export default function AssignmentsClient({
       )}
 
       {/* Confirm Dialog */}
-      <Dialog
-        open={confirmDialog.open}
-        onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
-        maxWidth='xs'
-      >
-        <DialogTitle>Confirm</DialogTitle>
-        <DialogContent>
-          <Typography>{confirmDialog.message}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() =>
-              setConfirmDialog((prev) => ({ ...prev, open: false }))
-            }
-          >
-            Cancel
-          </Button>
-          <Button
-            variant='contained'
-            color='error'
-            onClick={confirmDialog.onConfirm}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        confirmDialog={confirmDialog}
+        setConfirmDialog={setConfirmDialog}
+      />
 
       {/* Create Assignment Modal */}
       <Dialog
         open={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setForm(EMPTY_FORM);
-        }}
+        onClose={handleModalClose}
         maxWidth='sm'
         fullWidth
       >
         <DialogTitle>New Assignment</DialogTitle>
         <DialogContent dividers>
-          <form onSubmit={createAssignment}>
+          <form id='create-assignment-form' onSubmit={createAssignment}>
             <Stack spacing={2}>
               {/* Title */}
               <TextField
                 size='small'
                 fullWidth
-                label={
-                  <>
-                    Title{' '}
-                    <Typography
-                      component='span'
-                      variant='caption'
-                      color='text.disabled'
-                      fontWeight={400}
-                    >
-                      (optional)
-                    </Typography>
-                  </>
-                }
+                label='Title (optional)'
                 value={form.title}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, title: e.target.value }))
                 }
                 placeholder='e.g. Auth Module — v2.5 regression'
+                slotProps={{
+                  htmlInput: { name: 'assignment-title', autoComplete: 'off' },
+                }}
               />
 
               {/* Scope: Module or Manual selection */}
-              <Box>
-                <Typography
-                  variant='caption'
-                  color='text.secondary'
-                  fontWeight={500}
-                  sx={{ mb: 0.75, display: 'block' }}
-                >
+              <Stack spacing={0.75}>
+                <Typography variant='formLabel' sx={{ display: 'block' }}>
                   Scope
                 </Typography>
                 <ToggleButtonGroup
@@ -425,20 +443,21 @@ export default function AssignmentsClient({
                   size='small'
                   fullWidth
                 >
-                  <ToggleButton value='module'>⊞ By Module</ToggleButton>
-                  <ToggleButton value='selection'>◎ By Selection</ToggleButton>
+                  <ToggleButton value='module'>
+                    <GridViewIcon fontSize='small' sx={{ mr: 0.75 }} />
+                    By Module
+                  </ToggleButton>
+                  <ToggleButton value='selection'>
+                    <ChecklistIcon fontSize='small' sx={{ mr: 0.75 }} />
+                    By Selection
+                  </ToggleButton>
                 </ToggleButtonGroup>
-              </Box>
+              </Stack>
 
               {/* Module picker */}
               {form.type === 'module' && (
-                <Box>
-                  <Typography
-                    variant='caption'
-                    color='text.secondary'
-                    fontWeight={500}
-                    sx={{ mb: 0.75, display: 'block' }}
-                  >
+                <Stack spacing={0.75}>
+                  <Typography variant='formLabel' sx={{ display: 'block' }}>
                     Modules to assign
                   </Typography>
                   <Stack
@@ -454,7 +473,7 @@ export default function AssignmentsClient({
                   >
                     {modules.length === 0 ? (
                       <Typography
-                        variant='caption'
+                        variant='tableCell'
                         color='text.disabled'
                         sx={{ p: 1 }}
                       >
@@ -467,24 +486,26 @@ export default function AssignmentsClient({
                         return (
                           <Stack
                             key={m._id}
-                            component='label'
                             direction='row'
                             spacing={1}
+                            component='label'
                             sx={{
                               alignItems: 'center',
                               px: 1,
-                              py: 0.75,
+                              py: 0.5,
                               borderRadius: 1.5,
-                              cursor: 'pointer',
-                              bgcolor: checked ? 'primary.50' : 'transparent',
+                              bgcolor: checked
+                                ? 'action.selected'
+                                : 'transparent',
                               border: '1px solid',
                               borderColor: checked
-                                ? 'primary.200'
+                                ? 'primary.main'
                                 : 'transparent',
+                              cursor: 'pointer',
                             }}
                           >
-                            <input
-                              type='checkbox'
+                            <Checkbox
+                              size='small'
                               checked={checked}
                               onChange={() =>
                                 setForm((f) => ({
@@ -494,24 +515,32 @@ export default function AssignmentsClient({
                                     : [...f.moduleIds, m._id],
                                 }))
                               }
+                              sx={{ p: 0.5 }}
                             />
-                            <Box
-                              component='span'
-                              sx={{ flex: 1, fontSize: 13 }}
+                            <Stack
+                              direction='row'
+                              spacing={0.5}
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                alignItems: 'center',
+                              }}
                             >
                               <Typography
-                                component='span'
-                                variant='caption'
+                                variant='tableCell'
                                 color='text.disabled'
+                                noWrap
                               >
                                 {m.applicationName} /
-                              </Typography>{' '}
-                              {m.name}
-                            </Box>
+                              </Typography>
+                              <Typography variant='tableCell' noWrap>
+                                {m.name}
+                              </Typography>
+                            </Stack>
                             <Typography
-                              component='span'
-                              variant='caption'
+                              variant='tableCell'
                               color='text.disabled'
+                              sx={{ flexShrink: 0 }}
                             >
                               {count} cases
                             </Typography>
@@ -520,7 +549,7 @@ export default function AssignmentsClient({
                       })
                     )}
                   </Stack>
-                </Box>
+                </Stack>
               )}
 
               {form.type === 'selection' && (
@@ -539,7 +568,7 @@ export default function AssignmentsClient({
                 select
                 size='small'
                 fullWidth
-                label='Assign to'
+                label='Assignee'
                 value={form.assignedTo}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, assignedTo: e.target.value }))
@@ -577,20 +606,11 @@ export default function AssignmentsClient({
                     size='small'
                     fullWidth
                     type='date'
-                    label={
-                      <>
-                        Due date{' '}
-                        <Typography
-                          component='span'
-                          variant='caption'
-                          color='text.disabled'
-                          fontWeight={400}
-                        >
-                          (optional)
-                        </Typography>
-                      </>
-                    }
-                    slotProps={{ inputLabel: { shrink: true } }}
+                    label='Due Date (optional)'
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      htmlInput: { name: 'assignment-due-date' },
+                    }}
                     value={form.dueDate}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, dueDate: e.target.value }))
@@ -601,70 +621,53 @@ export default function AssignmentsClient({
 
               {/* Notes */}
               <TextField
-                size='small'
                 fullWidth
                 multiline
-                rows={3}
-                label={
-                  <>
-                    Notes{' '}
-                    <Typography
-                      component='span'
-                      variant='caption'
-                      color='text.disabled'
-                      fontWeight={400}
-                    >
-                      (optional)
-                    </Typography>
-                  </>
-                }
+                minRows={3}
+                maxRows={10}
+                label='Notes (optional)'
                 value={form.notes}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, notes: e.target.value }))
                 }
                 placeholder='Instructions, context, or special focus areas…'
-                slotProps={{ htmlInput: { style: { resize: 'vertical' } } }}
-              />
-            </Stack>
-
-            <Stack
-              direction='row'
-              spacing={1.25}
-              sx={{ justifyContent: 'flex-end', mt: 2.5 }}
-            >
-              <Button
-                type='button'
-                variant='outlined'
-                onClick={() => {
-                  setShowModal(false);
-                  setForm(EMPTY_FORM);
+                slotProps={{
+                  htmlInput: {
+                    style: { resize: 'vertical' },
+                    name: 'assignment-notes',
+                    autoComplete: 'off',
+                  },
                 }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type='submit'
-                variant='contained'
-                disabled={
-                  saving ||
-                  (form.type === 'module' && !form.moduleIds.length) ||
-                  !form.assignedTo
-                }
-              >
-                {saving ? 'Creating…' : 'Create Assignment'}
-              </Button>
+              />
             </Stack>
           </form>
         </DialogContent>
+        <DialogActions>
+          <Button variant='outlined' onClick={handleModalClose}>
+            Cancel
+          </Button>
+          <Button
+            type='submit'
+            form='create-assignment-form'
+            variant='contained'
+            disabled={saving}
+            startIcon={
+              saving ? (
+                <CircularProgress size={14} color='inherit' />
+              ) : undefined
+            }
+          >
+            {saving ? 'Creating…' : 'Create Assignment'}
+          </Button>
+        </DialogActions>
       </Dialog>
-    </Box>
+    </Stack>
   );
 }
 
 function AssignmentCard({
   assignment: a,
-  isMine,
-  isSent,
+  view,
   isEditing,
   editForm,
   onEdit,
@@ -674,6 +677,9 @@ function AssignmentCard({
   onCancel,
   onViewCases,
 }) {
+  const isMine = view === 'mine';
+  const isSent = view === 'sent';
+
   const priorityStripeColor =
     a.priority === PRIORITIES.HIGH
       ? 'error.main'
@@ -684,17 +690,12 @@ function AssignmentCard({
   return (
     <Paper variant='outlined' sx={{ overflow: 'hidden', p: 0 }}>
       {/* Priority stripe */}
-      <Box
-        sx={{
-          height: 4,
-          bgcolor: priorityStripeColor,
-        }}
-      />
+      <Box sx={{ height: 4, bgcolor: priorityStripeColor }} />
 
-      <Box sx={{ px: 2.5, py: 2 }}>
+      <Stack sx={{ px: 2.5, py: 2 }} spacing={1.5}>
         {isEditing ? (
           /* Edit mode */
-          <Stack spacing={1.5}>
+          <>
             <TextField
               size='small'
               fullWidth
@@ -751,7 +752,7 @@ function AssignmentCard({
                 Save
               </Button>
             </Stack>
-          </Stack>
+          </>
         ) : (
           /* View mode */
           <>
@@ -761,16 +762,15 @@ function AssignmentCard({
               sx={{
                 alignItems: 'flex-start',
                 justifyContent: 'space-between',
-                mb: 1.5,
               }}
             >
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.5}>
                 <Stack
                   direction='row'
                   spacing={1}
-                  sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}
+                  sx={{ alignItems: 'center', flexWrap: 'wrap' }}
                 >
-                  <Typography variant='body1' fontWeight={700}>
+                  <Typography variant='panelTitle' component='h2'>
                     {a.title}
                   </Typography>
                   <Chip
@@ -789,68 +789,67 @@ function AssignmentCard({
                   }}
                 >
                   {isMine && (
-                    <Typography variant='caption' color='text.disabled'>
-                      From:{' '}
-                      <Typography
-                        component='strong'
-                        variant='caption'
-                        fontWeight={600}
-                        color='text.primary'
-                      >
-                        {a.assignedBy}
-                      </Typography>
+                    <Typography variant='tableCell' color='text.disabled'>
+                      From: <strong>{a.assignedBy}</strong>
                     </Typography>
                   )}
                   {isSent && (
-                    <Typography variant='caption' color='text.disabled'>
-                      To:{' '}
-                      <Typography
-                        component='strong'
-                        variant='caption'
-                        fontWeight={600}
-                        color='text.primary'
-                      >
-                        {a.assignedTo}
-                      </Typography>
+                    <Typography variant='tableCell' color='text.disabled'>
+                      To: <strong>{a.assignedTo}</strong>
                     </Typography>
                   )}
-                  <Typography variant='caption' color='text.disabled'>
-                    {a.type === 'module'
-                      ? `⊞ ${a.moduleIds?.length || 1} module${
-                          (a.moduleIds?.length || 1) !== 1 ? 's' : ''
-                        }`
-                      : '◎ Selection'}
-                    · {a.testCaseCount} test case
+                  <Typography variant='tableCell' color='text.disabled'>
+                    {a.type === 'module' ? (
+                      <>
+                        <GridViewIcon
+                          sx={{ fontSize: 'inherit', verticalAlign: 'middle' }}
+                          aria-hidden='true'
+                        />{' '}
+                        {a.moduleIds?.length || 1} module
+                        {(a.moduleIds?.length || 1) !== 1 ? 's' : ''}
+                      </>
+                    ) : (
+                      <>
+                        <ChecklistIcon
+                          sx={{ fontSize: 'inherit', verticalAlign: 'middle' }}
+                          aria-hidden='true'
+                        />{' '}
+                        Selection
+                      </>
+                    )}
+                    {' · '}
+                    {a.testCaseCount} test case
                     {a.testCaseCount !== 1 ? 's' : ''}
                   </Typography>
                   <DueDate dueDate={a.dueDate} />
                 </Stack>
-              </Box>
+              </Stack>
               <Stack direction='row' spacing={0.75} sx={{ flexShrink: 0 }}>
                 {isSent && (
-                  <Button
-                    variant='outlined'
-                    size='small'
-                    onClick={onEdit}
-                    title='Edit assignment'
-                  >
-                    ✎
-                  </Button>
+                  <Tooltip title='Edit assignment'>
+                    <IconButton
+                      size='small'
+                      onClick={onEdit}
+                      aria-label='Edit assignment'
+                    >
+                      <EditIcon fontSize='small' />
+                    </IconButton>
+                  </Tooltip>
                 )}
                 <Button variant='contained' size='small' onClick={onViewCases}>
                   View Cases
                 </Button>
                 {isSent && (
-                  <Button
-                    variant='outlined'
-                    color='error'
-                    size='small'
-                    onClick={onCancel}
-                    title='Cancel assignment'
-                    sx={{ minWidth: 0, px: 1.25 }}
-                  >
-                    ✕
-                  </Button>
+                  <Tooltip title='Cancel assignment'>
+                    <IconButton
+                      size='small'
+                      color='error'
+                      onClick={onCancel}
+                      aria-label='Cancel assignment'
+                    >
+                      <CloseIcon fontSize='small' />
+                    </IconButton>
+                  </Tooltip>
                 )}
               </Stack>
             </Stack>
@@ -858,25 +857,20 @@ function AssignmentCard({
             <ProgressBar completed={a.completedCount} total={a.testCaseCount} />
 
             {a.notes && (
-              <Box
-                sx={{
-                  mt: 1.25,
-                  px: 1.5,
-                  py: 1,
-                  bgcolor: 'background.default',
-                  borderRadius: 1.5,
-                  borderLeft: '3px solid',
-                  borderColor: 'divider',
-                }}
+              <Alert
+                severity='info'
+                icon={false}
+                variant='outlined'
+                sx={{ py: 0.5 }}
               >
-                <Typography variant='caption' color='text.disabled'>
+                <Typography variant='tableCell' color='text.disabled'>
                   {a.notes}
                 </Typography>
-              </Box>
+              </Alert>
             )}
           </>
         )}
-      </Box>
+      </Stack>
     </Paper>
   );
 }

@@ -2,37 +2,21 @@
 
 import DownloadIcon from '@mui/icons-material/Download';
 import Button from '@mui/material/Button';
-import { useState } from 'react';
-import { showToast } from '@/components/Toast';
-import { exportData } from '@/lib/api/exportData';
-import { dateStamp } from '@/utils/formatters';
-import { generateTestRunReport } from '@/utils/pdf/generateTestRunReport';
+import { useDownloadTestRunReport } from '@/hooks/useDownloadTestRunReport';
 
 /**
+ * @param {object} props
+ * @param {{ _id: string, softwareVersion: string, uploadedFileName: string, testEnvironment: string, createdAt: string }} props.run
  * @see {@link __tests__/components/DownloadPdfButton.test.jsx}
  */
 export default function DownloadPdfButton({ run }) {
-  const [downloading, setDownloading] = useState(false);
-
-  async function handleClick() {
-    setDownloading(true);
-    try {
-      const cases = await exportData({ testRunId: run._id });
-      if (!cases.length) {
-        showToast('No test cases for this run', 'info');
-        return;
-      }
-
-      const doc = await generateTestRunReport({ run, cases });
-      doc.save(`report-v${run.softwareVersion || 'NA'}-${dateStamp()}.pdf`);
-      showToast('Report downloaded', 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('Download failed', 'error');
-    } finally {
-      setDownloading(false);
-    }
-  }
+  const { download, downloading } = useDownloadTestRunReport({
+    runId: run._id,
+    softwareVersion: run.softwareVersion,
+    uploadedFileName: run.uploadedFileName,
+    testEnvironment: run.testEnvironment,
+    createdAt: run.createdAt,
+  });
 
   return (
     <Button
@@ -41,10 +25,10 @@ export default function DownloadPdfButton({ run }) {
       loading={downloading}
       loadingPosition='start'
       startIcon={<DownloadIcon />}
-      onClick={handleClick}
+      onClick={download}
       sx={{ whiteSpace: 'nowrap' }}
     >
-      PDF
+      Download PDF
     </Button>
   );
 }
