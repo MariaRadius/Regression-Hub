@@ -130,23 +130,13 @@ export function ReleaseEnvProvider({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setRelease = useCallback((release) => {
-    if (!release) return;
-    const firstEnv = release.environments?.[0] ?? null;
+  const setReleaseEnv = useCallback((release, env) => {
+    if (!release || !env) return;
+    if (!release.environments?.includes(env)) return;
     setActiveRelease(release);
-    setEnvironmentState(firstEnv);
-    writeSessionStorage(release._id, firstEnv);
+    setEnvironmentState(env);
+    writeSessionStorage(release._id, env);
   }, []);
-
-  const setEnvironment = useCallback(
-    (env) => {
-      if (!env || !activeRelease) return;
-      if (!activeRelease.environments?.includes(env)) return;
-      setEnvironmentState(env);
-      writeSessionStorage(activeRelease._id, env);
-    },
-    [activeRelease],
-  );
 
   const value = useMemo(
     () => ({
@@ -155,10 +145,10 @@ export function ReleaseEnvProvider({
       environments: activeRelease?.environments ?? [],
       environment,
       activeRelease,
-      setRelease,
-      setEnvironment,
+      releases,
+      setReleaseEnv,
     }),
-    [activeRelease, environment, setRelease, setEnvironment],
+    [releases, activeRelease, environment, setReleaseEnv],
   );
 
   return (
@@ -178,8 +168,8 @@ export function ReleaseEnvProvider({
  *   environments: string[],
  *   environment: string|null,
  *   activeRelease: object|null,
- *   setRelease: (release: object) => void,
- *   setEnvironment: (env: string) => void,
+ *   releases: object[],
+ *   setReleaseEnv: (release: object, env: string) => void,
  * }}
  */
 export function useReleaseEnv() {

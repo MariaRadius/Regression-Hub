@@ -380,6 +380,5 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - Port may be 3000–3099 depending on what is already running. Always parse from the server log.
 - `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
 - Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`) and assignment mutations (`POST /api/assignments`, `DELETE /api/assignments/[id]`) each append entries to the `events` collection (audit log). Entries carry `caseId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`.
-- The `ReleaseContextBar` (persistent bar below TopNav) must be visible on every authenticated page; it shows the active release selector and environment toggle. If it is missing on any route, the context wiring is broken.
-- Archived releases must not appear in the default release selector dropdown; they must still be findable by typing in the selector's search input.
+- The release/environment selector is a single combined searchable dropdown inside TopNav (right side, before the profile avatar), visible on every authenticated route including mobile. If it is missing on any route, the context wiring is broken.
 - Admin mutations on an archived release (edit, import, add result, add assignment) must return 409; verify with a direct API call if needed.

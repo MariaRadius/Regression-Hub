@@ -154,6 +154,10 @@ Reuse the dark-on-nav `Autocomplete` styling already proven in `ReleaseContextBa
 | `components/TopNav.jsx` | Render `<ReleaseEnvSelector />` + divider on the right of the `Toolbar`. |
 | `.claude/skills/smoke-test/SKILL.md` | Update line ~383: selector now lives in `TopNav` as one combined dropdown (per the project rule on route/UI-affecting changes). |
 
+## Data Validation
+
+- ReleaseFormDialog.jsx and others + backend: Do not allow "/" character in release name or environment name while creating or updating releases and environments
+
 ## Out of scope (YAGNI)
 
 - No grouping by release header (rejected "Design C").

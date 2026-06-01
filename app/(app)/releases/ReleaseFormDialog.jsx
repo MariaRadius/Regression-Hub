@@ -34,6 +34,10 @@ import {
   updateRelease,
 } from '@/lib/api/releases';
 import { DEFAULT_ENVIRONMENTS } from '@/lib/constants';
+import {
+  environmentNameSchema,
+  releaseNameSchema,
+} from '@/lib/schemas/releases';
 
 /** Start-type options for a new release. */
 const START_TYPES = [
@@ -65,15 +69,23 @@ const START_TYPES = [
  */
 function EnvChipInput({ value, onChange }) {
   const [draft, setDraft] = useState('');
+  const [draftError, setDraftError] = useState(null);
 
   const addEnv = useCallback(() => {
-    const trimmed = draft.trim().toUpperCase();
-    if (!trimmed || value.includes(trimmed)) {
-      setDraft('');
+    const r = environmentNameSchema.safeParse(draft);
+    if (!r.success) {
+      setDraftError(r.error.issues[0].message);
       return;
     }
-    onChange([...value, trimmed]);
+    const normalised = r.data.toUpperCase();
+    if (value.includes(normalised)) {
+      setDraft('');
+      setDraftError(null);
+      return;
+    }
+    onChange([...value, normalised]);
     setDraft('');
+    setDraftError(null);
   }, [draft, value, onChange]);
 
   const removeEnv = useCallback(
@@ -111,8 +123,13 @@ function EnvChipInput({ value, onChange }) {
           size='small'
           placeholder='Add environment… (Enter or comma)'
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setDraftError(null);
+          }}
           onKeyDown={handleKeyDown}
+          error={Boolean(draftError)}
+          helperText={draftError ?? ''}
           sx={{ flex: 1 }}
         />
         <Button
@@ -199,11 +216,12 @@ export default function ReleaseFormDialog({
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
-      const trimmedName = name.trim();
-      if (!trimmedName) {
-        setError('Release name is required.');
+      const r = releaseNameSchema.safeParse(name);
+      if (!r.success) {
+        setError(r.error.issues[0].message);
         return;
       }
+      const cleanName = r.data;
 
       if (!isEdit && environments.length === 0) {
         setError('At least one environment is required.');
@@ -220,17 +238,17 @@ export default function ReleaseFormDialog({
 
       try {
         if (isEdit) {
-          await updateRelease(editTarget._id, { name: trimmedName });
+          await updateRelease(editTarget._id, { name: cleanName });
         } else if (startType === 'clone') {
           await cloneRelease({
-            name: trimmedName,
+            name: cleanName,
             environments,
             cloneFromId: sourceReleaseId,
             carryAssignments,
           });
         } else {
           // empty or import — both create an empty release; import adds cases later
-          await createRelease({ name: trimmedName, environments });
+          await createRelease({ name: cleanName, environments });
         }
 
         onSuccess();

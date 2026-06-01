@@ -33,6 +33,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { Fragment, useState } from 'react';
 import { locationToChipColor, roleToChipColor } from '@/app/theme';
+import ReleaseEnvSelector from '@/components/ReleaseEnvSelector';
 import { ROLES } from '@/lib/constants';
 
 const NAV = [
@@ -225,6 +226,18 @@ export default function TopNav({ user }) {
           </Stack>
 
           <Box sx={{ flex: 1 }} />
+
+          <ReleaseEnvSelector />
+          <Divider
+            orientation='vertical'
+            flexItem
+            sx={{
+              borderColor: 'rgba(255,255,255,0.12)',
+              mx: 1.5,
+              my: 1.5,
+              display: { xs: 'none', md: 'block' },
+            }}
+          />
 
           {/* Desktop nav — public + admin (admin items hidden for non-admins) */}
           <Stack

@@ -111,8 +111,6 @@ const setupHookMocks = () => {
     releaseId: currentReleaseId,
     environment: currentEnvironment,
     activeRelease: currentActiveRelease,
-    setRelease: vi.fn(),
-    setEnvironment: vi.fn(),
   }));
   filtersModule.useTestCaseFilters.mockImplementation(() => ({
     active: currentFiltersActive,
