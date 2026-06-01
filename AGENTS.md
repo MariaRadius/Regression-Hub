@@ -55,6 +55,7 @@
 - DO NOT use `next/dynamic` with `ssr: false` in RSC pages; extract the dynamic import into a `'use client'` wrapper component
 - DO NOT fetch page-level data client-side; use async RSC with server-side data fetching — eliminates loading skeletons, reduces RTT, and keeps sensitive query logic off the client
 - DO NOT let a `loading.js` skeleton's layout diverge from the settled page; each skeleton block must match its rendered counterpart's dimensions, spacing, and grid position exactly — any page layout change requires an equal update to `loading.js`
+- DO NOT pass full server records/documents to client components; queries MUST project (select only the fields the client renders) and pass that minimal shape as props
 - when an RSC page is refreshed client-side via `router.refresh()`, add `export const dynamic = 'force-dynamic'` to the page so the server re-runs the query on every refresh
 - when exposing cached data through an API route (e.g. `/api/dashboard`), set `Cache-Control` to at least `private, max-age=60, stale-while-revalidate=300` to align with the `unstable_cache` TTL
 - when wrapping DB queries with `unstable_cache`, add `revalidatePath` to every mutation route that affects that page's data — not just the primary mutation route

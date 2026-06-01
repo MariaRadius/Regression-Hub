@@ -2,27 +2,19 @@ import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { analyseImport, commitImport } from '@/lib/db/importExcelData';
 import { ApiError } from '@/lib/errors';
+import { importBodySchema } from '@/lib/schemas/import';
 import { withAdmin } from '@/lib/server/withTeam';
+import { deriveInitial } from '@/utils/appInitial';
 
-// Mirror the FE MIME set. Ambiguous types (octet-stream / empty) fall back to
-// extension check — the FE already guards these, but the BE must not trust the client.
-const XLSX_MIMES = new Set([
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/zip',
-]);
-
-function isValidXlsxFile(file) {
-  const mime = file.type ?? '';
-  if (mime === 'application/octet-stream' || mime === '') {
-    return file.name?.toLowerCase().endsWith('.xlsx') ?? false;
-  }
-  return XLSX_MIMES.has(mime);
-}
+// Process-safety floor caps (tunable). These are the server-side defaults;
+// the client enforces the same values pre-upload (decision B).
+const MAX_ROWS = 10_000;
+const MAX_FIELD_CHARS = 20_000;
 
 /**
  * POST /api/releases/[id]/import
  *
- * Two-phase import route gated to admins.
+ * Two-phase import route gated to admins. Accepts application/json.
  *
  * @see {@link app/api/releases/[id]/import/__tests__/route.test.js}
  *
@@ -38,73 +30,89 @@ function isValidXlsxFile(file) {
  *   and appends IMPORT audit events. All-or-nothing (decision 14).
  *   Returns { imported, updated, releaseId }.
  *
- * Form fields:
- *   file                — .xlsx workbook (required)
- *   releaseId           — target release ObjectId string (required)
- *   environment         — target environment name for result columns (required)
- *   confirmed           — "true" | "false" (optional, default "false")
- *   appInitialOverrides — JSON-encoded Record<appName, initial> (optional)
+ * Body (application/json):
+ *   rows                — parsed row array (required)
+ *   confirmed           — boolean (optional, default false)
+ *   environment         — target environment name (required when confirmed: true)
+ *   appInitialOverrides — Record<appName, initial> (optional)
  */
 export const POST = withAdmin(async (request, context, { teamId, db }) => {
   const { id: releaseId } = await context.params;
 
-  const formData = await request.formData();
+  // --- Parse and zod-validate body (process-safety floor) ---
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    throw new ApiError(400, 'Request body must be valid JSON');
+  }
 
-  const file = formData.get('file');
-  const environment = (formData.get('environment') ?? '').trim();
-  const confirmedRaw = formData.get('confirmed');
-  const confirmed = confirmedRaw === 'true' || confirmedRaw === true;
-  const appInitialOverridesRaw = formData.get('appInitialOverrides');
-
-  // --- Validate file presence and type ---
-  if (!file) throw new ApiError(400, 'No file uploaded');
-  if (!isValidXlsxFile(file)) {
+  const parsed = importBodySchema.safeParse(body);
+  if (!parsed.success) {
     throw new ApiError(
       400,
-      'Invalid file type. Upload a .xlsx Excel workbook.',
+      parsed.error.errors[0]?.message ?? 'Invalid request body',
     );
   }
 
-  // --- Parse appInitialOverrides if provided ---
-  let appInitialOverrides = {};
-  if (appInitialOverridesRaw) {
-    try {
-      appInitialOverrides = JSON.parse(appInitialOverridesRaw);
-      if (
-        typeof appInitialOverrides !== 'object' ||
-        Array.isArray(appInitialOverrides)
-      ) {
-        throw new Error('must be a JSON object');
+  const {
+    rows,
+    confirmed = false,
+    environment = '',
+    appInitialOverrides = {},
+  } = parsed.data;
+
+  // --- Server process-safety floor caps ---
+  if (rows.length > MAX_ROWS) {
+    throw new ApiError(
+      400,
+      `Row count ${rows.length} exceeds the ${MAX_ROWS}-row limit`,
+    );
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    for (const [key, val] of Object.entries(row)) {
+      if (typeof val === 'string' && val.length > MAX_FIELD_CHARS) {
+        throw new ApiError(
+          400,
+          `Row ${i + 1}: field "${key}" exceeds the ${MAX_FIELD_CHARS}-character limit`,
+        );
       }
-    } catch {
-      throw new ApiError(
-        400,
-        'appInitialOverrides must be a valid JSON object',
-      );
     }
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const fileName = file.name;
+  // --- Guard deriveInitial throw: a new-app name with no alphanumeric chars
+  //     must yield a clean 400, never a 500 (floor guarantee). ---
+  const uniqueAppNames = [
+    ...new Set(rows.map((r) => r.applicationName || 'Default Application')),
+  ];
+  for (const appName of uniqueAppNames) {
+    if (!(appName in appInitialOverrides)) {
+      try {
+        deriveInitial(appName);
+      } catch {
+        throw new ApiError(
+          400,
+          `Application "${appName}" has no alphanumeric characters`,
+        );
+      }
+    }
+  }
 
   if (!confirmed) {
     // --- Phase 1: dry-run analysis ---
-    const preview = await analyseImport(db, teamId, {
-      buffer,
-      fileName,
-      releaseId,
-    });
+    const preview = await analyseImport(db, teamId, { rows, releaseId });
     return NextResponse.json(preview);
   }
 
   // --- Phase 2: commit ---
-  if (!environment) {
+  if (!environment.trim()) {
     throw new ApiError(400, 'environment is required when confirmed is true');
   }
 
   const result = await commitImport(db, teamId, {
-    buffer,
-    fileName,
+    rows,
     releaseId,
     environment,
     appInitialOverrides,
