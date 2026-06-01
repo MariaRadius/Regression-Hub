@@ -1,5 +1,10 @@
+import { promisify } from 'node:util';
+import { gunzip, gzip } from 'node:zlib';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
+
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 
 const { db, reset } = createMockDb();
 const { analyseImport, commitImport } = vi.hoisted(() => ({
@@ -62,8 +67,19 @@ function makeRow(overrides = {}) {
   };
 }
 
-function makeRequest(body) {
-  return { json: async () => body };
+/**
+ * Build a mock request whose arrayBuffer() returns a gzip-compressed JSON body.
+ *
+ * @param {unknown} body - value to JSON-encode and compress
+ * @returns {{ arrayBuffer: () => Promise<ArrayBuffer> }}
+ */
+async function makeRequest(body) {
+  const json = JSON.stringify(body);
+  const buf = await gzipAsync(Buffer.from(json, 'utf8'));
+  return {
+    arrayBuffer: async () =>
+      buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+  };
 }
 
 beforeEach(() => {
@@ -85,7 +101,7 @@ describe('POST /api/releases/[id]/import — Phase 1 (analyse)', () => {
       errors: [],
       warnings: [],
     });
-    const res = await POST(makeRequest({ rows: [makeRow()] }), PARAMS);
+    const res = await POST(await makeRequest({ rows: [makeRow()] }), PARAMS);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ valid: true, createCount: 3 });
@@ -110,7 +126,7 @@ describe('POST /api/releases/[id]/import — Phase 1 (analyse)', () => {
       warnings: [],
     });
     const res = await POST(
-      makeRequest({ rows: [makeRow()], confirmed: false }),
+      await makeRequest({ rows: [makeRow()], confirmed: false }),
       PARAMS,
     );
     expect(res.status).toBe(200);
@@ -132,7 +148,11 @@ describe('POST /api/releases/[id]/import — Phase 2 (commit)', () => {
       releaseId: RELEASE_ID,
     });
     const res = await POST(
-      makeRequest({ rows: [makeRow()], confirmed: true, environment: 'QA' }),
+      await makeRequest({
+        rows: [makeRow()],
+        confirmed: true,
+        environment: 'QA',
+      }),
       PARAMS,
     );
     expect(res.status).toBe(200);
@@ -157,7 +177,11 @@ describe('POST /api/releases/[id]/import — Phase 2 (commit)', () => {
 
   it('returns 400 when confirmed is true but environment is missing', async () => {
     const res = await POST(
-      makeRequest({ rows: [makeRow()], confirmed: true, environment: '' }),
+      await makeRequest({
+        rows: [makeRow()],
+        confirmed: true,
+        environment: '',
+      }),
       PARAMS,
     );
     expect(res.status).toBe(400);
@@ -173,7 +197,7 @@ describe('POST /api/releases/[id]/import — Phase 2 (commit)', () => {
       releaseId: RELEASE_ID,
     });
     const res = await POST(
-      makeRequest({
+      await makeRequest({
         rows: [makeRow({ applicationName: 'My App' })],
         confirmed: true,
         environment: 'QA',
@@ -195,20 +219,54 @@ describe('POST /api/releases/[id]/import — Phase 2 (commit)', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/releases/[id]/import — server floor', () => {
-  it('returns 400 for non-JSON body', async () => {
+  it('returns 400 for malformed (non-gzip) body', async () => {
     const req = {
-      json: async () => {
-        throw new SyntaxError('bad json');
+      arrayBuffer: async () => {
+        const buf = Buffer.from('this is not gzip data', 'utf8');
+        return buf.buffer.slice(
+          buf.byteOffset,
+          buf.byteOffset + buf.byteLength,
+        );
       },
     };
     const res = await POST(req, PARAMS);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/valid JSON/);
+    expect(body.error).toMatch(/gzip/i);
+  });
+
+  it('returns 400 for a gzip body containing non-JSON content', async () => {
+    const buf = await gzipAsync(Buffer.from('not json %%%', 'utf8'));
+    const req = {
+      arrayBuffer: async () =>
+        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    };
+    const res = await POST(req, PARAMS);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/gzip/i);
+  });
+
+  it('returns 400 for an empty body', async () => {
+    const req = { arrayBuffer: async () => new ArrayBuffer(0) };
+    const res = await POST(req, PARAMS);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/empty/i);
+  });
+
+  it('returns 400 for an oversized compressed body (zip-bomb guard)', async () => {
+    // Exceeds MAX_COMPRESSED_BYTES (50 MB) before gunzip fires.
+    const oversized = new ArrayBuffer(50 * 1024 * 1024 + 1);
+    const req = { arrayBuffer: async () => oversized };
+    const res = await POST(req, PARAMS);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/exceeds/i);
   });
 
   it('returns 400 when body is schema-malformed (missing rows field)', async () => {
-    const res = await POST(makeRequest({ confirmed: false }), PARAMS);
+    const res = await POST(await makeRequest({ confirmed: false }), PARAMS);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBeTruthy();
@@ -218,7 +276,7 @@ describe('POST /api/releases/[id]/import — server floor', () => {
     const rows = Array.from({ length: 10_001 }, (_, i) =>
       makeRow({ testCase: `Case ${i}`, fingerprint: `case-${i}` }),
     );
-    const res = await POST(makeRequest({ rows }), PARAMS);
+    const res = await POST(await makeRequest({ rows }), PARAMS);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/exceeds the/);
@@ -227,7 +285,7 @@ describe('POST /api/releases/[id]/import — server floor', () => {
   it('returns 400 when a field in a row exceeds the field-length cap', async () => {
     const longField = 'x'.repeat(20_001);
     const res = await POST(
-      makeRequest({ rows: [makeRow({ testCase: longField })] }),
+      await makeRequest({ rows: [makeRow({ testCase: longField })] }),
       PARAMS,
     );
     expect(res.status).toBe(400);
@@ -238,7 +296,7 @@ describe('POST /api/releases/[id]/import — server floor', () => {
   it('returns 400 for a degenerate app name (deriveInitial throw-guard), not 500', async () => {
     // Application name with no alphanumeric characters → deriveInitial throws.
     const res = await POST(
-      makeRequest({
+      await makeRequest({
         rows: [
           makeRow({
             applicationName: '---',
@@ -256,7 +314,45 @@ describe('POST /api/releases/[id]/import — server floor', () => {
   });
 
   it('returns 400 when rows is not an array', async () => {
-    const res = await POST(makeRequest({ rows: 'not-an-array' }), PARAMS);
+    const res = await POST(await makeRequest({ rows: 'not-an-array' }), PARAMS);
     expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3 — gzip round-trip and wire tests
+// ---------------------------------------------------------------------------
+
+describe('gzip round-trip — lossless encoding', () => {
+  it('survives multi-line text, quotes, and unicode through JSON.stringify → gzip → gunzip → JSON.parse', async () => {
+    const rows = [
+      makeRow({
+        testCase: 'Login\nwith\nnewlines',
+        steps: 'Step 1: Enter "username"\nStep 2: Enter "password"',
+        notes: 'Unicode: 日本語 Ünïcödé 🔒',
+        expectedResult: 'Dashboard\twith\ttabs',
+        preconditions: 'Quote: He said "hello"',
+      }),
+      makeRow({
+        testCase: 'Blank fields test',
+        steps: '',
+        notes: '',
+        fingerprint: 'blank-fields-test',
+      }),
+    ];
+
+    const json = JSON.stringify({ rows });
+    const compressed = await gzipAsync(Buffer.from(json, 'utf8'));
+    const decompressed = await gunzipAsync(compressed);
+    const parsed = JSON.parse(decompressed.toString('utf8'));
+
+    expect(parsed).toEqual({ rows });
+    // Spot-check the free-text fields survived unchanged
+    expect(parsed.rows[0].testCase).toBe('Login\nwith\nnewlines');
+    expect(parsed.rows[0].steps).toBe(
+      'Step 1: Enter "username"\nStep 2: Enter "password"',
+    );
+    expect(parsed.rows[0].notes).toBe('Unicode: 日本語 Ünïcödé 🔒');
+    expect(parsed.rows[1].testCase).toBe('Blank fields test');
   });
 });
