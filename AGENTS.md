@@ -30,7 +30,7 @@
 ## Reuse and Code Organization
 
 - DO NOT apply pre-v9 MUI patterns (direct system props, Grid xs/sm/md props, InputLabelProps, inputProps, TransitionProps, MenuListProps); use MUI v9 equivalents (sx, Grid size prop, slotProps.<slotName>). Clean as you go
-- when encountering MUI v9 API friction, consult https://mui.com/material-ui/migration/upgrade-to-v9.md before attempting workarounds
+- when encountering MUI v9 API friction, consult <https://mui.com/material-ui/migration/upgrade-to-v9.md> before attempting workarounds
 - DO NOT write DB queries inline in `page.js` or API route files — always extract to `lib/[name]Data.js` and import from there, even when only one caller exists today. Clean as you go
 - DO NOT hardcode domain enum literals (status, roles, priorities, assignment status, unassigned sentinel, confirm tokens); import from `@/lib/constants`. Clean as you go
 - DO NOT inline JSX blocks, hook logic, or utility patterns that duplicate an existing implementation in another page file; extract to `components/`, `hooks/`, or `utils/` before the second use. Clean as you go
@@ -45,7 +45,7 @@
 
 ## Testing Scope and Minimum Coverage
 
-- DO NOT test AWS SDK/framework internals, platform wiring, private methods, call order, or runtime-owned config; if a behavior-preserving refactor breaks a test, the test is wrong — delete or fix it
+- DO NOT test AWS SDK or framework internals, platform wiring, private methods, call order, or runtime-owned configuration. Tests must verify observable behavior; if a behavior-preserving refactor breaks a test, the test is brittle and must be fixed or removed.
 - when a route calls `revalidatePath` or `revalidateTag`, add `vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }))` to that route's test file — these require Next.js server runtime context absent in vitest/jsdom
 - when writing unit tests, cover at minimum: valid input → expected output, invalid input → specific error, dependency failure → handled error, one edge case per unit; mock AWS SDKs, network calls, databases, ConfigService env vars, and framework APIs
 

@@ -11,3 +11,4 @@ debug.log
 e2e/.auth/
 playwright-report/
 e2e/test-results/
+.superpowers/brainstorm
