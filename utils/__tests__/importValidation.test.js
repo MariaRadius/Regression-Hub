@@ -323,6 +323,23 @@ describe('validateParsedRows', () => {
     });
   });
 
+  describe('gate (e) — application name length cap', () => {
+    it('rejects application name exceeding 100 characters', () => {
+      const longName = 'A'.repeat(101);
+      const result = run([{ applicationName: longName }]);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Application name exceeds 100 characters',
+      );
+    });
+
+    it('accepts application name of exactly 100 characters', () => {
+      const exactName = 'A'.repeat(100);
+      const result = run([{ applicationName: exactName }]);
+      expect(result.valid).toBe(true);
+    });
+  });
+
   describe('status whitelist', () => {
     it('rejects status not in COMPLETED_STATUSES', () => {
       const result = run([{ status: 'In Progress' }]);

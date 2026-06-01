@@ -283,6 +283,15 @@ export function validateParsedRows({
       }
     }
 
+    // (e) Application name length cap
+    if (appName.length > maxNameChars) {
+      const errKey = `app:len:${appName}`;
+      if (!appErrors.has(errKey)) {
+        appErrors.add(errKey);
+        errors.push(`Application name exceeds 100 characters`);
+      }
+    }
+
     // Track new apps and proposed initials
     if (appName && !knownAppMap.has(appName) && !newAppMap.has(appName)) {
       let proposedInitial = '';
