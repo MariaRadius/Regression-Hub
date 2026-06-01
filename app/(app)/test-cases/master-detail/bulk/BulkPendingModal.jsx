@@ -1,18 +1,21 @@
 'use client';
 import { TextField } from '@mui/material';
 import { useState } from 'react';
-import { bulkUpdateTestCases } from '@/lib/api/testCasesBulk';
+import { bulkRecordResults } from '@/lib/api/results';
 import { STATUS } from '@/lib/constants';
 import { showToast } from '@/utils/showToast';
 import BulkModalShell from './BulkModalShell';
 
 /**
- * Bulk mark as Pending: clears tester/date. Requires a reason (stored in notes).
+ * Bulk mark as Pending: clears tester/date. Requires a reason.
+ * Sends { releaseId, environment } for the new results model.
  */
 export default function BulkPendingModal({
   open,
   onClose,
   selection,
+  releaseId,
+  environment,
   onSuccess,
 }) {
   const [reason, setReason] = useState('');
@@ -27,19 +30,15 @@ export default function BulkPendingModal({
     setReasonError(false);
     setLoading(true);
     try {
-      const fields = {
+      await bulkRecordResults(releaseId, {
+        releaseId,
+        environment,
         status: STATUS.PENDING,
-        testedBy: '',
-        testedOn: '',
-        notes: reason.trim(),
-      };
-      const res = await bulkUpdateTestCases({
-        ids: selection.map((s) => s._id),
-        fields,
+        caseIds: selection.map((s) => s.caseId),
+        reason: reason.trim(),
       });
-      const toastMsg = `Marked ${res.updated} as Pending${res.skipped ? `, ${res.skipped} skipped (already Pending)` : ''}`;
-      showToast(toastMsg, 'success');
-      onSuccess(fields);
+      showToast(`Marked ${selection.length} as Pending`, 'success');
+      onSuccess({ status: STATUS.PENDING, reason: reason.trim() });
     } catch (e) {
       showToast(e.message || 'Bulk update failed', 'error');
     } finally {

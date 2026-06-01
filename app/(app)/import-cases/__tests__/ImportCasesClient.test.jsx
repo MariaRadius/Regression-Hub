@@ -1,30 +1,61 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ImportCasesClient from '../ImportCasesClient';
-
-vi.mock('@/components/UploadExcel', () => ({
-  default: () => <div data-testid='upload-excel' />,
-}));
 
 vi.mock('@/components/Toast', () => ({
   default: () => null,
+  showToast: vi.fn(),
 }));
 
+vi.mock('@/lib/api/releases', () => ({
+  importIntoRelease: vi.fn(),
+}));
+
+const { useReleaseEnv } = vi.hoisted(() => ({ useReleaseEnv: vi.fn() }));
+vi.mock('@/contexts/ReleaseEnvContext', () => ({ useReleaseEnv }));
+
 describe('ImportCasesClient', () => {
-  it('renders the "Import Test Cases" page header title', () => {
-    render(<ImportCasesClient />);
-    // PageHeader uses <Typography variant="pageTitle"> which renders as <span>
-    // without ThemeProvider — query by text content instead of heading role
-    expect(screen.getByText('Import Test Cases')).toBeInTheDocument();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('renders the UploadExcel component', () => {
+  it('renders the empty state when no release is active', () => {
+    useReleaseEnv.mockReturnValue({
+      releaseId: null,
+      releaseName: '',
+      environments: [],
+      environment: '',
+      activeRelease: null,
+    });
     render(<ImportCasesClient />);
-    expect(screen.getByTestId('upload-excel')).toBeInTheDocument();
+    expect(screen.getByText('No release selected')).toBeInTheDocument();
   });
 
-  it('renders correctly without any props', () => {
+  it('renders the dropzone and analyse control when a release is active', () => {
+    useReleaseEnv.mockReturnValue({
+      releaseId: 'r1',
+      releaseName: 'v1.0',
+      environments: ['QA', 'Sandbox'],
+      environment: 'QA',
+      activeRelease: { _id: 'r1', name: 'v1.0', archived: false },
+    });
     render(<ImportCasesClient />);
     expect(screen.getByText('Import Test Cases')).toBeInTheDocument();
+    expect(screen.getByTestId('upload-dropzone')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /analyse import/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an archived warning and no dropzone interaction when archived', () => {
+    useReleaseEnv.mockReturnValue({
+      releaseId: 'r1',
+      releaseName: 'v1.0',
+      environments: ['QA'],
+      environment: 'QA',
+      activeRelease: { _id: 'r1', name: 'v1.0', archived: true },
+    });
+    render(<ImportCasesClient />);
+    expect(screen.getByText(/is archived/i)).toBeInTheDocument();
   });
 });

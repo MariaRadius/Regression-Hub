@@ -1,7 +1,7 @@
 'use client';
 import { Grid, MenuItem, TextField } from '@mui/material';
 import { useState } from 'react';
-import { useQaUsers } from '@/hooks/useSharedData';
+import { useQaUserList } from '@/hooks/useSharedData';
 import { createAssignment } from '@/lib/api/assignments';
 import { PRIORITIES } from '@/lib/constants';
 import { showToast } from '@/utils/showToast';
@@ -17,7 +17,7 @@ export default function BulkReassignModal({
   selection,
   onSuccess,
 }) {
-  const qaUsers = useQaUsers();
+  const { data: qaUsers = [] } = useQaUserList();
   const [assignedTo, setAssignedTo] = useState('');
   const [priority, setPriority] = useState('');
   const [dueDate, setDueDate] = useState('');

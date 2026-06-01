@@ -2,13 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
 const { db, reset } = createMockDb();
-const { getTeamSettings, updateTeamSettings, checkRateLimit } = vi.hoisted(
-  () => ({
-    getTeamSettings: vi.fn(),
-    updateTeamSettings: vi.fn(),
-    checkRateLimit: vi.fn(() => ({ ok: true })),
-  }),
-);
+const { getTeamSettings } = vi.hoisted(() => ({
+  getTeamSettings: vi.fn(),
+}));
 
 vi.mock('@/lib/server/withTeam', () => ({
   withTeam: (handler) => (req, ctx) =>
@@ -28,12 +24,9 @@ vi.mock('@/lib/server/withTeam', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/db/settingsData', () => ({
   getTeamSettings,
-  updateTeamSettings,
 }));
 
-vi.mock('@/lib/rateLimit', () => ({ checkRateLimit }));
-
-import { GET, PUT } from '../route';
+import { GET } from '../route';
 
 beforeEach(() => {
   reset();
@@ -41,33 +34,15 @@ beforeEach(() => {
 });
 
 describe('GET /api/settings', () => {
-  it('returns settings from db layer', async () => {
+  it('returns qaUsers from db layer', async () => {
     getTeamSettings.mockResolvedValue({
-      qaUsers: ['A'],
-      softwareVersion: '1.0',
+      qaUsers: ['Alice', 'Bob'],
     });
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      qaUsers: ['A'],
-      softwareVersion: '1.0',
+      qaUsers: ['Alice', 'Bob'],
     });
     expect(getTeamSettings).toHaveBeenCalledWith(db, 't1');
-  });
-});
-
-describe('PUT /api/settings', () => {
-  it('updates settings for admin', async () => {
-    updateTeamSettings.mockResolvedValue(undefined);
-    const req = new Request('http://x', {
-      method: 'PUT',
-      body: JSON.stringify({ softwareVersion: '2.0' }),
-    });
-    const res = await PUT(req);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-    expect(updateTeamSettings).toHaveBeenCalledWith(db, 't1', {
-      softwareVersion: '2.0',
-    });
   });
 });

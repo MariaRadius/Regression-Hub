@@ -2,11 +2,12 @@
 import CloseIcon from '@mui/icons-material/Close';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
+  FormControlLabel,
   Grid,
   IconButton,
   MenuItem,
@@ -17,31 +18,23 @@ import {
 import { useRef, useState } from 'react';
 import RichTextEditor from '@/components/RichTextEditor';
 import { showToast } from '@/components/Toast';
-import { useQaUsers } from '@/hooks/useSharedData';
 import { createModule as apiCreateModule } from '@/lib/api/modules';
-import { createTestCase, updateTestCase } from '@/lib/api/testCases';
-import { PRIORITIES, ROLES, STATUS } from '@/lib/constants';
-import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
 import {
-  formatTcId,
-  normalizedStatus,
-  toDateInputValue,
-} from '@/utils/formatters';
+  createTestCaseForRelease,
+  updateTestCaseForRelease,
+} from '@/lib/api/releases';
+import { PRIORITIES } from '@/lib/constants';
+import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
 
 export const EMPTY_FORM = {
   applicationId: '',
   moduleId: '',
-  testCaseId: '',
   testCase: '',
   type: '',
   traceability: '',
   preconditions: '',
   steps: '',
   expectedResult: '',
-  notes: '',
-  status: '',
-  testedBy: '',
-  testedOn: '',
   priority: '',
   jiraStory: '',
 };
@@ -50,7 +43,6 @@ function seedForm(tc) {
   return {
     applicationId: tc.applicationId || '',
     moduleId: tc.moduleId || '',
-    testCaseId: tc.testCaseId || '',
     type: tc.type || '',
     traceability: tc.traceability || '',
     priority: tc.priority || '',
@@ -59,10 +51,6 @@ function seedForm(tc) {
     preconditions: tc.preconditions || '',
     steps: tc.steps || '',
     expectedResult: tc.expectedResult || '',
-    notes: tc.notes || '',
-    status: normalizedStatus(tc.status),
-    testedBy: tc.testedBy || '',
-    testedOn: toDateInputValue(tc.testedOn || ''),
   };
 }
 
@@ -70,7 +58,9 @@ function seedForm(tc) {
  * Unified dialog for adding and editing a test case.
  *
  * - `tc` absent (null/undefined) → Add mode
- * - `tc` present → Edit mode
+ * - `tc` present → Edit mode; shows read-only testKey and an opt-in
+ *   "Reset all environments to Pending" checkbox (spec §4, default off).
+ *   When checked, the update route resets every environment's result to Pending.
  *
  * Callers must pass `key={tc?._id ?? 'add'}` to drive clean remount on
  * record change instead of relying on useEffect state resets.
@@ -80,7 +70,7 @@ function seedForm(tc) {
 export default function TestCaseDialog({
   open,
   tc,
-  user,
+  releaseId,
   applications,
   modules,
   onModuleCreated,
@@ -89,15 +79,14 @@ export default function TestCaseDialog({
 }) {
   const isEdit = !!tc;
   const [form, setForm] = useState(() => (tc ? seedForm(tc) : EMPTY_FORM));
+  const [resetAllToPending, setResetAllToPending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newModuleName, setNewModuleName] = useState(null);
   const [creatingModule, setCreatingModule] = useState(false);
   const newModuleInputRef = useRef(null);
-  const qaUsers = useQaUsers();
 
   const isOpen = isEdit ? true : open;
   const formId = isEdit ? 'edit-test-case-form' : 'add-test-case-form';
-  const today = new Date().toISOString().slice(0, 10);
   const jiraStoryError = Boolean(
     form.jiraStory && !JIRA_KEY_RE.test(form.jiraStory),
   );
@@ -121,25 +110,34 @@ export default function TestCaseDialog({
     }
     setSaving(true);
     try {
-      const payload = { ...form, status: normalizedStatus(form.status) };
       if (isEdit) {
         const applicationName =
-          applications.find((a) => a._id === payload.applicationId)?.name ||
+          applications.find((a) => a._id === form.applicationId)?.name ||
           tc.applicationName;
         const moduleName =
-          modules.find((m) => m._id === payload.moduleId)?.name ||
-          tc.moduleName;
-        await updateTestCase(tc._id, payload);
+          modules.find((m) => m._id === form.moduleId)?.name || tc.moduleName;
+        await updateTestCaseForRelease(releaseId, tc._id, {
+          ...form,
+          resetAllToPending,
+        });
         showToast('Test case updated', 'success');
-        onSuccess({ ...tc, ...payload, applicationName, moduleName });
+        onSuccess({
+          ...tc,
+          ...form,
+          applicationName,
+          moduleName,
+          resetAllToPending,
+        });
       } else {
         const applicationName = applications.find(
-          (a) => a._id === payload.applicationId,
+          (a) => a._id === form.applicationId,
         )?.name;
-        const moduleName = modules.find(
-          (m) => m._id === payload.moduleId,
-        )?.name;
-        await createTestCase({ ...payload, applicationName, moduleName });
+        const moduleName = modules.find((m) => m._id === form.moduleId)?.name;
+        await createTestCaseForRelease(releaseId, {
+          ...form,
+          applicationName,
+          moduleName,
+        });
         showToast('Test case added', 'success');
         onSuccess();
       }
@@ -182,12 +180,12 @@ export default function TestCaseDialog({
       slotProps={{ paper: { sx: { maxHeight: '90vh' } } }}
     >
       <DialogTitle>
-        {tc && (
+        {tc?.testKey && (
           <Typography
             variant='mono'
             sx={{ display: 'block', color: 'text.disabled', fontWeight: 400 }}
           >
-            {formatTcId(tc)}
+            {tc.testKey}
           </Typography>
         )}
         {isEdit ? 'Edit Test Case' : 'Add Test Case'}
@@ -330,20 +328,9 @@ export default function TestCaseDialog({
               />
             </Grid>
           </Grid>
-          {/* Test Case ID, Type, Traceability */}
+          {/* Type, Traceability */}
           <Grid container spacing={1.75} sx={{ mb: 1.75 }}>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <TextField
-                fullWidth
-                size='small'
-                label='Test Case ID'
-                name='testCaseId'
-                value={form.testCaseId}
-                placeholder='e.g. TC-001'
-                onChange={handleField}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 size='small'
@@ -354,7 +341,7 @@ export default function TestCaseDialog({
                 onChange={handleField}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 size='small'
@@ -433,76 +420,24 @@ export default function TestCaseDialog({
               minHeight={80}
             />
           </Stack>
-          <Divider sx={{ mb: 1.75, mx: -3 }} />
-          {/* Notes */}
-          <Stack sx={{ mb: 1.75 }}>
-            <TextField
-              fullWidth
-              label='Notes'
-              multiline
-              minRows={3}
-              maxRows={10}
-              name='notes'
-              value={form.notes}
-              onChange={handleField}
-              required={
-                form.status === STATUS.FAIL || form.status === STATUS.PENDING
+          {/* Reset checkbox — only in edit mode */}
+          {isEdit && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={resetAllToPending}
+                  onChange={(e) => setResetAllToPending(e.target.checked)}
+                  size='small'
+                />
               }
+              label={
+                <Typography variant='tableCell'>
+                  Reset all environments to Pending
+                </Typography>
+              }
+              sx={{ mt: 0.5 }}
             />
-          </Stack>
-          {/* Status, Tested By, Tested On */}
-          <Grid container spacing={1.75}>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <TextField
-                select
-                fullWidth
-                size='small'
-                label='Status'
-                name='status'
-                value={normalizedStatus(form.status)}
-                onChange={handleField}
-                slotProps={{ select: { displayEmpty: true } }}
-              >
-                <MenuItem value={STATUS.PENDING}>Pending</MenuItem>
-                <MenuItem value={STATUS.PASS}>Pass</MenuItem>
-                <MenuItem value={STATUS.FAIL}>Fail</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <TextField
-                select
-                fullWidth
-                size='small'
-                label='Tested By'
-                name='testedBy'
-                value={form.testedBy}
-                onChange={handleField}
-                disabled={user?.role === ROLES.QA}
-              >
-                <MenuItem value=''>—</MenuItem>
-                {qaUsers.map((u) => (
-                  <MenuItem key={u} value={u}>
-                    {u}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <TextField
-                fullWidth
-                size='small'
-                label='Tested On'
-                type='date'
-                name='testedOn'
-                value={form.testedOn}
-                onChange={handleField}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  htmlInput: { max: today },
-                }}
-              />
-            </Grid>
-          </Grid>
+          )}
         </DialogContent>
         <DialogActions>
           <Button variant='outlined' onClick={handleClose}>

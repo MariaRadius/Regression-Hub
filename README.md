@@ -15,7 +15,7 @@ Free MongoDB M0 cluster: <https://cloud.mongodb.com>
 
 ## Tech Stack
 
-Next.js 15 · React 18 · MongoDB 6 · NextAuth 4 · React Query 5 · TipTap 3 · Recharts · jsPDF · xlsx · bcryptjs · Tailwind CSS 3
+Next.js 16 · React 19 · MongoDB 6 · NextAuth 4 · React Query 5 · TipTap 3 · Recharts · jsPDF · xlsx · bcryptjs · MUI v9
 
 ## Linting & Duplication
 
@@ -51,10 +51,20 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 ## Roles
 
-| Role      | Can do                                                                                |
-| --------- | ------------------------------------------------------------------------------------- |
-| **QA**    | Sign in, fill results, edit own assignments, run imports, view dashboards and reports |
-| **Admin** | All QA permissions + manage users, edit settings, and restore versions                |
+| Role      | Can do                                                                              |
+| --------- | ----------------------------------------------------------------------------------- |
+| **QA**    | Sign in, record results, view assignments, view dashboards and reports              |
+| **Admin** | All QA permissions + manage users, manage releases, import cases, manage assignments |
+
+## Domain Model
+
+**Release → Test Case → Result (per Environment)**
+
+- A **Release** is a named testing cycle (e.g. `v2.9`). Admins create releases; a release owns its test cases and declares its environments (QA / Sandbox / Production by default).
+- A **Test Case** belongs to exactly one release. All environments in that release share the same test-case definition. Every test case carries a stable `caseId` (lineage across releases) and a DB-unique `testKey` display id (e.g. `SAP-0001`).
+- A **Result** records Pass / Fail / Pending for one (test case × environment). Every valid pair always has exactly one result row (dense invariant — no "missing = Pending" special case).
+- **Applications and Modules** are team-global; referenced by stable ID so renaming never breaks lineage. Auto-created on import; cannot be deleted while any test case references them.
+- The active **(Release, Environment)** working context is a persistent bar below the top nav, stored in session only — never on the user record.
 
 ## User Experience
 
@@ -66,66 +76,101 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 ### Dashboard
 
-- Live metrics: total / passed / failed / blocked / pending
+- Scoped to the active (Release, Environment) selection
+- Live metrics: total / passed / failed / pending
 - Donut chart by status
 - Bar chart by module
-- Tester breakdown
 - Drag-and-drop `.xlsx` upload tile
+
+### Releases
+
+Admin-managed list of named testing cycles. Actions per release:
+
+- **Create** — empty, clone from an existing release, or start from Excel import
+- **Clone** — copies test cases (same `caseId` lineage, fresh Pending results); assignments opt-in only
+- **Archive / Unarchive** — frozen and hidden from default selectors while archived; fully reversible
+- **Delete** — cascades to test cases, results, and assignments (confirmation dialog restates cascade)
+- **Add / Remove Environment** — fan-out generates / removes result rows for all cases in the release
+
+An archived release is read-only — no results, edits, assignments, or imports until unarchived.
 
 ### Test Cases
 
 Master·Detail layout: scannable list (left 46%) + detail panel (right 54%).
 
+List is driven from `testResults` for the active (Release, Environment); switching either resets to page 1.
+
 **Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
 
-**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Reassign / Edit modals. Single-row actions are also available from the detail panel's Mark Pass/Fail/Pending buttons.
+**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Reassign / Edit modals. Single-row actions are also available from the detail panel.
 
 **Test-case business rules (enforcement is server-side; UI reflects these constraints):**
 
-- **BR-15 — Tester ≠ Assignee (by design).** `testedBy` = whoever performs the mark; `assignedTo` = who owns the assignment. They may differ (anyone can pitch in under another's assignment). Reports must label the two distinctly — never conflate "assigned to" with "tested by."
+- **BR-15 — Tester identity.** QA users record results as themselves; admin may record on behalf of any active QA user.
+- **R21 — Fail requires notes.** Resetting to Pending requires a reason and clears tester/date while keeping the result row.
+- **Expected result required** before a case can be marked Pass or Fail.
 
-**Detail panel:** Shows full editable fields via TestCaseRow. `testedOn` saves on blur (not on every keystroke).
+**Detail panel:** Shows `testKey`, full editable fields, and a per-environment results grid. Offers opt-in "reset all environments to Pending" on content edit.
 
 **Pagination:** URL-persisted (`?page=`, `?size=`). Defaults: page 1, 50 rows. Options: 10 / 50 / 100.
 
 ### Excel Import
 
+Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional commit).
+
 - Drag-and-drop `.xlsx`
 - Fuzzy header matching (case + spaces + punctuation ignored)
-- Deduplicates by `app::module::testCaseId` — re-importing updates instead of duplicating
+- **Identity ladder:** Test Key column (round-trip id) matched first; content fingerprint across releases as fallback; new case if neither matches
+- In-file duplicates reject the entire import before commit
+- Import generates Pending results for **all** environments, then writes result columns to the chosen environment
+- New application initials (3-char, DB-unique) are editable in the confirmation dialog before commit
 
 ### Applications & Modules
 
-- Browse the application registry
+- Browse the application registry (team-global, auto-created on import)
 - View modules grouped by application
+- Deletion blocked while any test case in any release references the application or module
 
 ### Assignments
 
-- Assign test cases to QA users
-- Track who owns what
+- Assign test cases to QA users; scope release-wide or to a specific environment
+- Most recent assignment per (case, environment) is the effective owner; history is retained
+- Assigned-to and tested-by are distinct — reports show them separately
 
 ### Audit Log
 
-Every Pass / Fail / reset-to-Pending and every assign / unassign appends an immutable entry to the `events` collection — actor name and timestamp included — so no result or ownership change is ever anonymous or losable.
-
-### Test Runs
-
-- History of every import with timestamp and counts
-- Software version is set only by import or version restore — never editable on an individual test case
+Every result write (Pass / Fail / Pending reset) and every assign / unassign appends an immutable entry to the `events` collection — `caseId`, `releaseId`, `environment`, actor, and timestamp included.
 
 ### Reports
 
-> Initial page data (version history, summary metrics, export settings, applications) is server-rendered; the application filter updates summary server-side via URL searchParam; exports and version mutations remain client-driven API calls.
+Per-(Release, Environment) scoped:
 
-- PDF: cover page, summary, detailed results, bug report, signoff block
-- Excel export: summary sheet + full results sheet
+- Metric cards: total / passed / failed / pending + pass rate
+- Per-application breakdown
+- Excel export: carries `testKey` per row; scoped to the chosen release and environment
+- PDF signoff report
 
-### Version History
+## API Routes
 
-- Snapshot the current state as a software version
-- Mark a version complete
-- Restore a prior version
-- View per-version detail / diff
+All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js` only.
+
+| Method | Route | Role | Description |
+| ------ | ----- | ---- | ----------- |
+| GET | `/api/releases` | admin+qa | List releases |
+| POST | `/api/releases` | admin | Create / clone |
+| GET | `/api/releases/[id]` | admin+qa | Get release |
+| PATCH | `/api/releases/[id]` | admin | Rename or archive/unarchive |
+| DELETE | `/api/releases/[id]` | admin | Delete with cascade |
+| POST | `/api/releases/[id]/environments` | admin | Add environment |
+| DELETE | `/api/releases/[id]/environments` | admin | Remove environment |
+| GET | `/api/releases/[id]/test-cases` | admin+qa | List test cases |
+| POST | `/api/releases/[id]/test-cases` | admin | Create test case |
+| GET | `/api/releases/[id]/test-cases/[caseId]` | admin+qa | Get test case |
+| PATCH | `/api/releases/[id]/test-cases/[caseId]` | admin | Update test case |
+| DELETE | `/api/releases/[id]/test-cases/[caseId]` | admin | Delete test case |
+| GET | `/api/releases/[id]/results` | admin+qa | List results |
+| POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
+| POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
 
 ## Excel Column Headers
 
@@ -135,7 +180,7 @@ Auto-detected (case-insensitive, spaces/punctuation ignored):
 | -------------------- | ------------------------------ |
 | Platform/Application | platform, application, app     |
 | Module               | module, modulename             |
-| Test Case ID         | testcaseid, testid, tcid       |
+| Test Key             | testkey, testid, tcid          |
 | Test Case            | testcase, testcasename         |
 | Steps                | steps, teststeps               |
 | Expected Result      | expectedresult, expected       |
@@ -143,6 +188,7 @@ Auto-detected (case-insensitive, spaces/punctuation ignored):
 | Status               | status                         |
 | Tested By            | testedby, tester               |
 | Tested On            | testedon, testdate, date       |
-| Version              | softwareversiontested, version |
 | Priority             | priority                       |
 | Jira ID              | jiraid, jira                   |
+
+`softwareVersionTested` / `Version` columns are **ignored** — the release owns the version context.

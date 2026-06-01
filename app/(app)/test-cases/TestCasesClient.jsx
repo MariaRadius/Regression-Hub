@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Skeleton, Stack } from '@mui/material';
+import { Alert, Button, Skeleton, Stack } from '@mui/material';
 import {
   Suspense,
   useCallback,
@@ -11,29 +11,34 @@ import {
 } from 'react';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider from '@/components/Toast';
+import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { useTestCaseFilters } from '@/hooks/useTestCaseFilters';
 import { useTestCaseKeyNav } from '@/hooks/useTestCaseKeyNav';
 import {
   DEFAULT_PAGE,
-  DEFAULT_SIZE,
   useTestCasePagination,
 } from '@/hooks/useTestCasePagination';
 import { useTestCaseSelection } from '@/hooks/useTestCaseSelection';
-import { getTestCase, listTestCases } from '@/lib/api/testCases';
+import {
+  getTestCaseForRelease,
+  listTestCasesForRelease,
+} from '@/lib/api/releases';
 import BulkModalRenderer from './master-detail/bulk/BulkModalRenderer';
 import FilterStrip from './master-detail/FilterStrip';
 import TestCaseDetailPanel from './master-detail/TestCaseDetailPanel';
 import TestCaseDialog from './master-detail/TestCaseDialog';
 import TestCaseList from './master-detail/TestCaseList';
 
-function TestCasesPage({ user, initialData }) {
-  const [cases, setCases] = useState(initialData?.data ?? []);
-  const [totalCount, setTotalCount] = useState(initialData?.total ?? 0);
-  const [applications, setApplications] = useState(
-    initialData?.applications ?? [],
-  );
-  const [modules, setModules] = useState(initialData?.modules ?? []);
-  const [loading, setLoading] = useState(!initialData);
+function TestCasesPage({ user }) {
+  const { releaseId, environment, environments, activeRelease } =
+    useReleaseEnv();
+  const isArchived = !!activeRelease?.archived;
+
+  const [cases, setCases] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [applications, setApplications] = useState([]);
+  const [modules, setModules] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -49,9 +54,9 @@ function TestCasesPage({ user, initialData }) {
   const [activeId, setActiveId] = useState(null);
   // activeCase holds the currently displayed case independently of the filtered page.
   // The list (`cases`) is a filtered, paginated slice — after a status change the case
-  // may fall out of the current filter.  activeCase keeps the drawer populated and
+  // may fall out of the current filter. activeCase keeps the drawer populated and
   // supplies the selection object to BulkModalRenderer for single-case actions without
-  // needing to re-scan `cases`.  It is updated from `cases` whenever the server confirms
+  // needing to re-scan `cases`. It is updated from `cases` whenever the server confirms
   // the case is still on the page, and optimistically merged in onSuccess.
   const [activeCase, setActiveCase] = useState(null);
   useEffect(() => {
@@ -91,27 +96,26 @@ function TestCasesPage({ user, initialData }) {
     return () => document.removeEventListener('keydown', handleEsc);
   }, [activeId, openModal]);
 
-  const appsModsLoaded = useRef(!!initialData);
-  const prevFiltersRef = useRef(filters.active);
-  // When initialData is provided by SSR, the first effect invocation would
-  // re-fetch the identical default query and discard the hydrated data — but
-  // SSR only ever fetches the DEFAULT view (no filters, page 1, default size),
-  // while the filter/pagination hooks seed their state from the URL on mount.
-  // So the skip is only safe when the client's initial state actually matches
-  // what SSR fetched; for a deep link like ?status=pass we MUST fetch on mount.
-  // The flag is cleared immediately so every subsequent state change fetches.
-  const isDefaultView =
-    Object.keys(filters.active).length === 0 &&
-    pagination.page === DEFAULT_PAGE &&
-    pagination.size === DEFAULT_SIZE;
-  const skipInitialFetch = useRef(!!initialData && isDefaultView);
+  const appsModsLoaded = useRef(false);
 
-  const fetchPage = useCallback(async ({ active, page, size }) => {
+  /**
+   * Fetches whenever release, environment, filters, or pagination changes.
+   * Passes rid/env as arguments rather than capturing in closure to avoid
+   * stale-closure issues when context changes trigger concurrent re-fetches.
+   * @see app/(app)/test-cases/__tests__/TestCasesClient.test.jsx
+   */
+  const fetchPage = useCallback(async ({ active, page, size, rid, env }) => {
+    if (!rid || !env) return;
     setLoading(true);
     try {
-      const query = { ...active, page, limit: size };
-      const data = await listTestCases(query);
-      // CRITICAL: the API returns data.data (array), data.total, data.applications, data.modules
+      const query = {
+        ...active,
+        environment: env,
+        page,
+        limit: size,
+        includeMeta: !appsModsLoaded.current || undefined,
+      };
+      const data = await listTestCasesForRelease(rid, query);
       setCases(data.data);
       setTotalCount(data.total);
       if (!appsModsLoaded.current) {
@@ -126,22 +130,18 @@ function TestCasesPage({ user, initialData }) {
     }
   }, []);
 
-  /**
-   * Skips the first fetch when initialData covers the default view, then fetches
-   * normally on any subsequent filter/pagination change.
-   * @see app/(app)/test-cases/__tests__/TestCasesClient.test.jsx
-   */
+  const prevFiltersRef = useRef(filters.active);
+  const prevContextRef = useRef({ releaseId, environment });
+
+  // Reset to page 1 and reload app/module lists when release/environment changes
   useEffect(() => {
-    if (skipInitialFetch.current) {
-      skipInitialFetch.current = false;
-      return;
+    const ctx = prevContextRef.current;
+    if (ctx.releaseId !== releaseId || ctx.environment !== environment) {
+      prevContextRef.current = { releaseId, environment };
+      appsModsLoaded.current = false;
+      pagination.setPage(DEFAULT_PAGE);
     }
-    fetchPage({
-      active: filters.active,
-      page: pagination.page,
-      size: pagination.size,
-    });
-  }, [fetchPage, filters.active, pagination.page, pagination.size]);
+  }, [releaseId, environment, pagination]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -151,9 +151,33 @@ function TestCasesPage({ user, initialData }) {
     }
   }, [filters.active, pagination]);
 
+  useEffect(() => {
+    fetchPage({
+      active: filters.active,
+      page: pagination.page,
+      size: pagination.size,
+      rid: releaseId,
+      env: environment,
+    });
+  }, [
+    fetchPage,
+    filters.active,
+    pagination.page,
+    pagination.size,
+    releaseId,
+    environment,
+  ]);
+
   return (
     <Stack sx={{ height: '100%', minHeight: 0 }}>
       <ToastProvider />
+
+      {/* Archived release — read-only banner */}
+      {isArchived && (
+        <Alert severity='warning' sx={{ borderRadius: 0, flexShrink: 0 }}>
+          This release is archived. Results and definitions are read-only.
+        </Alert>
+      )}
 
       {/* Header */}
       <PageHeader
@@ -167,13 +191,15 @@ function TestCasesPage({ user, initialData }) {
           )
         }
         actions={
-          <Button
-            variant='contained'
-            size='small'
-            onClick={() => setShowAddModal(true)}
-          >
-            + Add Test Case
-          </Button>
+          !isArchived && (
+            <Button
+              variant='contained'
+              size='small'
+              onClick={() => setShowAddModal(true)}
+            >
+              + Add Test Case
+            </Button>
+          )
         }
       />
 
@@ -212,6 +238,8 @@ function TestCasesPage({ user, initialData }) {
       <TestCaseDetailPanel
         open={!!activeId}
         displayCase={activeCase}
+        releaseId={releaseId}
+        environments={environments}
         onEdit={(tc) => setEditTc(tc)}
         onAction={(a, id) => {
           setSingleActionId(id);
@@ -227,6 +255,8 @@ function TestCasesPage({ user, initialData }) {
         singleActionId={singleActionId}
         singleActionCase={singleActionId ? activeCase : null}
         user={user}
+        releaseId={releaseId}
+        environment={environment}
         applications={applications}
         modules={modules}
         onClose={() => {
@@ -237,8 +267,8 @@ function TestCasesPage({ user, initialData }) {
           setOpenModal(null);
           setSingleActionId(null);
           selection.clear();
-          if (activeId) {
-            getTestCase(activeId)
+          if (activeId && releaseId) {
+            getTestCaseForRelease(releaseId, activeId)
               .then(setActiveCase)
               .catch(() => {});
           }
@@ -246,51 +276,61 @@ function TestCasesPage({ user, initialData }) {
             active: filters.active,
             page: pagination.page,
             size: pagination.size,
+            rid: releaseId,
+            env: environment,
           });
         }}
       />
 
-      <TestCaseDialog
-        key='add'
-        open={showAddModal}
-        applications={applications}
-        modules={modules}
-        onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={() => {
-          setShowAddModal(false);
-          setTotalCount((n) => n + 1);
-          fetchPage({
-            active: filters.active,
-            page: pagination.page,
-            size: pagination.size,
-          });
-        }}
-      />
+      {!isArchived && (
+        <TestCaseDialog
+          key='add'
+          open={showAddModal}
+          releaseId={releaseId}
+          applications={applications}
+          modules={modules}
+          onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => {
+            setShowAddModal(false);
+            setTotalCount((n) => n + 1);
+            fetchPage({
+              active: filters.active,
+              page: pagination.page,
+              size: pagination.size,
+              rid: releaseId,
+              env: environment,
+            });
+          }}
+        />
+      )}
 
-      <TestCaseDialog
-        key={editTc?._id}
-        tc={editTc}
-        user={user}
-        applications={applications}
-        modules={modules}
-        onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
-        onClose={() => setEditTc(null)}
-        onSuccess={(updatedTc) => {
-          setEditTc(null);
-          setCases((prev) =>
-            prev.map((tc) => (tc._id === updatedTc._id ? updatedTc : tc)),
-          );
-        }}
-      />
+      {!isArchived && editTc && (
+        <TestCaseDialog
+          key={editTc._id}
+          tc={editTc}
+          user={user}
+          releaseId={releaseId}
+          applications={applications}
+          modules={modules}
+          onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
+          onClose={() => setEditTc(null)}
+          onSuccess={(updatedTc) => {
+            setEditTc(null);
+            setCases((prev) =>
+              prev.map((tc) => (tc._id === updatedTc._id ? updatedTc : tc)),
+            );
+          }}
+        />
+      )}
     </Stack>
   );
 }
 
-export default function TestCasesClient({ user, initialData }) {
+export default function TestCasesClient({ user }) {
   return (
     <Suspense>
-      <TestCasesPage user={user} initialData={initialData} />
+      <TestCasesPage user={user} />
     </Suspense>
   );
 }

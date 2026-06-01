@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   dateStamp,
-  formatTcId,
   normalizedStatus,
   normalizeText,
   toDateInputValue,
@@ -88,31 +87,5 @@ describe('normalizeText', () => {
 
   it('returns the string as-is when no trimming needed', () => {
     expect(normalizeText('clean')).toBe('clean');
-  });
-});
-
-describe('formatTcId', () => {
-  it('formats a numeric testCaseId shorter than 4 digits with leading zeros', () => {
-    expect(formatTcId({ testCaseId: 7, _id: 'abc' })).toBe('TC0007');
-  });
-
-  it('formats a string testCaseId shorter than 4 chars with leading zeros', () => {
-    expect(formatTcId({ testCaseId: '42', _id: 'abc' })).toBe('TC0042');
-  });
-
-  it('does not truncate a testCaseId that is already 4+ characters', () => {
-    expect(formatTcId({ testCaseId: '12345', _id: 'abc' })).toBe('TC12345');
-  });
-
-  it('falls back to _id when testCaseId is absent', () => {
-    expect(formatTcId({ _id: '99' })).toBe('TC0099');
-  });
-
-  it('falls back to _id when testCaseId is falsy (empty string)', () => {
-    expect(formatTcId({ testCaseId: '', _id: '3' })).toBe('TC0003');
-  });
-
-  it('prefers testCaseId over _id when both are present', () => {
-    expect(formatTcId({ testCaseId: '5', _id: '999' })).toBe('TC0005');
   });
 });

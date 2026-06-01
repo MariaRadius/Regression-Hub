@@ -1,7 +1,7 @@
 /**
- * Tests the mount-fetch guard in TestCasesClient: when initialData is supplied
- * the component must NOT call listTestCases on mount, and must call it after a
- * filter or pagination state change.
+ * Tests the fetch behaviour in TestCasesClient: the component must call
+ * listTestCasesForRelease on mount (context-driven, no SSR seed) and re-fetch
+ * on filter or pagination state changes. Page resets to 1 when context changes.
  *
  * @see app/(app)/test-cases/TestCasesClient.jsx
  */
@@ -16,6 +16,24 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/test-cases',
   useRouter: () => ({ replace: mockRouterReplace }),
+}));
+
+// ---------------------------------------------------------------------------
+// Mock ReleaseEnvContext — controls the active (release, environment) pair.
+// ---------------------------------------------------------------------------
+import * as releaseEnvModule from '@/contexts/ReleaseEnvContext';
+
+let currentReleaseId = 'rel-1';
+let currentEnvironment = 'QA';
+let currentActiveRelease = {
+  _id: 'rel-1',
+  name: 'v1.0',
+  environments: ['QA'],
+  archived: false,
+};
+
+vi.mock('@/contexts/ReleaseEnvContext', () => ({
+  useReleaseEnv: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -53,7 +71,10 @@ let lastTestCaseListProps = {};
 vi.mock('@/components/PageHeader', () => ({
   default: ({ title }) => <div data-testid='page-header'>{title}</div>,
 }));
-vi.mock('@/components/Toast', () => ({ default: () => null }));
+vi.mock('@/components/Toast', () => ({
+  default: () => null,
+  showToast: vi.fn(),
+}));
 vi.mock('../master-detail/FilterStrip', () => ({
   default: () => <div data-testid='filter-strip' />,
 }));
@@ -76,23 +97,23 @@ vi.mock('../master-detail/bulk/BulkModalRenderer', () => ({
 // ---------------------------------------------------------------------------
 // Mock the API client — this is what we assert on.
 // ---------------------------------------------------------------------------
-import { listTestCases } from '@/lib/api/testCases';
+import { listTestCasesForRelease } from '@/lib/api/releases';
 
-vi.mock('@/lib/api/testCases', () => ({
-  listTestCases: vi.fn(),
-  getTestCase: vi.fn(),
+vi.mock('@/lib/api/releases', () => ({
+  listTestCasesForRelease: vi.fn(),
+  getTestCaseForRelease: vi.fn(),
 }));
 
 import TestCasesClient from '../TestCasesClient';
 
-const makeInitialData = () => ({
-  data: [{ _id: 'tc1', testCase: 'Login' }],
-  total: 1,
-  applications: ['App A'],
-  modules: ['Auth'],
-});
-
 const setupHookMocks = () => {
+  releaseEnvModule.useReleaseEnv.mockImplementation(() => ({
+    releaseId: currentReleaseId,
+    environment: currentEnvironment,
+    activeRelease: currentActiveRelease,
+    setRelease: vi.fn(),
+    setEnvironment: vi.fn(),
+  }));
   filtersModule.useTestCaseFilters.mockImplementation(() => ({
     active: currentFiltersActive,
     setActive: mockSetActive,
@@ -111,15 +132,23 @@ const setupHookMocks = () => {
   }));
 };
 
-describe('TestCasesClient — mount-fetch guard', () => {
+describe('TestCasesClient — fetch behaviour', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastTestCaseListProps = {};
     currentFiltersActive = {};
     currentPage = 1;
     currentSize = 50;
+    currentReleaseId = 'rel-1';
+    currentEnvironment = 'QA';
+    currentActiveRelease = {
+      _id: 'rel-1',
+      name: 'v1.0',
+      environments: ['QA'],
+      archived: false,
+    };
     setupHookMocks();
-    listTestCases.mockResolvedValue({
+    listTestCasesForRelease.mockResolvedValue({
       data: [],
       total: 0,
       applications: [],
@@ -127,205 +156,116 @@ describe('TestCasesClient — mount-fetch guard', () => {
     });
   });
 
-  it('does NOT call listTestCases on mount when initialData is provided', async () => {
+  it('calls listTestCasesForRelease on mount with current context', async () => {
     await act(async () => {
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
     });
 
-    expect(listTestCases).not.toHaveBeenCalled();
-  });
-
-  it('keeps loading=false (no skeleton flash) when initialData is provided and first fetch is skipped', async () => {
-    await act(async () => {
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
-    });
-
-    // loading=false is evidenced by TestCaseList receiving loading=false.
-    expect(lastTestCaseListProps.loading).toBe(false);
-  });
-
-  it('DOES call listTestCases on mount when initialData is absent', async () => {
-    await act(async () => {
-      render(<TestCasesClient user={{ name: 'Tester', role: 'tester' }} />);
-    });
-
-    expect(listTestCases).toHaveBeenCalledTimes(1);
-  });
-
-  it('DOES call listTestCases on mount when initialData is present but filters are non-default (deep link, e.g. ?status=pass)', async () => {
-    // SSR only fetches the default unfiltered view, so a deep link with active
-    // filters must trigger a corrective fetch on mount — not be skipped.
-    currentFiltersActive = { status: 'pass' };
-    setupHookMocks();
-
-    await act(async () => {
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
-    });
-
-    expect(listTestCases).toHaveBeenCalledTimes(1);
-    expect(listTestCases).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'pass', page: 1, limit: 50 }),
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(1);
+    expect(listTestCasesForRelease).toHaveBeenCalledWith(
+      'rel-1',
+      expect.objectContaining({ environment: 'QA', page: 1, limit: 50 }),
     );
   });
 
-  it('DOES call listTestCases on mount when initialData is present but pagination is non-default (deep link, e.g. ?page=2)', async () => {
+  it('does NOT call listTestCasesForRelease when releaseId is absent', async () => {
+    currentReleaseId = null;
+    currentEnvironment = null;
+    currentActiveRelease = null;
+    setupHookMocks();
+
+    await act(async () => {
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
+    });
+
+    expect(listTestCasesForRelease).not.toHaveBeenCalled();
+  });
+
+  it('sets loading=false after fetch resolves', async () => {
+    await act(async () => {
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
+    });
+
+    expect(lastTestCaseListProps.loading).toBe(false);
+  });
+
+  it('re-fetches after a filter change', async () => {
+    const { rerender } = await act(async () =>
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />),
+    );
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(1);
+
+    currentFiltersActive = { status: 'Pass' };
+    setupHookMocks();
+
+    await act(async () => {
+      rerender(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
+    });
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(2);
+    expect(listTestCasesForRelease).toHaveBeenLastCalledWith(
+      'rel-1',
+      expect.objectContaining({
+        status: 'Pass',
+        environment: 'QA',
+        page: 1,
+        limit: 50,
+      }),
+    );
+  });
+
+  it('re-fetches after a page change', async () => {
+    const { rerender } = await act(async () =>
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />),
+    );
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(1);
+
     currentPage = 2;
     setupHookMocks();
 
     await act(async () => {
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
+      rerender(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
     });
 
-    expect(listTestCases).toHaveBeenCalledTimes(1);
-    expect(listTestCases).toHaveBeenCalledWith(
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(2);
+    expect(listTestCasesForRelease).toHaveBeenLastCalledWith(
+      'rel-1',
       expect.objectContaining({ page: 2, limit: 50 }),
     );
   });
 
-  it('DOES call listTestCases after a filter change following the skipped initial fetch', async () => {
+  it('resets to page 1 when release context changes', async () => {
     const { rerender } = await act(async () =>
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      ),
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />),
     );
 
-    // Confirm mount did not trigger a fetch.
-    expect(listTestCases).not.toHaveBeenCalled();
-
-    // Simulate a filter change — update the mock hook return value and rerender.
-    currentFiltersActive = { status: 'pass' };
+    currentReleaseId = 'rel-2';
+    currentEnvironment = 'Sandbox';
+    currentActiveRelease = {
+      _id: 'rel-2',
+      name: 'v2.0',
+      environments: ['QA', 'Sandbox'],
+      archived: false,
+    };
     setupHookMocks();
 
     await act(async () => {
-      rerender(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
+      rerender(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
     });
 
-    expect(listTestCases).toHaveBeenCalledTimes(1);
-    expect(listTestCases).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'pass', page: 1, limit: 50 }),
-    );
+    expect(mockSetPage).toHaveBeenCalledWith(1);
   });
 
-  it('DOES call listTestCases after a page change following the skipped initial fetch', async () => {
-    const { rerender } = await act(async () =>
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      ),
-    );
-
-    // Confirm mount did not trigger a fetch.
-    expect(listTestCases).not.toHaveBeenCalled();
-
-    // Simulate a pagination change.
-    currentPage = 2;
-    setupHookMocks();
+  it('sets loading=false and stays mounted when listTestCasesForRelease rejects', async () => {
+    listTestCasesForRelease.mockRejectedValue(new Error('500'));
 
     await act(async () => {
-      rerender(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
     });
 
-    expect(listTestCases).toHaveBeenCalledTimes(1);
-    expect(listTestCases).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 2, limit: 50 }),
-    );
-  });
-
-  it('DOES call listTestCases after a page-size change following the skipped initial fetch', async () => {
-    const { rerender } = await act(async () =>
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      ),
-    );
-
-    // Confirm mount did not trigger a fetch.
-    expect(listTestCases).not.toHaveBeenCalled();
-
-    // Simulate a page-size change.
-    currentSize = 100;
-    setupHookMocks();
-
-    await act(async () => {
-      rerender(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
-    });
-
-    expect(listTestCases).toHaveBeenCalledTimes(1);
-    expect(listTestCases).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 1, limit: 100 }),
-    );
-  });
-
-  it('sets loading=false and stays mounted when listTestCases rejects after a state change', async () => {
-    listTestCases.mockRejectedValue(new Error('500'));
-
-    const { rerender } = await act(async () =>
-      render(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      ),
-    );
-
-    // Trigger a real fetch by changing the page.
-    currentPage = 2;
-    setupHookMocks();
-
-    await act(async () => {
-      rerender(
-        <TestCasesClient
-          user={{ name: 'Tester', role: 'tester' }}
-          initialData={makeInitialData()}
-        />,
-      );
-    });
-
-    // (a) loading must be false after the rejection (finally block runs).
     expect(lastTestCaseListProps.loading).toBe(false);
-    // (b) component is still mounted — list is still rendered.
     expect(screen.getByTestId('test-case-list')).toBeTruthy();
   });
 });

@@ -24,7 +24,6 @@ import { useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider, { showToast } from '@/components/Toast';
-import { putSettings } from '@/lib/api/settings';
 import { resetTeamTestCases } from '@/lib/api/testCases';
 import { CONFIRM_TOKENS } from '@/lib/constants';
 
@@ -79,13 +78,7 @@ export default function AdminClient() {
               showToast('Reset cancelled — type RESET exactly', 'info');
               return;
             }
-            await Promise.all([
-              resetTeamTestCases({ confirm: CONFIRM_TOKENS.RESET }),
-              putSettings(
-                { testEnvironment: '', softwareVersion: '' },
-                { silentFailure: true },
-              ),
-            ]);
+            await resetTeamTestCases({ confirm: CONFIRM_TOKENS.RESET });
             showToast('All data cleared', 'info');
           },
         });

@@ -70,7 +70,19 @@ Environments are named values (uppercased and trimmed on save, so `qa` and `QA` 
 
 ### Applications and Modules
 
-Applications and modules are **team-global** entities, shared across all releases — every release's test cases reference the same stable application/module records by their internal IDs, not their names, so **renaming one never moves a case's lineage or its import-match scope**. They are **auto-created on import**: when an imported row names an application or module that does not yet exist for the team, it is created on the fly; there is no separate management screen. Each application is assigned a **DB-unique 3-character initial** at creation, derived from its name (e.g. `SAP` for "Super Admin Portal") — this is the namespace prefix for test-case display ids (see import matching), and uniqueness is enforced so two applications can never share an initial (a derivation collision falls back to an alternative until unique). An application or module **cannot be deleted while any test case in any release still references it**; the referencing cases must be reassigned or removed first — no orphans, no cascade wipe.
+- Applications and modules are **team-global** entities shared across all releases.
+- Every release's test cases reference stable application/module records by internal ID, not by name, so **renaming one never moves a case's lineage or import-match scope**.
+- Applications and modules are **auto-created on import**: when an imported row names one that does not exist for the team, it is created on the fly.
+- There is no separate management screen for creating applications or modules.
+- Each application gets a **DB-unique 3-character initial** at creation, derived from its name (for example, `SAP` for "Super Admin Portal").
+- This initial is the namespace prefix for test-case display IDs (see import matching).
+- Initial uniqueness is enforced: two applications can never share an initial; derivation collisions fall back to an alternative until unique.
+- **Every application must always carry an initial**.
+- If an application record is found without an initial (for example, created before initials existed), the next import **backfills a unique initial in place** rather than reusing an empty value.
+- A test key must never render as `undefined-NNNN`.
+- An application or module **cannot be deleted while any test case in any release still references it**.
+- Referencing cases must be reassigned or removed first.
+- No orphans and no cascade wipe.
 
 ### Test Case and its stable lineage (`caseId`)
 
@@ -236,6 +248,7 @@ These are *how-to-build* decisions — not domain-model rules, but settled so th
 | Area | Decision | Why / trade-off |
 | --- | --- | --- |
 | **Listing query shape** | The (release, environment) listing is **driven from `testResults`**, scoped by `releaseId + environment`, with the test case looked up for content/app/module. Pagination and the status filter operate on the result rows. | Dense results mean exactly one row per case per env, so status is index-direct and pagination matches what's displayed — no filter-after-join. |
+| **Display id rendering** | The UI renders the case's **`testKey`** (e.g. `SAP-0039`) as the sole display id, in **both** the master-list row and the detail panel. There is **no** legacy `TC<serial>`/`testCaseId` fallback — that scheme and its `formatTcId` helper are removed. A row with no `testKey` renders no id chip rather than a synthesized one. | One display identity end-to-end; eliminates the `TC<ObjectId>` leak from the dropped serial scheme. |
 | **Bulk-write / rate limiting** | **Keep the existing in-memory, per-process rate limiter as-is.** No batch-size cap and no shared/distributed limiter added for this feature. | Accepts the known per-process limitation; revisit only if the deployment goes genuinely multi-replica and abuse becomes real. |
 | **Cross-team isolation** | **Central scoping + a dedicated isolation test suite.** All reads/writes inject `teamId` through the data layer, and a two-team test suite asserts team A can never read or write team B's releases, cases, results, and assignments. | Structural prevention *and* proof — belt and suspenders against the highest-impact data-leak class. |
 | **`testedOn` timezone** | **Store in UTC; present and enter in the viewer's local timezone.** The "cannot be in the future" check is evaluated in the user's local zone at entry, then persisted as UTC. | Unambiguous storage with intuitive local-time UX; display converts per viewer. |

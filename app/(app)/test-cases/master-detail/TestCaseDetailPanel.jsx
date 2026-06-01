@@ -18,6 +18,8 @@ import TestCaseDetail from './TestCaseDetail';
 export default function TestCaseDetailPanel({
   open,
   displayCase,
+  releaseId,
+  environments,
   onEdit,
   onAction,
   onClose,
@@ -57,6 +59,8 @@ export default function TestCaseDetailPanel({
         />
         <TestCaseDetail
           tc={displayCase}
+          releaseId={releaseId}
+          environments={environments}
           onEdit={onEdit}
           onAction={onAction}
           onClose={onClose}
@@ -82,6 +86,8 @@ export default function TestCaseDetailPanel({
       >
         <TestCaseDetail
           tc={displayCase}
+          releaseId={releaseId}
+          environments={environments}
           onEdit={onEdit}
           onAction={onAction}
           onClose={onClose}

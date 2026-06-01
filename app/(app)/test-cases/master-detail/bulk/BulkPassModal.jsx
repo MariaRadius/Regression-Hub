@@ -1,8 +1,8 @@
 'use client';
 import { Grid, TextField } from '@mui/material';
 import { useState } from 'react';
-import { useQaUsers } from '@/hooks/useSharedData';
-import { bulkUpdateTestCases } from '@/lib/api/testCasesBulk';
+import { useQaUserList } from '@/hooks/useSharedData';
+import { bulkRecordResults } from '@/lib/api/results';
 import { ROLES, STATUS } from '@/lib/constants';
 import { showToast } from '@/utils/showToast';
 import BulkModalShell from './BulkModalShell';
@@ -10,15 +10,19 @@ import BulkStatusFields from './BulkStatusFields';
 
 /**
  * Bulk mark as Pass: sets status, testedBy, testedOn, notes.
+ * Sends { releaseId, environment } for the new results model.
+ * BR-15: QA testedBy is locked to self; admin may pick any active QA user.
  */
 export default function BulkPassModal({
   open,
   onClose,
   selection,
   user,
+  releaseId,
+  environment,
   onSuccess,
 }) {
-  const qaUsers = useQaUsers();
+  const { data: qaUsers = [] } = useQaUserList();
   const lockTester = user?.role === ROLES.QA;
   const [testedBy, setTestedBy] = useState(user?.name || '');
   const [testedOn, setTestedOn] = useState(() =>
@@ -30,20 +34,17 @@ export default function BulkPassModal({
   async function handleConfirm() {
     setLoading(true);
     try {
-      const fields = {
+      const fields = { status: STATUS.PASS, testedBy, testedOn, notes };
+      await bulkRecordResults(releaseId, {
+        releaseId,
+        environment,
         status: STATUS.PASS,
+        caseIds: selection.map((s) => s.caseId),
         testedBy,
         testedOn,
         notes,
-      };
-      const res = await bulkUpdateTestCases({
-        ids: selection.map((s) => s._id),
-        fields,
       });
-      showToast(
-        `Marked ${res.updated} as Pass${res.skipped ? `, ${res.skipped} skipped (already Pass)` : ''}`,
-        'success',
-      );
+      showToast(`Marked ${selection.length} as Pass`, 'success');
       onSuccess(fields);
     } catch (e) {
       showToast(e.message || 'Bulk update failed', 'error');

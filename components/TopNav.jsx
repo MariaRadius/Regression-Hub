@@ -8,7 +8,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
-import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
+import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import {
   AppBar,
   Avatar,
@@ -39,7 +39,7 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/test-cases', label: 'Test Cases', Icon: BugReportIcon },
   { href: '/assignments', label: 'Assignments', Icon: AssignmentIcon },
-  { href: '/test-runs', label: 'Test Runs', Icon: PlaylistPlayIcon },
+  { href: '/releases', label: 'Releases', Icon: NewReleasesIcon },
   { href: '/reports', label: 'Reports', Icon: AssessmentIcon },
   {
     href: '/admin',

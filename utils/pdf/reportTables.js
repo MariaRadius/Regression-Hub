@@ -1,7 +1,6 @@
 import { PDF_COLORS } from '../pdfHelpers';
 
 /**
- * @see utils/pdf/generateTestRunReport.js
  * @see utils/pdf/generateSignoffReport.js
  */
 export function buildModuleSummaryTable({ rows, includeApplication }) {

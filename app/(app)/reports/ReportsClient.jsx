@@ -1,22 +1,12 @@
 'use client';
 
-import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import HistoryIcon from '@mui/icons-material/History';
-import SearchIcon from '@mui/icons-material/Search';
-import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import {
+  Alert,
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Grid,
-  IconButton,
-  InputAdornment,
   MenuItem,
   Stack,
   Table,
@@ -26,27 +16,18 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import ConfirmDialog from '@/components/ConfirmDialog';
-import EmptyState from '@/components/EmptyState';
+import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
 import PassRateBar from '@/components/PassRateBar';
 import ToastProvider, { showToast } from '@/components/Toast';
+import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { exportData as apiExportData } from '@/lib/api/exportData';
-import { putSettings } from '@/lib/api/settings';
-import {
-  completeVersion as apiCompleteVersion,
-  deleteVersion as apiDeleteVersion,
-  restoreVersion as apiRestoreVersion,
-  getVersionHistoryDetail,
-  listVersions,
-} from '@/lib/api/versions';
+import { listTestCasesForRelease } from '@/lib/api/releases';
+import { listResults } from '@/lib/api/results';
 import { STATUS } from '@/lib/constants';
 import { dateStamp, normalizedStatus } from '@/utils/formatters';
 import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
@@ -54,155 +35,155 @@ import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
 // Teal palette aliases — matches primary.main (#0d9488) at various opacities
 const TEAL = '#0d9488';
 const teal07 = alpha(TEAL, 0.07);
-const teal35 = alpha(TEAL, 0.35);
-const teal10 = alpha(TEAL, 0.1);
 const teal30 = alpha(TEAL, 0.3);
-const teal05 = alpha(TEAL, 0.05);
-const teal15 = alpha(TEAL, 0.15);
+const teal10 = alpha(TEAL, 0.1);
 
-export default function ReportsClient({
-  initialVersions,
-  initialSettings,
-  initialApplications,
-  initialApplicationId,
-}) {
-  const router = useRouter();
-  const [versions, setVersions] = useState(initialVersions);
-  const [selectedApp, setSelectedApp] = useState(initialApplicationId);
-  const [selectedVersion, setSelectedVersion] = useState('');
-  const [environment, setEnvironment] = useState(
-    initialSettings.testEnvironment,
+/**
+ * Metric card — displays a single labelled number.
+ *
+ * @param {{ label: string, value: string|number|null, color?: string }} props
+ */
+function MetricCard({ label, value, color = 'text.primary' }) {
+  return (
+    <Stack
+      spacing={0.5}
+      sx={{
+        bgcolor: 'background.default',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        p: '14px 20px',
+        textAlign: 'center',
+        minWidth: 100,
+      }}
+    >
+      <Typography variant='metricLabel' color='text.disabled'>
+        {label}
+      </Typography>
+      <Typography variant='metricValue' component='p' sx={{ color }}>
+        {value ?? '—'}
+      </Typography>
+    </Stack>
   );
-  const [version, setVersion] = useState(initialSettings.softwareVersion);
+}
+
+/**
+ * Computes pass/fail/pending counts and integer pass rate from a results array.
+ *
+ * @param {object[]} results
+ * @returns {{ total: number, passed: number, failed: number, pending: number, passRate: number }}
+ */
+function computeSummary(results) {
+  const total = results.length;
+  const passed = results.filter((r) => r.status === STATUS.PASS).length;
+  const failed = results.filter((r) => r.status === STATUS.FAIL).length;
+  const pending = results.filter((r) => r.status === STATUS.PENDING).length;
+  const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+  return { total, passed, failed, pending, passRate };
+}
+
+/**
+ * Reports page client — per-(release, environment) overview, per-app breakdown,
+ * and export panel.
+ *
+ * Version-history table, complete/restore/delete version controls, and free-text
+ * env/version inputs removed per the Releases × Environments refactor (RXR-11849).
+ *
+ * @param {{ applications: object[] }} props
+ */
+export default function ReportsClient({ applications }) {
+  const { releaseId, releaseName, environment, activeRelease } =
+    useReleaseEnv();
+
+  const [selectedApp, setSelectedApp] = useState('');
+  // summary: { total, passed, failed, pending, passRate } | null
+  const [summary, setSummary] = useState(null);
+  // appBreakdown: { appId, appName, total, passed, failed, pending, passRate }[]
+  const [appBreakdown, setAppBreakdown] = useState([]);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [generatingVersion, setGeneratingVersion] = useState('');
-  const [deletingVersion, setDeletingVersion] = useState('');
-  const [restoringVersion, setRestoringVersion] = useState('');
-  const [confirmRestore, setConfirmRestore] = useState(null); // { version } pending confirmation
-  const [confirmComplete, setConfirmComplete] = useState(null); // version string
-  const [completingVersion, setCompletingVersion] = useState('');
-  const [versionFilter, setVersionFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [viewModal, setViewModal] = useState(null); // { version, summary, byModule, byTester }
-  const [viewLoading, setViewLoading] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(null); // { ver, isCurrent, msg }
 
-  useEffect(() => {
-    setVersions(initialVersions);
-  }, [initialVersions]);
+  // ── Data fetching ─────────────────────────────────────────────
 
-  // Sync settings fields if server re-fetches updated values after a mutation
-  useEffect(() => {
-    setEnvironment(initialSettings.testEnvironment);
-    setVersion(initialSettings.softwareVersion);
-  }, [initialSettings.testEnvironment, initialSettings.softwareVersion]);
-
-  const fetchVersions = useCallback(() => {
-    listVersions({ silentFailure: true }).then((v) => {
-      if (v) setVersions(v);
-    });
-  }, []);
-
-  // Re-fetch versions when the user tabs back in (handles concurrent changes from other users)
-  useEffect(() => {
-    function handleVisibility() {
-      if (document.visibilityState === 'visible') fetchVersions();
+  const fetchReportData = useCallback(async () => {
+    if (!releaseId || !environment) {
+      setSummary(null);
+      setAppBreakdown([]);
+      return;
     }
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () =>
-      document.removeEventListener('visibilitychange', handleVisibility);
-  }, [fetchVersions]);
-
-  function handleAppChange(id) {
-    setSelectedApp(id);
-    const params = new URLSearchParams(id ? { applicationId: id } : {});
-    router.push(`/reports${params.size ? `?${params}` : ''}`);
-  }
-
-  function deleteVersion(ver, isCurrent) {
-    const msg = isCurrent
-      ? `Delete ALL test cases for active version "${ver}"?\n\nThis permanently removes them and cannot be undone.`
-      : `Remove the historical snapshot for version "${ver}"?\n\nThis removes the saved history entry but leaves the current test cases untouched.`;
-    setConfirmDelete({ ver, isCurrent, msg });
-  }
-
-  async function doDelete({ ver, isCurrent }) {
-    setConfirmDelete(null);
-    setDeletingVersion(ver);
+    setDataLoading(true);
     try {
-      const data = await apiDeleteVersion({ version: ver, isCurrent });
-      if (selectedVersion === ver) setSelectedVersion('');
-      showToast(
-        isCurrent
-          ? `Deleted ${data.deleted} test cases for v${ver}`
-          : `Removed history snapshot for v${ver} from ${data.deleted} test case(s)`,
-        'success',
+      // Fetch the full results list and test-cases list in parallel.
+      // The results route returns all results for (release, env); the test-cases
+      // route carries applicationId per row. We join locally to build the
+      // per-app breakdown without requiring a server-side aggregation.
+      const [results, casesResp] = await Promise.all([
+        listResults(releaseId, { environment }, { silentFailure: true }),
+        listTestCasesForRelease(
+          releaseId,
+          { environment },
+          { silentFailure: true },
+        ),
+      ]);
+
+      if (!results) return;
+
+      setSummary(computeSummary(results));
+
+      // testCasesListResponseSchema: { data: [...], total, page, totalPages }
+      const caseRows = casesResp?.data ?? [];
+      const caseAppMap = Object.fromEntries(
+        caseRows
+          .filter((c) => c.caseId && c.applicationId)
+          .map((c) => [c.caseId, c.applicationId]),
       );
-      router.refresh();
-    } catch (e) {
-      showToast(e.message || 'Delete failed', 'error');
-    } finally {
-      setDeletingVersion('');
-    }
-  }
 
-  async function viewVersion(ver) {
-    setViewLoading(ver);
-    try {
-      const data = await getVersionHistoryDetail(ver);
-      setViewModal(data);
-    } catch (e) {
-      showToast(e.message || 'Failed to load version detail', 'error');
-    } finally {
-      setViewLoading('');
-    }
-  }
+      // Group results by applicationId.
+      const appGroups = {};
+      for (const result of results) {
+        const appId = caseAppMap[result.caseId];
+        if (!appId) continue;
+        if (!appGroups[appId]) appGroups[appId] = [];
+        appGroups[appId].push(result);
+      }
 
-  function restoreVersion(ver) {
-    setConfirmRestore({ version: ver });
-  }
-
-  async function doRestore({ version: ver }) {
-    setConfirmRestore(null);
-    setRestoringVersion(ver);
-    try {
-      // Restore from history[] snapshot
-      const data = await apiRestoreVersion(ver);
-      showToast(`Restored ${data.restored} test cases to v${ver}`, 'success');
-      // Sync the active version across the UI immediately
-      setVersion(ver);
-      router.refresh();
-    } catch (e) {
-      showToast(e.message || 'Restore failed', 'error');
-    } finally {
-      setRestoringVersion('');
-    }
-  }
-
-  async function markComplete(ver) {
-    setConfirmComplete(null);
-    setCompletingVersion(ver);
-    try {
-      const data = await apiCompleteVersion(ver);
-      showToast(
-        `v${ver} marked as completed — ${data.snapshotted} test cases snapshotted`,
-        'success',
+      // Build name lookup from the server-fetched applications list.
+      const appNameMap = Object.fromEntries(
+        applications.map((a) => [a._id, a.name]),
       );
-      router.refresh();
-    } catch (e) {
-      showToast(e.message || 'Failed to complete version', 'error');
-    } finally {
-      setCompletingVersion('');
-    }
-  }
 
-  async function exportExcel(overrideVersion) {
+      const rows = Object.entries(appGroups)
+        .map(([appId, appResults]) => ({
+          appId,
+          appName: appNameMap[appId] ?? 'Unknown Application',
+          ...computeSummary(appResults),
+        }))
+        .sort((a, b) => a.appName.localeCompare(b.appName));
+
+      setAppBreakdown(rows);
+    } catch {
+      // silentFailure handles per-request errors; top-level catch is defensive.
+    } finally {
+      setDataLoading(false);
+    }
+  }, [releaseId, environment, applications]);
+
+  useEffect(() => {
+    setSummary(null);
+    setAppBreakdown([]);
+    fetchReportData();
+  }, [fetchReportData]);
+
+  // ── Exports ───────────────────────────────────────────────
+
+  async function exportExcel() {
+    setGeneratingExcel(true);
     try {
-      const params = new URLSearchParams();
-      if (selectedApp) params.set('applicationId', selectedApp);
-      const ver = overrideVersion ?? selectedVersion;
-      if (ver) params.set('softwareVersion', ver);
-      const cases = await apiExportData(Object.fromEntries(params));
+      const query = { releaseId, environment };
+      if (selectedApp) query.applicationId = selectedApp;
+
+      const cases = await apiExportData(query);
       if (!cases?.length) {
         showToast('No test cases to export', 'info');
         return;
@@ -210,33 +191,31 @@ export default function ReportsClient({
 
       const { utils, writeFile } = await import('xlsx');
       const rows = cases.map((tc) => ({
+        'Test Key': tc.testKey,
         'Platform/Application': tc.applicationName,
         Module: tc.moduleName,
-        Type: tc.type,
-        Traceability: tc.traceability,
-        'Test Case ID': tc.testCaseId,
-        'Test Case': tc.testCase,
+        'Test Case': tc.name,
         Preconditions: tc.preconditions,
         Steps: tc.steps,
         'Expected Result': tc.expectedResult,
+        Priority: tc.priority,
+        'Jira Story': tc.jiraStory,
         Status: normalizedStatus(tc.status),
         Notes: tc.notes,
         'Tested By': tc.testedBy,
         'Tested On': tc.testedOn,
-        'Software Version Tested': tc.softwareVersionTested,
+        Environment: tc.environment,
       }));
 
-      // Summary sheet
+      const appLabel = selectedApp
+        ? applications.find((a) => a._id === selectedApp)?.name
+        : 'All';
+
       const summaryRows = [
         ['Metric', 'Value'],
-        [
-          'Application',
-          selectedApp
-            ? initialApplications.find((a) => a._id === selectedApp)?.name
-            : 'All',
-        ],
-        ['Environment', environment],
-        ['Version', version || 'Not specified'],
+        ['Application', appLabel],
+        ['Release', releaseName ?? ''],
+        ['Environment', environment ?? ''],
         ['Total Test Cases', cases.length],
         [
           'Passed',
@@ -263,172 +242,210 @@ export default function ReportsClient({
 
       const wsData = utils.json_to_sheet(rows);
       wsData['!cols'] = [
-        22, 18, 12, 14, 14, 24, 18, 18, 24, 10, 30, 12, 14, 18,
+        14, 22, 18, 24, 18, 18, 24, 10, 14, 10, 30, 12, 14, 14,
       ].map((wch) => ({ wch }));
       utils.book_append_sheet(wb, wsData, 'Test Cases');
 
-      writeFile(wb, `regression-report-${dateStamp()}.xlsx`);
+      const safeName = (releaseName ?? 'export').replace(/\s+/g, '-');
+      writeFile(
+        wb,
+        `regression-report-${safeName}-${environment ?? ''}-${dateStamp()}.xlsx`,
+      );
       showToast('Excel report exported', 'success');
     } catch (e) {
       console.error(e);
       showToast('Export failed', 'error');
+    } finally {
+      setGeneratingExcel(false);
     }
   }
 
-  async function exportPdf(overrideVersion) {
-    const isVersionExport = overrideVersion !== undefined;
-    if (isVersionExport) setGeneratingVersion(overrideVersion);
-    else setGeneratingPdf(true);
+  async function exportPdf() {
+    setGeneratingPdf(true);
     try {
-      const params = new URLSearchParams();
-      if (selectedApp) params.set('applicationId', selectedApp);
-      const ver = overrideVersion ?? selectedVersion;
-      if (ver) params.set('softwareVersion', ver);
-      const cases = await apiExportData(Object.fromEntries(params));
-      if (!cases.length) {
+      const query = { releaseId, environment };
+      if (selectedApp) query.applicationId = selectedApp;
+
+      const cases = await apiExportData(query);
+      if (!cases?.length) {
         showToast('No test cases to export', 'info');
-        if (isVersionExport) setGeneratingVersion('');
-        else setGeneratingPdf(false);
         return;
       }
 
       const appName = selectedApp
-        ? initialApplications.find((a) => a._id === selectedApp)?.name
+        ? applications.find((a) => a._id === selectedApp)?.name
         : 'All Applications';
 
       const doc = await generateSignoffReport({
         cases,
         appName,
-        environment,
-        version,
+        environment: environment ?? '',
+        version: releaseName ?? '',
       });
-      doc.save(`regression-signoff-${dateStamp()}.pdf`);
+
+      const safeName = (releaseName ?? 'export').replace(/\s+/g, '-');
+      doc.save(
+        `regression-signoff-${safeName}-${environment ?? ''}-${dateStamp()}.pdf`,
+      );
       showToast('PDF exported', 'success');
     } catch (e) {
       console.error(e);
       showToast('PDF export failed', 'error');
     } finally {
       setGeneratingPdf(false);
-      setGeneratingVersion('');
     }
   }
 
-  const filteredVersions = useMemo(
-    () =>
-      versions.filter((v) => {
-        if (
-          versionFilter &&
-          !v.version.toLowerCase().includes(versionFilter.toLowerCase())
-        )
-          return false;
-        if (statusFilter === 'active' && !v.isCurrent) return false;
-        if (statusFilter === 'completed' && v.isCurrent) return false;
-        return true;
-      }),
-    [versions, versionFilter, statusFilter],
-  );
+  // ── Render ────────────────────────────────────────────────
+
+  const hasContext = Boolean(releaseId && environment);
+  const isArchived = Boolean(activeRelease?.archived);
+
+  const metricCards = [
+    { label: 'Total', value: summary?.total, color: 'text.primary' },
+    { label: 'Passed', value: summary?.passed, color: 'success.main' },
+    {
+      label: 'Failed',
+      value: summary?.failed,
+      color: (summary?.failed ?? 0) > 0 ? 'error.main' : 'text.disabled',
+    },
+    { label: 'Pending', value: summary?.pending, color: 'warning.main' },
+    {
+      label: 'Pass Rate',
+      value: summary ? `${summary.passRate}%` : null,
+      color: (summary?.passRate ?? 0) >= 80 ? 'success.main' : 'warning.main',
+    },
+  ];
 
   return (
     <>
-      {/* Always-mounted aria-live region — outside Stack so PageHeader is Stack's first child */}
-      <Typography
-        component='span'
-        aria-live='polite'
-        aria-atomic='true'
-        sx={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          overflow: 'hidden',
-          clip: 'rect(0 0 0 0)',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {selectedVersion
-          ? `Version ${selectedVersion} selected for export`
-          : ''}
-      </Typography>
+      <ToastProvider />
       <Stack spacing={3}>
-        <ToastProvider />
-
         <PageHeader
           eyebrow='Exports'
           title='Reports'
-          sub='Generate PDF signoff reports and Excel exports'
+          sub='Overview and Excel / PDF exports for the active release and environment'
         />
 
-        {/* Version History — always rendered to prevent CLS when empty */}
+        {/* Archived warning */}
+        {isArchived && (
+          <Alert severity='warning' variant='outlined'>
+            This release is archived — exports are still available but no
+            results can be recorded.
+          </Alert>
+        )}
+
+        {/* ── Overview panel ───────────────────────────────────────── */}
         <Panel
-          title='Version History'
+          title='Overview'
           headerActions={
-            versions.length > 0 ? (
+            hasContext ? (
               <Stack
                 direction='row'
                 spacing={1}
                 sx={{ alignItems: 'center', flexWrap: 'wrap' }}
               >
-                <TextField
-                  size='small'
-                  value={versionFilter}
-                  onChange={(e) => setVersionFilter(e.target.value)}
-                  label='Version'
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position='start'>
-                          <SearchIcon color='disabled' aria-hidden='true' />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                  sx={{ width: 160 }}
-                />
-                <TextField
-                  select
-                  size='small'
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  slotProps={{
-                    inputLabel: { shrink: true },
-                    select: { displayEmpty: true },
-                  }}
-                  label='Status'
-                  sx={{ width: 160 }}
-                >
-                  <MenuItem value=''>All statuses</MenuItem>
-                  <MenuItem value='active'>Active only</MenuItem>
-                  <MenuItem value='completed'>Completed only</MenuItem>
-                </TextField>
                 <Typography
-                  id='version-table-hint'
-                  variant='tableCell'
-                  color='text.disabled'
+                  variant='mono'
+                  component='span'
+                  sx={{
+                    bgcolor: teal10,
+                    border: `1px solid ${teal30}`,
+                    borderRadius: 0.75,
+                    px: 1.25,
+                    py: 0.25,
+                    color: 'success.dark',
+                  }}
                 >
-                  Select a row to scope the export below
+                  {releaseName}
                 </Typography>
+                <Chip
+                  label={environment}
+                  size='small'
+                  sx={{
+                    bgcolor: teal07,
+                    color: 'primary.dark',
+                    border: `1px solid ${teal30}`,
+                  }}
+                />
               </Stack>
             ) : null
           }
         >
-          {versions.length === 0 ? (
-            <EmptyState
-              icon={
-                <HistoryIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
-              }
-              title='No version history yet'
+          {!hasContext ? (
+            <Stack
+              spacing={1}
+              sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
             >
-              <Typography variant='body2' color='text.disabled'>
-                Export a report below to create your first version snapshot.
+              <AssessmentOutlinedIcon
+                sx={{ fontSize: 48, color: 'text.disabled' }}
+              />
+              <Typography variant='pageTitle' sx={{ fontSize: 18 }}>
+                No release selected
               </Typography>
-            </EmptyState>
+              <Typography variant='pageSub' color='text.disabled'>
+                Select a release and environment in the bar above to view
+                metrics.
+              </Typography>
+            </Stack>
           ) : (
-            <>
+            <Stack spacing={2} sx={{ p: 3 }}>
+              <Grid container spacing={1.5}>
+                {metricCards.map(({ label, value, color }) => (
+                  <Grid key={label} size={{ xs: 6, sm: 4, md: 'grow' }}>
+                    <MetricCard
+                      label={label}
+                      value={dataLoading ? '…' : value}
+                      color={color}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+
+              {!dataLoading && summary && (
+                <PassRateBar
+                  value={summary.passRate}
+                  label={`Overall pass rate: ${summary.passRate}%`}
+                />
+              )}
+            </Stack>
+          )}
+        </Panel>
+
+        {/* ── Application Breakdown panel ───────────────────────────── */}
+        {hasContext && (
+          <Panel title='Application Breakdown'>
+            {dataLoading ? (
+              <Stack sx={{ py: 3, alignItems: 'center' }}>
+                <Typography variant='tableCell' color='text.disabled'>
+                  Loading…
+                </Typography>
+              </Stack>
+            ) : appBreakdown.length === 0 ? (
+              <Stack
+                spacing={1}
+                sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
+              >
+                <AssessmentOutlinedIcon
+                  sx={{ fontSize: 48, color: 'text.disabled' }}
+                />
+                <Typography variant='pageTitle' sx={{ fontSize: 16 }}>
+                  No test cases yet
+                </Typography>
+                <Typography variant='pageSub' color='text.disabled'>
+                  Import test cases into this release to see per-application
+                  metrics.
+                </Typography>
+                <Button variant='contained' href='/import-cases'>
+                  Import Cases
+                </Button>
+              </Stack>
+            ) : (
               <TableContainer>
                 <Table
                   size='small'
                   stickyHeader
-                  aria-label='Version history'
-                  aria-describedby='version-table-hint'
+                  aria-label='Application breakdown'
                 >
                   <TableHead
                     sx={{
@@ -440,787 +457,140 @@ export default function ReportsClient({
                     }}
                   >
                     <TableRow>
-                      <TableCell>Version</TableCell>
+                      <TableCell>Application</TableCell>
                       <TableCell align='center'>Total</TableCell>
-                      <TableCell align='center'>Pass</TableCell>
-                      <TableCell align='center'>Fail</TableCell>
-                      <TableCell align='center'>Pending</TableCell>
-                      <TableCell align='center'>Pass Rate</TableCell>
-                      <TableCell align='right'>Last Updated</TableCell>
-                      <TableCell align='center'>Export</TableCell>
-                      <TableCell align='center' sx={{ width: 72 }}>
-                        Actions
+                      <TableCell align='center' sx={{ color: 'success.main' }}>
+                        Pass
                       </TableCell>
+                      <TableCell align='center' sx={{ color: 'error.main' }}>
+                        Fail
+                      </TableCell>
+                      <TableCell align='center' sx={{ color: 'warning.main' }}>
+                        Pending
+                      </TableCell>
+                      <TableCell align='center'>Pass Rate</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredVersions.map((v) => {
-                      const isSelected = selectedVersion === v.version;
-                      return (
-                        <TableRow
-                          key={v.version}
-                          hover
-                          tabIndex={0}
-                          aria-selected={isSelected}
-                          onClick={() =>
-                            setSelectedVersion(isSelected ? '' : v.version)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setSelectedVersion(isSelected ? '' : v.version);
-                            }
-                          }}
+                    {appBreakdown.map((row) => (
+                      <TableRow key={row.appId} hover>
+                        <TableCell>
+                          <Typography variant='tableCell' fontWeight={500}>
+                            {row.appName}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Typography variant='tableCell'>
+                            {row.total}
+                          </Typography>
+                        </TableCell>
+                        <TableCell
+                          align='center'
+                          sx={{ color: 'success.main' }}
+                        >
+                          <Typography variant='tableCell'>
+                            {row.passed}
+                          </Typography>
+                        </TableCell>
+                        <TableCell
+                          align='center'
                           sx={{
-                            cursor: 'pointer',
-                            bgcolor: isSelected ? teal07 : undefined,
-                            outline: isSelected
-                              ? `2px solid ${teal35}`
-                              : undefined,
-                            '&:focus-visible': {
-                              outline: '2px solid',
-                              outlineColor: 'primary.main',
-                              outlineOffset: -2,
-                            },
+                            color:
+                              row.failed > 0 ? 'error.main' : 'text.disabled',
                           }}
                         >
-                          {/* Version label */}
-                          <TableCell>
-                            <Stack
-                              direction='row'
-                              spacing={1}
-                              sx={{ alignItems: 'center' }}
-                            >
-                              {isSelected && (
-                                <FiberManualRecordIcon
-                                  sx={{ color: 'primary.main', fontSize: 10 }}
-                                  aria-hidden='true'
-                                />
-                              )}
-                              <Typography
-                                variant='mono'
-                                component='span'
-                                sx={{
-                                  bgcolor: teal10,
-                                  border: `1px solid ${teal30}`,
-                                  borderRadius: 0.75,
-                                  px: 1.25,
-                                  py: 0.25,
-                                  color: 'success.dark',
-                                }}
-                              >
-                                v{v.version}
-                              </Typography>
-                              {v.isCurrent ? (
-                                <Chip
-                                  label='ACTIVE'
-                                  size='small'
-                                  color='success'
-                                  variant='outlined'
-                                />
-                              ) : (
-                                <Chip
-                                  label='completed'
-                                  size='small'
-                                  variant='outlined'
-                                  sx={{
-                                    color: 'text.disabled',
-                                    borderColor: 'divider',
-                                  }}
-                                />
-                              )}
-                            </Stack>
-                          </TableCell>
-
-                          {/* Numeric stats */}
-                          <TableCell align='center'>
-                            <Typography variant='tableCell'>
-                              {v.total}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Typography
-                              variant='tableCell'
-                              sx={{ color: 'success.main' }}
-                            >
-                              {v.passed}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Typography
-                              variant='tableCell'
-                              sx={{
-                                color:
-                                  v.failed > 0 ? 'error.main' : 'text.disabled',
-                              }}
-                            >
-                              {v.failed}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Typography
-                              variant='tableCell'
-                              sx={{ color: 'warning.main' }}
-                            >
-                              {v.pending}
-                            </Typography>
-                          </TableCell>
-
-                          {/* Pass rate bar */}
-                          <TableCell align='center'>
-                            <PassRateBar value={v.passRate} maxWidth={60} />
-                          </TableCell>
-
-                          {/* Last updated */}
-                          <TableCell align='right'>
-                            <Typography
-                              variant='tableCell'
-                              color='text.disabled'
-                            >
-                              {v.lastUpdated
-                                ? new Date(v.lastUpdated).toLocaleDateString()
-                                : '—'}
-                            </Typography>
-                          </TableCell>
-
-                          {/* Export buttons */}
-                          <TableCell
-                            align='center'
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Stack
-                              direction='row'
-                              spacing={0.625}
-                              sx={{
-                                justifyContent: 'center',
-                                flexWrap: 'wrap',
-                              }}
-                            >
-                              {!v.isCurrent && (
-                                <Button
-                                  variant='outlined'
-                                  size='small'
-                                  startIcon={
-                                    viewLoading === v.version ? null : (
-                                      <VisibilityOutlinedIcon />
-                                    )
-                                  }
-                                  onClick={() => viewVersion(v.version)}
-                                  disabled={viewLoading === v.version}
-                                  aria-label={
-                                    viewLoading === v.version
-                                      ? `Loading v${v.version}`
-                                      : `View v${v.version}`
-                                  }
-                                  aria-busy={viewLoading === v.version}
-                                  sx={{ minWidth: 0 }}
-                                >
-                                  {viewLoading === v.version
-                                    ? 'Loading…'
-                                    : 'View'}
-                                </Button>
-                              )}
-                              <Button
-                                variant='outlined'
-                                size='small'
-                                onClick={() => exportExcel(v.version)}
-                                sx={{ minWidth: 0 }}
-                              >
-                                Excel
-                              </Button>
-                              <Button
-                                variant='contained'
-                                size='small'
-                                onClick={() => exportPdf(v.version)}
-                                disabled={generatingVersion === v.version}
-                                aria-label={
-                                  generatingVersion === v.version
-                                    ? `Generating PDF for v${v.version}`
-                                    : `Export PDF for v${v.version}`
-                                }
-                                aria-busy={generatingVersion === v.version}
-                                sx={{ minWidth: 0 }}
-                              >
-                                {generatingVersion === v.version
-                                  ? 'Generating…'
-                                  : 'PDF'}
-                              </Button>
-                            </Stack>
-                          </TableCell>
-
-                          {/* Row actions */}
-                          <TableCell
-                            align='center'
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{ whiteSpace: 'nowrap' }}
-                          >
-                            {v.isCurrent && (
-                              <Tooltip
-                                title={`Mark v${v.version} as completed`}
-                              >
-                                <span>
-                                  <IconButton
-                                    size='small'
-                                    aria-label={`Mark v${v.version} as completed`}
-                                    onClick={() =>
-                                      setConfirmComplete(v.version)
-                                    }
-                                    disabled={completingVersion === v.version}
-                                    color='success'
-                                    sx={{
-                                      opacity:
-                                        completingVersion === v.version
-                                          ? 0.4
-                                          : 0.75,
-                                      '&:hover': { opacity: 1 },
-                                    }}
-                                  >
-                                    <CheckCircleOutlinedIcon />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            )}
-                            {!v.isCurrent && (
-                              <Tooltip
-                                title={`Restore test cases to saved state from v${v.version}`}
-                              >
-                                <span>
-                                  <IconButton
-                                    size='small'
-                                    aria-label={`Restore test cases to v${v.version}`}
-                                    onClick={() => restoreVersion(v.version)}
-                                    disabled={restoringVersion === v.version}
-                                    color='primary'
-                                    sx={{
-                                      opacity:
-                                        restoringVersion === v.version
-                                          ? 0.4
-                                          : 0.75,
-                                      '&:hover': { opacity: 1 },
-                                    }}
-                                  >
-                                    <HistoryIcon fontSize='small' />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            )}
-                            <Tooltip
-                              title={
-                                v.isCurrent
-                                  ? `Delete all test cases for v${v.version}`
-                                  : `Remove history snapshot for v${v.version}`
-                              }
-                            >
-                              <span>
-                                <IconButton
-                                  size='small'
-                                  aria-label={
-                                    v.isCurrent
-                                      ? `Delete all test cases for v${v.version}`
-                                      : `Remove history snapshot for v${v.version}`
-                                  }
-                                  onClick={() =>
-                                    deleteVersion(v.version, v.isCurrent)
-                                  }
-                                  disabled={deletingVersion === v.version}
-                                  color='error'
-                                  sx={{
-                                    opacity:
-                                      deletingVersion === v.version ? 0.4 : 0.7,
-                                    '&:hover': { opacity: 1 },
-                                  }}
-                                >
-                                  <DeleteOutlinedIcon fontSize='small' />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                          <Typography variant='tableCell'>
+                            {row.failed}
+                          </Typography>
+                        </TableCell>
+                        <TableCell
+                          align='center'
+                          sx={{
+                            color:
+                              row.pending > 0
+                                ? 'warning.main'
+                                : 'text.disabled',
+                          }}
+                        >
+                          <Typography variant='tableCell'>
+                            {row.pending}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <PassRateBar
+                            value={row.passRate}
+                            label={`${row.appName} pass rate: ${row.passRate}%`}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
+          </Panel>
+        )}
 
-              {/* Selected version banner */}
-              {selectedVersion && (
-                <Stack
-                  direction='row'
-                  spacing={1.25}
-                  sx={{
-                    alignItems: 'center',
-                    px: 2.5,
-                    py: 1.25,
-                    bgcolor: teal05,
-                    borderTop: `1px solid ${teal15}`,
-                  }}
-                >
-                  <Stack
-                    direction='row'
-                    spacing={0.75}
-                    sx={{ alignItems: 'center' }}
-                  >
-                    <FiberManualRecordIcon
-                      sx={{ color: 'primary.main', fontSize: 10 }}
-                      aria-hidden='true'
-                    />
-                    <Typography
-                      variant='tableCell'
-                      component='span'
-                      sx={{ color: 'primary.main' }}
-                    >
-                      Selected: v{selectedVersion}
-                    </Typography>
-                  </Stack>
-                  <Typography
-                    variant='tableCell'
-                    component='span'
-                    color='text.disabled'
-                  >
-                    — custom export below will use this version
-                  </Typography>
-                  <Button
-                    variant='text'
-                    size='small'
-                    onClick={() => setSelectedVersion('')}
-                    aria-label='Clear selected version'
-                    sx={{ ml: 'auto !important', color: 'text.disabled' }}
-                  >
-                    Clear ×
-                  </Button>
-                </Stack>
-              )}
-            </>
-          )}
-        </Panel>
-
-        {/* Custom Export */}
+        {/* ── Export panel ────────────────────────────────────────────── */}
         <Panel
-          title={
-            <>
-              Custom Export{' '}
-              {selectedVersion && (
-                <Typography component='span' sx={{ color: 'primary.main' }}>
-                  — scoped to v{selectedVersion}
-                </Typography>
-              )}
-            </>
+          title='Export'
+          headerActions={
+            <FileDownloadOutlinedIcon
+              sx={{ color: 'text.disabled', fontSize: 20 }}
+            />
           }
         >
-          <Stack spacing={1.75} sx={{ p: 2.5 }}>
-            <Stack direction='row' spacing={1.75} sx={{ flexWrap: 'wrap' }}>
-              <TextField
-                select
-                label='Application / Scope'
-                value={selectedApp}
-                onChange={(e) => handleAppChange(e.target.value)}
-                sx={{ minWidth: 180, flex: 1 }}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  input: { notched: true },
-                  select: { displayEmpty: true },
-                }}
-              >
-                <MenuItem value=''>All Applications</MenuItem>
-                {initialApplications.map((a) => (
-                  <MenuItem key={a._id} value={a._id}>
-                    {a.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                label='Test Environment'
-                value={environment}
-                onChange={(e) => setEnvironment(e.target.value)}
-                onBlur={() =>
-                  putSettings(
-                    { testEnvironment: environment, softwareVersion: version },
-                    { silentFailure: true },
-                  )
-                }
-                placeholder='e.g. QA, Staging…'
-                sx={{ minWidth: 180, flex: 1 }}
-              />
-              <TextField
-                label='Software Version (for PDF header)'
-                value={version}
-                onChange={(e) => setVersion(e.target.value)}
-                onBlur={() =>
-                  putSettings(
-                    { testEnvironment: environment, softwareVersion: version },
-                    { silentFailure: true },
-                  )
-                }
-                placeholder='e.g. 2.4.1…'
-                sx={{ minWidth: 180, flex: 1 }}
-              />
-            </Stack>
-            <Stack direction='row' spacing={1.25}>
-              <Button variant='outlined' onClick={() => exportExcel()}>
-                Export Excel
-              </Button>
-              <Button
-                variant='contained'
-                onClick={() => exportPdf()}
-                disabled={generatingPdf}
-              >
-                {generatingPdf ? 'Generating…' : 'Export PDF Signoff'}
-              </Button>
-            </Stack>
-          </Stack>
-        </Panel>
-
-        {/* ── Dialogs ─────────────────────────────────────────────────────── */}
-
-        {/* Delete Confirmation */}
-        <ConfirmDialog
-          open={!!confirmDelete}
-          title='Delete Version?'
-          confirmLabel='Delete'
-          confirmColor='error'
-          onConfirm={() => doDelete(confirmDelete)}
-          onClose={() => setConfirmDelete(null)}
-        >
-          <Typography variant='tableCell' sx={{ whiteSpace: 'pre-line' }}>
-            {confirmDelete?.msg}
-          </Typography>
-        </ConfirmDialog>
-
-        {/* Restore Confirmation */}
-        <Dialog
-          open={!!confirmRestore}
-          onClose={() => setConfirmRestore(null)}
-          maxWidth='xs'
-          fullWidth
-        >
-          <DialogTitle>Restore to v{confirmRestore?.version}?</DialogTitle>
-          <DialogContent>
-            <Stack spacing={1.25}>
-              <Typography variant='tableCell'>
-                All current test case results will be{' '}
-                <strong>
-                  reset to their saved state from v{confirmRestore?.version}
-                </strong>
-                .
+          <Stack spacing={1.75} sx={{ p: 3 }}>
+            {!hasContext ? (
+              <Typography variant='tableCell' color='text.disabled'>
+                Select a release and environment above to enable exports.
               </Typography>
-              <Typography variant='tableCell'>
-                Your current state is automatically saved as a history entry —
-                you can always restore back to it.
-              </Typography>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button variant='outlined' onClick={() => setConfirmRestore(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant='contained'
-              onClick={() => doRestore(confirmRestore)}
-            >
-              Yes, Restore
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Mark Complete Confirmation */}
-        <ConfirmDialog
-          open={!!confirmComplete}
-          title={`Mark v${confirmComplete} as Completed?`}
-          confirmLabel='Yes, Mark Complete'
-          confirmColor='success'
-          onConfirm={() => markComplete(confirmComplete)}
-          onClose={() => setConfirmComplete(null)}
-        >
-          <Typography variant='tableCell'>
-            This saves a snapshot of all test case results for v
-            {confirmComplete} and marks the testing cycle as{' '}
-            <strong>done</strong>. The version will appear as{' '}
-            <strong>completed</strong> in history and can be viewed or restored
-            anytime.
-          </Typography>
-        </ConfirmDialog>
-
-        {/* Version History Detail */}
-        <Dialog
-          open={!!viewModal}
-          onClose={() => setViewModal(null)}
-          maxWidth='md'
-          fullWidth
-          slotProps={{ paper: { sx: { maxHeight: '88vh' } } }}
-        >
-          <DialogTitle>
-            <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Typography
-                variant='mono'
-                component='span'
-                sx={{
-                  bgcolor: teal10,
-                  border: `1px solid ${teal30}`,
-                  borderRadius: 0.75,
-                  px: 1.5,
-                  py: 0.375,
-                  color: 'success.dark',
-                }}
-              >
-                v{viewModal?.version}
-              </Typography>
-              <Chip
-                label='Historical Snapshot'
-                size='small'
-                sx={{ bgcolor: 'grey.100', color: 'text.secondary' }}
-              />
-            </Stack>
-          </DialogTitle>
-
-          <DialogContent dividers>
-            {/* Summary stats */}
-            <Grid container spacing={1.25} sx={{ mb: 3 }}>
-              {[
-                {
-                  label: 'Total',
-                  value: viewModal?.summary.total,
-                  color: 'text.primary',
-                },
-                {
-                  label: 'Passed',
-                  value: viewModal?.summary.passed,
-                  color: 'success.dark',
-                },
-                {
-                  label: 'Failed',
-                  value: viewModal?.summary.failed,
-                  color: 'error.main',
-                },
-                {
-                  label: 'Pending',
-                  value: viewModal?.summary.pending,
-                  color: 'warning.main',
-                },
-                {
-                  label: 'Pass Rate',
-                  value: `${viewModal?.summary.passRate}%`,
-                  color:
-                    (viewModal?.summary.passRate ?? 0) >= 80
-                      ? 'success.dark'
-                      : 'warning.main',
-                },
-              ].map(({ label, value, color }) => (
-                <Grid key={label} size='grow'>
-                  <Stack
-                    spacing={0.5}
-                    sx={{
-                      bgcolor: 'background.default',
-                      p: '12px 16px',
-                      textAlign: 'center',
-                      border: 1,
-                      borderColor: 'divider',
-                      borderRadius: 1,
+            ) : (
+              <>
+                <Stack direction='row' spacing={1.75} sx={{ flexWrap: 'wrap' }}>
+                  <TextField
+                    select
+                    label='Application / Scope'
+                    value={selectedApp}
+                    onChange={(e) => setSelectedApp(e.target.value)}
+                    sx={{ minWidth: 200, flex: 1, maxWidth: 360 }}
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      input: { notched: true },
+                      select: { displayEmpty: true },
                     }}
                   >
-                    <Typography variant='metricLabel' color='text.disabled'>
-                      {label}
-                    </Typography>
-                    <Typography
-                      variant='panelTitle'
-                      component='p'
-                      sx={{ color }}
-                    >
-                      {value}
-                    </Typography>
-                  </Stack>
-                </Grid>
-              ))}
-            </Grid>
-
-            {/* Module breakdown */}
-            {viewModal?.byModule.length > 0 && (
-              <Stack spacing={1.25} sx={{ mb: 2.75 }}>
-                <Typography variant='panelTitle' component='h3'>
-                  Module Breakdown
-                </Typography>
-                <TableContainer>
-                  <Table size='small'>
-                    <TableHead
-                      sx={{
-                        '& th': {
-                          bgcolor: 'action.selected',
-                          borderBottomWidth: 2,
-                          borderBottomColor: 'divider',
-                        },
-                      }}
-                    >
-                      <TableRow>
-                        <TableCell>Module</TableCell>
-                        <TableCell align='center'>Total</TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{ color: 'success.dark' }}
-                        >
-                          Pass
-                        </TableCell>
-                        <TableCell align='center' sx={{ color: 'error.main' }}>
-                          Fail
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{ color: 'warning.main' }}
-                        >
-                          Pending
-                        </TableCell>
-                        <TableCell align='center'>Pass Rate</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {viewModal.byModule.map((m) => (
-                        <TableRow key={m.module}>
-                          <TableCell>
-                            <Typography variant='tableCell'>
-                              {m.module}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Typography variant='tableCell'>
-                              {m.total}
-                            </Typography>
-                          </TableCell>
-                          <TableCell
-                            align='center'
-                            sx={{ color: 'success.dark' }}
-                          >
-                            <Typography variant='tableCell'>
-                              {m.passed}
-                            </Typography>
-                          </TableCell>
-                          <TableCell
-                            align='center'
-                            sx={{
-                              color:
-                                m.failed > 0 ? 'error.main' : 'text.disabled',
-                            }}
-                          >
-                            <Typography variant='tableCell'>
-                              {m.failed}
-                            </Typography>
-                          </TableCell>
-                          <TableCell
-                            align='center'
-                            sx={{
-                              color:
-                                m.pending > 0
-                                  ? 'warning.main'
-                                  : 'text.disabled',
-                            }}
-                          >
-                            <Typography variant='tableCell'>
-                              {m.pending}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <PassRateBar
-                              value={m.passRate}
-                              label={`${m.module} pass rate: ${m.passRate}%`}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
-            )}
-
-            {/* Tester breakdown */}
-            {viewModal?.byTester.length > 0 && (
-              <Stack spacing={1.25} sx={{ mb: 2.75 }}>
-                <Typography variant='panelTitle' component='h3'>
-                  Tester Breakdown
-                </Typography>
-                <Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  {viewModal.byTester.map((t) => (
-                    <Stack
-                      key={t.tester}
-                      spacing={0.75}
-                      sx={{
-                        bgcolor: 'background.default',
-                        border: 1,
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                        p: '10px 16px',
-                        minWidth: 140,
-                      }}
-                    >
-                      <Typography variant='tableCell' fontWeight={600}>
-                        {t.tester}
-                      </Typography>
-                      <Stack direction='row' spacing={1}>
-                        <Typography
-                          variant='tableCell'
-                          component='span'
-                          sx={{ color: 'success.dark' }}
-                        >
-                          {t.passed} pass
-                        </Typography>
-                        <Typography
-                          variant='tableCell'
-                          component='span'
-                          sx={{ color: 'error.main' }}
-                        >
-                          {t.failed} fail
-                        </Typography>
-                        <Typography
-                          variant='tableCell'
-                          component='span'
-                          sx={{ color: 'warning.main' }}
-                        >
-                          {t.pending} pending
-                        </Typography>
-                      </Stack>
-                    </Stack>
-                  ))}
+                    <MenuItem value=''>All Applications</MenuItem>
+                    {applications.map((a) => (
+                      <MenuItem key={a._id} value={a._id}>
+                        {a.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Stack>
-              </Stack>
-            )}
 
-            {viewModal?.summary.total === 0 && (
-              <EmptyState
-                icon={
-                  <HistoryIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
-                }
-                title='No snapshot data for this version'
-              >
-                <Typography variant='body2' color='text.disabled'>
-                  Re-import a newer version to generate history.
-                </Typography>
-              </EmptyState>
+                <Stack direction='row' spacing={1.25}>
+                  <Button
+                    variant='outlined'
+                    onClick={exportExcel}
+                    disabled={generatingExcel}
+                    aria-busy={generatingExcel}
+                  >
+                    {generatingExcel ? 'Exporting…' : 'Export Excel'}
+                  </Button>
+                  <Button
+                    variant='contained'
+                    onClick={exportPdf}
+                    disabled={generatingPdf}
+                    aria-busy={generatingPdf}
+                  >
+                    {generatingPdf ? 'Generating…' : 'Export PDF Signoff'}
+                  </Button>
+                </Stack>
+              </>
             )}
-          </DialogContent>
-
-          <DialogActions>
-            <Button
-              variant='outlined'
-              onClick={() => exportExcel(viewModal?.version)}
-            >
-              Export Excel
-            </Button>
-            <Button
-              variant='outlined'
-              onClick={() => exportPdf(viewModal?.version)}
-            >
-              Export PDF
-            </Button>
-            <Button
-              variant='contained'
-              startIcon={<SettingsBackupRestoreIcon />}
-              onClick={() => {
-                setViewModal(null);
-                setConfirmRestore({ version: viewModal.version });
-              }}
-              disabled={restoringVersion === viewModal?.version}
-            >
-              Restore to This Version
-            </Button>
-          </DialogActions>
-        </Dialog>
+          </Stack>
+        </Panel>
       </Stack>
     </>
   );

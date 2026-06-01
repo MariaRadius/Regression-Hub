@@ -1,8 +1,8 @@
 'use client';
 import { Grid, TextField } from '@mui/material';
 import { useState } from 'react';
-import { useQaUsers } from '@/hooks/useSharedData';
-import { bulkUpdateTestCases } from '@/lib/api/testCasesBulk';
+import { useQaUserList } from '@/hooks/useSharedData';
+import { bulkRecordResults } from '@/lib/api/results';
 import { ROLES, STATUS } from '@/lib/constants';
 import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
 import { showToast } from '@/utils/showToast';
@@ -12,15 +12,19 @@ import BulkStatusFields from './BulkStatusFields';
 /**
  * Bulk mark as Fail: sets status, notes (required), jiraStory,
  * testedBy, testedOn.
+ * Sends { releaseId, environment } for the new results model.
+ * BR-15: QA testedBy is locked to self; admin may pick any active QA user.
  */
 export default function BulkFailModal({
   open,
   onClose,
   selection,
   user,
+  releaseId,
+  environment,
   onSuccess,
 }) {
-  const qaUsers = useQaUsers();
+  const { data: qaUsers = [] } = useQaUserList();
   const lockTester = user?.role === ROLES.QA;
   const [notes, setNotes] = useState('');
   const [jiraStory, setJiraStory] = useState('');
@@ -49,14 +53,16 @@ export default function BulkFailModal({
         testedBy,
         testedOn,
       };
-      const res = await bulkUpdateTestCases({
-        ids: selection.map((s) => s._id),
-        fields,
+      await bulkRecordResults(releaseId, {
+        releaseId,
+        environment,
+        status: STATUS.FAIL,
+        caseIds: selection.map((s) => s.caseId),
+        testedBy,
+        testedOn,
+        notes,
       });
-      showToast(
-        `Marked ${res.updated} as Fail${res.skipped ? `, ${res.skipped} skipped (already Fail)` : ''}`,
-        'success',
-      );
+      showToast(`Marked ${selection.length} as Fail`, 'success');
       onSuccess(fields);
     } catch (e) {
       showToast(e.message || 'Bulk update failed', 'error');

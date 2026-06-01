@@ -47,10 +47,10 @@ describe('POST /api/test-cases/reset-team', () => {
   it('resets team data when confirm is RESET', async () => {
     resetTeamData.mockResolvedValue({
       testCases: 10,
-      testRuns: 2,
       modules: 3,
       applications: 1,
       assignments: 0,
+      events: 5,
     });
     const req = new Request('http://x', {
       method: 'POST',
@@ -62,10 +62,10 @@ describe('POST /api/test-cases/reset-team', () => {
       ok: true,
       deleted: {
         testCases: 10,
-        testRuns: 2,
         modules: 3,
         applications: 1,
         assignments: 0,
+        events: 5,
       },
     });
     expect(resetTeamData).toHaveBeenCalledWith(db, 't1');

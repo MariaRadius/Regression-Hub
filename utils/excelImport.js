@@ -4,8 +4,9 @@ import { canonicalColumn } from './canonicalColumn';
 
 const REQUIRED_COLUMNS = [
   'Module',
-  'Test Case ID',
   'Test Case',
+  'Preconditions',
+  'Steps',
   'Expected Result',
 ];
 
@@ -68,15 +69,17 @@ export function parseWorkbookBuffer(buffer, qaUsers = []) {
         row[canonicalHeaders.get(h)] = normalizeText(v);
       });
 
-      if (!row.Module || !row['Test Case ID'] || !row['Test Case']) return;
+      if (!row.Module || !row['Test Case']) return;
 
       importedRows.push({
-        sourceSheetName: sheetName,
         applicationName: inferApplication(row, sheetName),
         moduleName: row.Module,
         type: row.Type || '',
         traceability: row.Traceability || '',
-        testCaseId: row['Test Case ID'],
+        // Identity comes from the Test Key only. The legacy "Test Case ID"
+        // column is a per-sheet serial that repeats across applications, so it
+        // is never matched on (it would forge false in-file duplicates).
+        testKey: row['Test Key'] || '',
         testCase: row['Test Case'],
         preconditions: row.Preconditions || '',
         steps: row.Steps || '',
@@ -92,7 +95,6 @@ export function parseWorkbookBuffer(buffer, qaUsers = []) {
             ? row['Tested By']
             : '',
         testedOn: row['Tested On'] || '',
-        softwareVersionTested: row['Software Version Tested'] || '',
       });
     });
   }

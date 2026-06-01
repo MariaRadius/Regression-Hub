@@ -13,8 +13,10 @@ function makeBuffer(sheetData) {
 
 const VALID_ROW = {
   Module: 'Auth',
-  'Test Case ID': 'TC-001',
+  'Test Key': 'TC-001',
   'Test Case': 'Login with valid credentials',
+  Preconditions: 'User account exists',
+  Steps: '1. Navigate to login',
   'Expected Result': 'User is redirected to dashboard',
   Status: 'Pass',
 };
@@ -90,7 +92,7 @@ describe('parseWorkbookBuffer', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       moduleName: 'Auth',
-      testCaseId: 'TC-001',
+      testKey: 'TC-001',
       testCase: 'Login with valid credentials',
       expectedResult: 'User is redirected to dashboard',
       status: 'Pass',
@@ -131,12 +133,11 @@ describe('parseWorkbookBuffer', () => {
     const buffer = makeBuffer({ 'iOS App': [VALID_ROW] });
     const rows = parseWorkbookBuffer(buffer);
     expect(rows[0].applicationName).toBe('iOS App');
-    expect(rows[0].sourceSheetName).toBe('iOS App');
   });
 
   it('throws when required columns are missing', () => {
     const buffer = makeBuffer({
-      Sheet1: [{ Module: 'Auth', 'Test Case ID': 'TC-001' }],
+      Sheet1: [{ Module: 'Auth' }],
     });
     expect(() => parseWorkbookBuffer(buffer)).toThrow(
       'Required columns missing',
@@ -159,8 +160,9 @@ describe('parseWorkbookBuffer', () => {
         VALID_ROW,
         {
           Module: '',
-          'Test Case ID': '',
           'Test Case': '',
+          Preconditions: '',
+          Steps: '',
           'Expected Result': '',
         },
       ],
@@ -169,7 +171,7 @@ describe('parseWorkbookBuffer', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('skips rows where Module or Test Case ID is blank', () => {
+  it('skips rows where Module or Test Case is blank', () => {
     const missingModule = { ...VALID_ROW, Module: '' };
     const buffer = makeBuffer({ Sheet1: [missingModule] });
     const rows = parseWorkbookBuffer(buffer);
@@ -223,15 +225,54 @@ describe('parseWorkbookBuffer', () => {
       Module: 'Search',
       'TC ID': 'TC-002',
       'Test Case Name': 'Search returns results',
+      Preconditions: 'User is logged in',
+      Steps: '1. Enter query',
       Expected: 'Results are displayed',
     };
     const buffer = makeBuffer({ Sheet1: [aliasRow] });
     const rows = parseWorkbookBuffer(buffer);
     expect(rows[0]).toMatchObject({
-      testCaseId: 'TC-002',
+      // 'TC ID' canonicalizes to the legacy Test Case ID column, which is
+      // ignored for identity — so testKey stays empty.
+      testKey: '',
       testCase: 'Search returns results',
       expectedResult: 'Results are displayed',
     });
+  });
+
+  it('ignores the legacy Test Case ID column for identity (testKey stays empty)', () => {
+    const buffer = makeBuffer({
+      Sheet1: [
+        {
+          Module: 'Auth',
+          'Test Case ID': '1',
+          'Test Case': 'Login with valid credentials',
+          Preconditions: 'User account exists',
+          Steps: '1. Navigate to login',
+          'Expected Result': 'User is redirected to dashboard',
+        },
+      ],
+    });
+    const rows = parseWorkbookBuffer(buffer);
+    expect(rows[0].testKey).toBe('');
+  });
+
+  it('populates testKey only from a literal Test Key column', () => {
+    const buffer = makeBuffer({
+      Sheet1: [
+        {
+          Module: 'Auth',
+          'Test Key': 'RXR-TK-42',
+          'Test Case ID': '1',
+          'Test Case': 'Login with valid credentials',
+          Preconditions: 'User account exists',
+          Steps: '1. Navigate to login',
+          'Expected Result': 'User is redirected to dashboard',
+        },
+      ],
+    });
+    const rows = parseWorkbookBuffer(buffer);
+    expect(rows[0].testKey).toBe('RXR-TK-42');
   });
 
   it('skips empty sheets', () => {

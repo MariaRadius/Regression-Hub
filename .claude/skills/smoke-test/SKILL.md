@@ -61,13 +61,29 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 ## Route inventory
 
 **All-role routes (5)** — both admin and QA walks visit these:
-`/dashboard`, `/test-cases`, `/assignments`, `/test-runs`, `/reports`
+`/dashboard`, `/test-cases`, `/assignments`, `/releases`, `/reports`
 
 **Admin-only routes (3)** — admin walk only:
 `/admin`, `/users`, `/import-cases`
 
 **QA redirect assertions (3)** — QA walk must confirm these redirect:
 `/admin` → `/dashboard`, `/users` → `/dashboard`, `/import-cases` → `/dashboard`
+
+---
+
+## Role-gating rules (server-side, enforced in `page.js`)
+
+| Route          | Admin | QA              |
+| -------------- | ----- | --------------- |
+| `/releases`    | PASS  | PASS (read-only mutations blocked) |
+| `/test-cases`  | PASS  | PASS            |
+| `/assignments` | PASS  | PASS (mutations blocked) |
+| `/reports`     | PASS  | PASS            |
+| `/import-cases`| PASS  | REDIRECT → `/dashboard` |
+| `/admin`       | PASS  | REDIRECT → `/dashboard` |
+| `/users`       | PASS  | REDIRECT → `/dashboard` |
+
+Mutation routes (POST/PATCH/DELETE on `/api/releases/**`, `/api/assignments`, `/api/test-cases/**`) require admin except result recording (`/api/releases/[id]/results`) which is open to QA.
 
 ---
 
@@ -79,9 +95,8 @@ All downloads are generated **client-side** (no HTTP download response). Use the
 
 | ID  | Page       | Button text          | What it generates     |
 | --- | ---------- | -------------------- | --------------------- |
-| A   | /test-runs | "PDF" (first row)    | jsPDF test-run report |
-| B   | /reports   | "Export PDF Signoff" | jsPDF sign-off report |
-| C   | /reports   | "Export Excel"       | xlsx workbook         |
+| A   | /reports   | "Export PDF Signoff" | jsPDF sign-off report |
+| B   | /reports   | "Export Excel"       | xlsx workbook         |
 
 ---
 
@@ -133,10 +148,10 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="admin-smoke"
 
 Confirm URL is `/dashboard`. If still on `/login`, fail with "Admin sign-in failed".
 
-#### Walk all 9 admin routes
+#### Walk all 8 admin routes
 
 For each route in order:
-`/dashboard`, `/test-cases`, `/assignments`, `/test-runs`, `/reports`, `/admin`, `/users`, `/import-cases`
+`/dashboard`, `/test-cases`, `/assignments`, `/releases`, `/reports`, `/admin`, `/users`, `/import-cases`
 
 Per route:
 
@@ -160,43 +175,7 @@ Record result:
 
 **Do not stop on FAIL** — continue walking all routes and collect results.
 
-#### Download A — Test Run PDF (on /test-runs) — **opt-in only**
-
-> **Skip unless the user explicitly asked to test downloads.**
-
-After navigating to `/test-runs` (already done above — navigate again if needed):
-
-1. `wait_for` text=`["PDF"]` timeout=5000 `includeSnapshot: true` → confirm first `button "PDF"` is visible in the table (rendered by DownloadPdfButton)
-2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
-3. `click` the PDF button
-4. `wait_for` text `["Report downloaded"]` timeout=15000
-5. `evaluate_script` → read `window.__smokeBlobs[0]`
-6. Record: `{ name: "Test Run PDF", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
-
-If `/test-runs` shows "No test runs yet" (EmptyState), mark A as `SKIPPED` with reason "no test runs".
-
-#### Download B — Signoff PDF (on /reports) — **opt-in only**
-
-> **Skip unless the user explicitly asked to test downloads.**
-
-Navigate to `/reports` (reuse if already there for Download C):
-
-```
-navigate_page type=url url="http://localhost:$SMOKE_PORT/reports" timeout=15000
-```
-
-Wait for the page to load (`wait_for` text=`["Version History", "Export Excel"]` timeout=10000 `includeSnapshot: true`).
-
-1. From the snapshot, find `button "Export PDF Signoff"` (in Custom Export panel)
-2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
-3. `click` the Export PDF Signoff button `includeSnapshot: true`
-4. `wait_for` text `["Export PDF Signoff"]` timeout=20000 (button text reverts after generating)
-5. `evaluate_script` → read `window.__smokeBlobs[0]`
-6. Record: `{ name: "Signoff PDF", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
-
-If `/reports` shows no version history (empty table), mark B as `SKIPPED` with reason "no data".
-
-#### Download C — Excel (on /reports) — **opt-in only**
+#### Download A — Signoff PDF (on /reports) — **opt-in only**
 
 > **Skip unless the user explicitly asked to test downloads.**
 
@@ -206,7 +185,28 @@ Navigate to `/reports` (reuse if already there for Download B):
 navigate_page type=url url="http://localhost:$SMOKE_PORT/reports" timeout=15000
 ```
 
-Wait for the page to load (`wait_for` text=`["Version History", "Export Excel"]` timeout=10000 `includeSnapshot: true`).
+Wait for the page to load (`wait_for` text=`["Export Excel"]` timeout=10000 `includeSnapshot: true`).
+
+1. From the snapshot, find `button "Export PDF Signoff"` (in Custom Export panel)
+2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
+3. `click` the Export PDF Signoff button `includeSnapshot: true`
+4. `wait_for` text `["Export PDF Signoff"]` timeout=20000 (button text reverts after generating)
+5. `evaluate_script` → read `window.__smokeBlobs[0]`
+6. Record: `{ name: "Signoff PDF", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
+
+If `/reports` has no data, mark A as `SKIPPED` with reason "no data".
+
+#### Download B — Excel (on /reports) — **opt-in only**
+
+> **Skip unless the user explicitly asked to test downloads.**
+
+Navigate to `/reports` (reuse if already there for Download A):
+
+```
+navigate_page type=url url="http://localhost:$SMOKE_PORT/reports" timeout=15000
+```
+
+Wait for the page to load (`wait_for` text=`["Export Excel"]` timeout=10000 `includeSnapshot: true`).
 
 1. From the snapshot, find `button "Export Excel"`
 2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
@@ -215,7 +215,7 @@ Wait for the page to load (`wait_for` text=`["Version History", "Export Excel"]`
    - If `__smokeBlobs` is still empty after 2 s, retry once more after 2 s.
 5. Record: `{ name: "Excel", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
 
-If `/reports` shows no version history (empty table), mark C as `SKIPPED` with reason "no data".
+If `/reports` has no data, mark B as `SKIPPED` with reason "no data".
 
 #### Font check (run once, on any already-loaded page)
 
@@ -247,10 +247,10 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="qa-smoke"
 
 Confirm URL is `/dashboard`. If not, fail "QA sign-in failed".
 
-#### Walk 6 QA-visible routes
+#### Walk 5 QA-visible routes
 
 Same per-route check as admin walk (navigate → console errors → HTTP 200):
-`/dashboard`, `/test-cases`, `/assignments`, `/test-runs`, `/reports`
+`/dashboard`, `/test-cases`, `/assignments`, `/releases`, `/reports`
 
 Record same fields as admin walk.
 
@@ -296,7 +296,7 @@ Assemble and print the following JSON (fill in real values):
     { "route": "/dashboard",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-cases",   "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/assignments",  "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
-    { "route": "/test-runs",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
+    { "route": "/releases",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/admin",        "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/users",        "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
@@ -306,7 +306,7 @@ Assemble and print the following JSON (fill in real values):
     { "route": "/dashboard",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-cases",   "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/assignments",  "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
-    { "route": "/test-runs",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
+    { "route": "/releases",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" }
   ],
   "redirectChecks": [
@@ -334,9 +334,8 @@ When download checks **were** explicitly run, include `downloadChecks` as an arr
 
 ```json
 "downloadChecks": [
-  { "name": "Test Run PDF", "blobSizeBytes": 0, "blobType": "application/pdf",          "status": "PASS" },
-  { "name": "Signoff PDF",  "blobSizeBytes": 0, "blobType": "application/pdf",          "status": "PASS" },
-  { "name": "Excel",        "blobSizeBytes": 0, "blobType": "application/octet-stream", "status": "PASS" }
+  { "name": "Signoff PDF", "blobSizeBytes": 0, "blobType": "application/pdf",          "status": "PASS" },
+  { "name": "Excel",       "blobSizeBytes": 0, "blobType": "application/octet-stream", "status": "PASS" }
 ]
 ```
 
@@ -379,5 +378,8 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - `utils/__tests__/smoke.test.js` is a `1+1` sanity test — ignore it.
 - The download interceptor patches `URL.createObjectURL` for the lifetime of the page tab. If multiple downloads are tested on the same page, reset `window.__smokeBlobs = []` before each click (the injector script above already does this).
 - Port may be 3000–3099 depending on what is already running. Always parse from the server log.
-- `softwareVersionTested` is **not** settable via the single-record create (`POST /api/test-cases`) or update (`PATCH /api/test-cases/[id]`). It is written only by Excel import or version restore. R12 (Pass/Fail requires a software version) validates against the stored value.
-- Result mutations (`PATCH /api/test-cases/[id]`, `PATCH /api/test-cases-bulk`) and assignment mutations (`POST /api/assignments`, `DELETE /api/assignments`) each append one or more entries to the `events` collection (audit log). A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`, with actor and timestamp populated.
+- `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
+- Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`) and assignment mutations (`POST /api/assignments`, `DELETE /api/assignments/[id]`) each append entries to the `events` collection (audit log). Entries carry `caseId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`.
+- The `ReleaseContextBar` (persistent bar below TopNav) must be visible on every authenticated page; it shows the active release selector and environment toggle. If it is missing on any route, the context wiring is broken.
+- Archived releases must not appear in the default release selector dropdown; they must still be findable by typing in the selector's search input.
+- Admin mutations on an archived release (edit, import, add result, add assignment) must return 409; verify with a direct API call if needed.

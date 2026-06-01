@@ -2,7 +2,7 @@
 import AddIcon from '@mui/icons-material/Add';
 import { Button, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { useCallback, useState } from 'react';
-import { useQaUsers } from '@/hooks/useSharedData';
+import { useQaUserList } from '@/hooks/useSharedData';
 import { FILTER_TYPES, VIEW_PRESETS } from '@/lib/constants';
 import AddFilterPopover from './AddFilterPopover';
 import FilterChip from './FilterChip';
@@ -30,7 +30,7 @@ export default function FilterStrip({
 }) {
   const { active, setFilter, removeFilter, clearAll, valuesOf, toggleValue } =
     filters;
-  const qaUsers = useQaUsers();
+  const { data: qaUsers = [] } = useQaUserList();
   const [addBtnEl, setAddBtnEl] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const setAddBtnRef = useCallback((el) => setAddBtnEl(el), []);

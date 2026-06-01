@@ -1,3 +1,4 @@
+import Grid from '@mui/material/Grid';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 import PageHeader from '@/components/PageHeader';
@@ -10,19 +11,33 @@ export default function ReportsLoading() {
       <PageHeader
         eyebrow={<Skeleton variant='text' width={60} height={14} />}
         title={<Skeleton variant='text' width={100} height={36} />}
-        sub={<Skeleton variant='text' width={280} height={16} />}
+        sub={<Skeleton variant='text' width={320} height={16} />}
       />
 
-      {/* Version History panel skeleton */}
+      {/* Overview panel skeleton - 5 metric cards */}
       <Panel
-        title={<Skeleton variant='text' width={140} height={28} />}
+        title={<Skeleton variant='text' width={80} height={28} />}
         headerActions={
           <Stack direction='row' spacing={1}>
-            <Skeleton variant='rounded' width={160} height={36} />
-            <Skeleton variant='rounded' width={160} height={36} />
+            <Skeleton variant='rounded' width={80} height={24} />
+            <Skeleton variant='rounded' width={64} height={24} />
           </Stack>
         }
       >
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Grid container spacing={1.5}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Grid key={n} size={{ xs: 6, sm: 4, md: 'grow' }}>
+                <Skeleton variant='rounded' height={76} />
+              </Grid>
+            ))}
+          </Grid>
+          <Skeleton variant='rounded' height={8} />
+        </Stack>
+      </Panel>
+
+      {/* Application Breakdown panel skeleton */}
+      <Panel title={<Skeleton variant='text' width={180} height={28} />}>
         <Stack>
           {[1, 2, 3].map((n) => (
             <Stack
@@ -37,30 +52,21 @@ export default function ReportsLoading() {
                 alignItems: 'center',
               }}
             >
-              <Skeleton variant='rounded' width={100} height={22} />
-              <Skeleton variant='text' width={36} sx={{ ml: 1 }} />
+              <Skeleton variant='text' width={140} />
+              <Skeleton variant='text' width={36} sx={{ ml: 'auto' }} />
               <Skeleton variant='text' width={36} />
               <Skeleton variant='text' width={36} />
               <Skeleton variant='text' width={36} />
-              <Skeleton
-                variant='rounded'
-                width={90}
-                height={14}
-                sx={{ ml: 'auto' }}
-              />
+              <Skeleton variant='rounded' width={100} height={14} />
             </Stack>
           ))}
         </Stack>
       </Panel>
 
-      {/* Custom Export panel skeleton */}
-      <Panel title={<Skeleton variant='text' width={120} height={28} />}>
-        <Stack spacing={1.75} sx={{ p: 2.5 }}>
-          <Stack direction='row' spacing={1.75}>
-            <Skeleton variant='rounded' height={56} sx={{ flex: 1 }} />
-            <Skeleton variant='rounded' height={56} sx={{ flex: 1 }} />
-            <Skeleton variant='rounded' height={56} sx={{ flex: 1 }} />
-          </Stack>
+      {/* Export panel skeleton */}
+      <Panel title={<Skeleton variant='text' width={60} height={28} />}>
+        <Stack spacing={1.75} sx={{ p: 3 }}>
+          <Skeleton variant='rounded' height={56} sx={{ maxWidth: 320 }} />
           <Stack direction='row' spacing={1.25}>
             <Skeleton variant='rounded' width={128} height={36} />
             <Skeleton variant='rounded' width={168} height={36} />

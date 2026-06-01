@@ -7,12 +7,8 @@ import MetricCards from '@/components/MetricCards';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
 import SummaryPanel from '@/components/SummaryPanel';
-import VersionBadge from '@/components/VersionBadge';
 import { authOptions } from '@/lib/auth';
-import {
-  getCachedDashboardData,
-  getCachedDashboardSettings,
-} from '@/lib/db/dashboardData';
+import { getCachedDashboardData } from '@/lib/db/dashboardData';
 import {
   buildAppBarData,
   buildDonutData,
@@ -40,10 +36,7 @@ export default async function DashboardPage() {
   const teamId = session?.user?.teamId;
   if (!teamId) redirect('/');
 
-  const [data, { softwareVersion }] = await Promise.all([
-    getCachedDashboardData(teamId),
-    getCachedDashboardSettings(teamId),
-  ]);
+  const data = await getCachedDashboardData(teamId);
 
   const { summary, moduleGroups, testerGroups, modulesByApp } = data;
 
@@ -59,7 +52,6 @@ export default async function DashboardPage() {
           eyebrow='QA Regression Control Center'
           title='Dashboard'
           sub='Live metrics across all imported test runs'
-          actions={<VersionBadge version={softwareVersion} />}
         />
 
         <MetricCards

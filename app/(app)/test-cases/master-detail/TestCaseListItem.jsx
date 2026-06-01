@@ -1,7 +1,6 @@
 'use client';
 import { Box, Checkbox, Stack, Tooltip, Typography } from '@mui/material';
 import { PRIORITIES, STATUS } from '@/lib/constants';
-import { formatTcId } from '@/utils/formatters';
 
 const STATUS_COLOR = {
   [STATUS.PASS]: 'success.main',
@@ -92,7 +91,7 @@ export default function TestCaseListItem({
             color='text.disabled'
             sx={{ flexShrink: 0 }}
           >
-            {formatTcId(tc)}
+            {tc.testKey}
           </Typography>
           <Typography variant='tableCell' noWrap sx={{ flex: 1, minWidth: 0 }}>
             {tc.testCase}

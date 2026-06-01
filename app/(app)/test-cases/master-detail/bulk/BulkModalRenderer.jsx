@@ -1,4 +1,3 @@
-import BulkEditModal from './BulkEditModal';
 import BulkFailModal from './BulkFailModal';
 import BulkPassModal from './BulkPassModal';
 import BulkPendingModal from './BulkPendingModal';
@@ -9,12 +8,15 @@ const MODAL_MAP = {
   fail: BulkFailModal,
   pending: BulkPendingModal,
   reassign: BulkReassignModal,
-  edit: BulkEditModal,
 };
 
 /**
- * Renders the active bulk-action modal (pass / fail / pending / reassign / edit).
+ * Renders the active bulk-action modal (pass / fail / pending / reassign).
  * Returns null when no modal is open.
+ *
+ * Selection is keyed by `caseId` for the new results model.
+ * Pass/Fail/Pending modals receive `releaseId` and `environment` from the
+ * active working context so they can target the correct result row.
  *
  * When singleActionId is set the selection is scoped to that one case, sourced
  * from singleActionCase (the drawer's own copy) rather than re-scanning `cases`.
@@ -30,6 +32,8 @@ export default function BulkModalRenderer({
   singleActionId,
   singleActionCase,
   user,
+  releaseId,
+  environment,
   applications,
   modules,
   onClose,
@@ -41,7 +45,8 @@ export default function BulkModalRenderer({
 
   const toSelItem = (c) => ({
     _id: c._id,
-    testCaseId: c.testCaseId,
+    caseId: c.caseId,
+    testKey: c.testKey,
     testCase: c.testCase,
     status: c.status,
   });
@@ -58,6 +63,8 @@ export default function BulkModalRenderer({
       onClose={onClose}
       selection={selArr}
       user={user}
+      releaseId={releaseId}
+      environment={environment}
       applications={applications}
       modules={modules}
       onSuccess={onSuccess}

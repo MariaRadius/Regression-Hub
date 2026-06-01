@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
 const { db, reset } = createMockDb();
-const { updateAssignment, deleteAssignment } = vi.hoisted(() => ({
-  updateAssignment: vi.fn(),
+const { deleteAssignment } = vi.hoisted(() => ({
   deleteAssignment: vi.fn(),
 }));
 
@@ -23,11 +22,10 @@ vi.mock('@/lib/server/withTeam', () => ({
 }));
 
 vi.mock('@/lib/db/assignmentsData', () => ({
-  updateAssignment,
   deleteAssignment,
 }));
 
-import { DELETE, PATCH } from '../route';
+import { DELETE } from '../route';
 
 beforeEach(() => {
   reset();
@@ -35,16 +33,6 @@ beforeEach(() => {
 });
 
 describe('assignments [id] route', () => {
-  it('PATCH updates', async () => {
-    updateAssignment.mockResolvedValue({ ok: true });
-    const req = new Request('http://x', {
-      method: 'PATCH',
-      body: JSON.stringify({ title: 'T' }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'aid' }) });
-    expect(res.status).toBe(200);
-  });
-
   it('DELETE removes', async () => {
     deleteAssignment.mockResolvedValue({ ok: true });
     const res = await DELETE(new Request('http://x'), {

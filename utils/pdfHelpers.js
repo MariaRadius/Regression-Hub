@@ -136,7 +136,6 @@ export async function loadPdf() {
 }
 
 /**
- * @see utils/pdf/__tests__/generateTestRunReport.test.js
  * @see utils/pdf/__tests__/generateSignoffReport.test.js
  */
 export async function createPdfDocument() {
@@ -155,7 +154,6 @@ export async function createPdfDocument() {
 }
 
 /**
- * @see utils/pdf/generateTestRunReport.js
  * @see utils/pdf/generateSignoffReport.js
  */
 export function drawCoverPage(doc, { W, ML, title, subtitle }) {
@@ -179,7 +177,6 @@ export function drawCoverPage(doc, { W, ML, title, subtitle }) {
 }
 
 /**
- * @see utils/pdf/generateTestRunReport.js
  * @see utils/pdf/generateSignoffReport.js
  */
 export function drawSectionBanner(
@@ -205,7 +202,6 @@ export function drawSectionBanner(
 }
 
 /**
- * @see utils/pdf/generateTestRunReport.js
  * @see utils/pdf/generateSignoffReport.js
  */
 export function renderTable(
