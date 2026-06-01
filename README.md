@@ -143,12 +143,12 @@ Every result write (Pass / Fail / Pending reset) and every assign / unassign app
 
 ### Reports
 
-Per-(Release, Environment) scoped:
+One unified, release-grouped surface — every active Release × Environment is a card (no top-of-page selection):
 
-- Metric cards: total / passed / failed / pending + pass rate
-- **PDF snapshot:** generates a fresh report, downloads it immediately, and stores it as the snapshot for that release + environment. Exactly one snapshot is kept per (release, environment) — generating again replaces the prior one.
-- **Version History:** lists the currently stored PDF snapshot for each release + environment (not a chronological archive — one entry per combo). Stored snapshots can be re-downloaded without regeneration.
-- **Excel export:** always reflects the latest saved data; import-compatible (round-trips through the Excel importer). Excel is never stored, never audited, and never appears in Version History.
+- **Create report (PDF):** generates a fresh signed-off report, downloads it immediately, and saves it as the latest copy for that release + environment. Exactly one copy is kept per (release, environment) — creating again replaces the prior one and writes an EXPORT/PDF audit event.
+- **Download copy:** re-downloads the exact saved PDF without regeneration. Shown only when a copy exists.
+- **Export Excel:** always reflects the latest saved data; import-compatible (round-trips through the Excel importer). Never stored, never audited.
+- Archived/renamed releases with a saved copy still surface as download-only cards so no stored report is hidden.
 
 ## API Routes
 

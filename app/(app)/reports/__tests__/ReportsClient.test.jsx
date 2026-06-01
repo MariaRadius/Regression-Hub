@@ -1,11 +1,12 @@
 /**
  * @file ReportsClient.test.jsx
- * Tests for the Reports page client component.
+ * Tests for the Reports page client component (unified, release-grouped cards).
  *
- * Covers spec section 7 client cases:
- *  1. PDF flow downloads locally even when the snapshot upload fails (warning toast).
- *  2. Excel flow writes no snapshot (saveSnapshot never called).
- *  3. No-context state: guidance Alert visible; action buttons disabled.
+ * Covers spec §7 client cases:
+ *  1. No releases → EmptyState guidance.
+ *  2. Create flow downloads locally AND warns when the saved-copy upload fails.
+ *  3. Create flow with no cases → info toast, no upload.
+ *  4. Excel flow writes no saved copy (saveSnapshot never called).
  *
  * @see {@link app/(app)/reports/ReportsClient.jsx}
  */
@@ -17,7 +18,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ── Hoisted mocks ────────────────────────────────────────────────────────────
 
 const mockShowToast = vi.hoisted(() => vi.fn());
-
 vi.mock('@/components/Toast', () => ({
   default: () => null,
   showToast: mockShowToast,
@@ -27,9 +27,6 @@ const mockUseReleaseEnv = vi.hoisted(() => vi.fn());
 vi.mock('@/contexts/ReleaseEnvContext', () => ({
   useReleaseEnv: mockUseReleaseEnv,
 }));
-
-const mockListResults = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/api/results', () => ({ listResults: mockListResults }));
 
 const mockExportData = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api/exportData', () => ({ exportData: mockExportData }));
@@ -62,29 +59,15 @@ vi.mock('xlsx', () => ({
   writeFile: mockXlsxWriteFile,
 }));
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 import ReportsClient from '../ReportsClient';
 
-/** Baseline context with a release + environment selected. */
-function withContext(overrides = {}) {
-  mockUseReleaseEnv.mockReturnValue({
-    releaseId: 'rel-1',
-    releaseName: 'v2.5',
-    environment: 'QA',
-    activeRelease: { _id: 'rel-1', name: 'v2.5', environments: ['QA'] },
-    ...overrides,
-  });
-}
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** No-context baseline (nothing selected in the top bar). */
-function withNoContext() {
-  mockUseReleaseEnv.mockReturnValue({
-    releaseId: null,
-    releaseName: null,
-    environment: null,
-    activeRelease: null,
-  });
+const ACTIVE_RELEASE = { _id: 'rel-1', name: 'v2.5', environments: ['QA'] };
+
+/** Context exposing one active release with a single QA environment. */
+function withReleases(releases = [ACTIVE_RELEASE]) {
+  mockUseReleaseEnv.mockReturnValue({ releases });
 }
 
 const FIXTURE_CASES = [
@@ -92,71 +75,33 @@ const FIXTURE_CASES = [
   { _id: 'c2', testKey: 'TC-2', name: 'Signup test', status: 'Fail' },
 ];
 
-const FIXTURE_SNAPSHOTS = [
-  {
-    _id: 's1',
-    releaseId: 'rel-1',
-    releaseName: 'v2.5',
-    environment: 'QA',
-    filename: 'regression-signoff-v2.5-QA-2026-06-01.pdf',
-    byteSize: 12345,
-    generatedBy: 'Alice',
-    generatedAt: '2026-06-01T10:00:00.000Z',
-  },
-];
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe('ReportsClient — no context selected', () => {
+describe('ReportsClient — no releases', () => {
   beforeEach(() => {
-    withNoContext();
-    mockListSnapshots.mockResolvedValue([]);
     vi.clearAllMocks();
-    // Reinstate no-context state after clearAllMocks
-    withNoContext();
-    mockListSnapshots.mockResolvedValue([]);
+    withReleases([]);
   });
 
-  it('shows guidance Alert when no release/environment selected', async () => {
+  it('shows the EmptyState guidance when no releases exist', async () => {
     await act(async () => {
       render(<ReportsClient initialSnapshots={[]} />);
     });
 
-    expect(screen.getByText(/select a release and environment/i)).toBeDefined();
-  });
-
-  it('disables Download PDF button when no context', async () => {
-    await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
-    });
-
-    const pdfBtn = screen.getByRole('button', { name: /download pdf/i });
-    expect(pdfBtn.disabled).toBe(true);
-  });
-
-  it('disables Export Excel button when no context', async () => {
-    await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
-    });
-
-    const excelBtn = screen.getByRole('button', { name: /export excel/i });
-    expect(excelBtn.disabled).toBe(true);
+    expect(screen.getByText(/no releases yet/i)).toBeDefined();
+    expect(screen.getByRole('link', { name: /go to releases/i })).toBeDefined();
   });
 });
 
-describe('ReportsClient — PDF flow', () => {
+describe('ReportsClient — Create report flow', () => {
   let mockDocSave;
   let mockDocOutput;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    withContext();
-
-    mockListResults.mockResolvedValue([
-      { _id: 'r1', caseId: 'c1', status: 'Pass' },
-    ]);
-    mockListSnapshots.mockResolvedValue(FIXTURE_SNAPSHOTS);
+    withReleases();
     mockExportData.mockResolvedValue(FIXTURE_CASES);
+    mockListSnapshots.mockResolvedValue([]);
 
     mockDocSave = vi.fn();
     mockDocOutput = vi.fn(
@@ -168,83 +113,79 @@ describe('ReportsClient — PDF flow', () => {
     });
   });
 
-  it('downloads locally AND shows warning toast when upload fails', async () => {
+  it('downloads locally AND warns when the saved-copy upload fails', async () => {
     mockSaveSnapshot.mockRejectedValue(new Error('network error'));
 
     await act(async () => {
-      render(<ReportsClient initialSnapshots={FIXTURE_SNAPSHOTS} />);
+      render(<ReportsClient initialSnapshots={[]} />);
     });
 
-    const pdfBtn = screen.getByRole('button', { name: /download pdf/i });
+    const createBtn = screen.getByRole('button', { name: /create report/i });
     await act(async () => {
-      await userEvent.click(pdfBtn);
+      await userEvent.click(createBtn);
     });
 
-    // Local download must have happened (doc.save called)
     expect(mockDocSave).toHaveBeenCalledTimes(1);
-
-    // Warning toast for failed upload
     expect(mockShowToast).toHaveBeenCalledWith(
-      expect.stringMatching(/saving to version history failed/i),
+      expect.stringMatching(/saving the copy failed/i),
       'warning',
     );
   });
 
-  it('shows success toast and refreshes snapshots when upload succeeds', async () => {
-    const savedDoc = {
-      _id: 's2',
-      releaseId: 'rel-1',
-      releaseName: 'v2.5',
-      environment: 'QA',
-      filename: 'new.pdf',
-      byteSize: 999,
-      generatedBy: 'Alice',
-      generatedAt: '2026-06-01T11:00:00.000Z',
-    };
-    mockSaveSnapshot.mockResolvedValue(savedDoc);
-    mockListSnapshots.mockResolvedValue([savedDoc]);
+  it('shows a success toast and refreshes when the upload succeeds', async () => {
+    mockSaveSnapshot.mockResolvedValue({ _id: 's2' });
+    mockListSnapshots.mockResolvedValue([
+      {
+        _id: 's2',
+        releaseId: 'rel-1',
+        releaseName: 'v2.5',
+        environment: 'QA',
+        generatedBy: 'Alice',
+        generatedAt: '2026-06-01T11:00:00.000Z',
+      },
+    ]);
 
     await act(async () => {
-      render(<ReportsClient initialSnapshots={FIXTURE_SNAPSHOTS} />);
+      render(<ReportsClient initialSnapshots={[]} />);
     });
 
-    const pdfBtn = screen.getByRole('button', { name: /download pdf/i });
+    const createBtn = screen.getByRole('button', { name: /create report/i });
     await act(async () => {
-      await userEvent.click(pdfBtn);
+      await userEvent.click(createBtn);
     });
 
     expect(mockDocSave).toHaveBeenCalledTimes(1);
     expect(mockShowToast).toHaveBeenCalledWith(
-      expect.stringMatching(/saved to version history/i),
+      expect.stringMatching(/created and downloaded/i),
       'success',
     );
+    expect(mockListSnapshots).toHaveBeenCalled();
   });
 
-  it('shows info toast and does not call saveSnapshot when no cases', async () => {
+  it('shows an info toast and does not upload when there are no cases', async () => {
     mockExportData.mockResolvedValue([]);
 
     await act(async () => {
       render(<ReportsClient initialSnapshots={[]} />);
     });
 
-    const pdfBtn = screen.getByRole('button', { name: /download pdf/i });
+    const createBtn = screen.getByRole('button', { name: /create report/i });
     await act(async () => {
-      await userEvent.click(pdfBtn);
+      await userEvent.click(createBtn);
     });
 
     expect(mockSaveSnapshot).not.toHaveBeenCalled();
     expect(mockShowToast).toHaveBeenCalledWith(
-      expect.stringMatching(/no test cases/i),
+      expect.stringMatching(/no test cases to report on/i),
       'info',
     );
   });
 });
 
-describe('ReportsClient — Excel flow writes no snapshot', () => {
+describe('ReportsClient — Excel flow writes no saved copy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    withContext();
-    mockListResults.mockResolvedValue([]);
+    withReleases();
     mockListSnapshots.mockResolvedValue([]);
     mockExportData.mockResolvedValue(FIXTURE_CASES);
   });
@@ -260,5 +201,6 @@ describe('ReportsClient — Excel flow writes no snapshot', () => {
     });
 
     expect(mockSaveSnapshot).not.toHaveBeenCalled();
+    expect(mockXlsxWriteFile).toHaveBeenCalledTimes(1);
   });
 });

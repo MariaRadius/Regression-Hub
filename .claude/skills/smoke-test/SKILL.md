@@ -93,19 +93,19 @@ Mutation routes (POST/PATCH/DELETE on `/api/releases/**`, `/api/assignments`, `/
 
 | ID  | Page       | Button text      | What it generates                          | Stored? | Mutates?         |
 | --- | ---------- | ---------------- | ------------------------------------------ | ------- | ---------------- |
-| A   | /reports   | "Download PDF"   | jsPDF sign-off report + server upload      | Yes     | Yes — see below  |
-| B   | /reports   | "Export Excel"   | xlsx workbook (client-side, not stored)    | No      | No               |
-| C   | /reports   | (Version History row Download link) | Streams stored PDF bytes from GridFS | N/A | No — read-only |
+| A   | /reports   | "Create report" (per row) | jsPDF sign-off report + server upload | Yes | Yes — see below  |
+| B   | /reports   | "Export Excel" (per row)  | xlsx workbook (client-side, not stored) | No  | No               |
+| C   | /reports   | "Download copy" (per row) | Streams stored PDF bytes from GridFS  | N/A | No — read-only |
 
-**Download A is a MUTATION.** Clicking "Download PDF":
+**Download A is a MUTATION.** Clicking a row's "Create report":
 1. Generates the PDF client-side and immediately downloads it locally (Blob interceptor captures this).
 2. POSTs the same bytes to `POST /api/releases/[id]/snapshot` (multipart: `file`, `environment`, `filename`).
-3. Replaces any prior snapshot for that (release, environment) — old GridFS bytes are deleted.
+3. Replaces any prior saved copy for that (release, environment) — old GridFS bytes are deleted.
 4. Writes an audit event (`category: export`, `action: pdf`).
 
-**Download B (Excel) is NOT a mutation** — it is never stored, never audited, and produces no Version History entry.
+**Download B (Excel) is NOT a mutation** — it is never stored, never audited, and creates no saved copy.
 
-**Download C (Version History re-download)** hits `GET /api/snapshots/[id]/download` and returns the stored bytes with no regeneration.
+**Download C (Download copy)** hits `GET /api/snapshots/[id]/download` and returns the stored bytes with no regeneration. The "Download copy" button only appears on rows that already have a saved copy.
 
 ---
 
@@ -187,7 +187,7 @@ Record result:
 #### Download A — PDF snapshot (on /reports) — **opt-in only**
 
 > **Skip unless the user explicitly asked to test downloads.**
-> **This is a mutation** — it writes/replaces a stored snapshot and appends an audit event.
+> **This is a mutation** — it writes/replaces a saved copy and appends an audit event.
 
 Navigate to `/reports` (reuse if already there for Download B):
 
@@ -195,18 +195,18 @@ Navigate to `/reports` (reuse if already there for Download B):
 navigate_page type=url url="http://localhost:$SMOKE_PORT/reports" timeout=15000
 ```
 
-Wait for the page to load (`wait_for` text=`["Export Excel"]` timeout=10000 `includeSnapshot: true`).
+Wait for the page to load (`wait_for` text=`["Create report"]` timeout=10000 `includeSnapshot: true`).
 
-Ensure a release and environment are selected (the "Download PDF" button is disabled until both are chosen). If the context bar shows no selection, skip and mark A as `SKIPPED` with reason "no release/environment selected".
+The page lists every active release × environment as a card — no top-of-page selection. If the snapshot shows the "No releases yet" empty state, skip and mark A as `SKIPPED` with reason "no releases".
 
-1. From the snapshot, find `button "Download PDF"` (in the Download PDF panel)
+1. From the snapshot, find the first row's `button "Create report"` (aria-label `Create report for <release> <env>`)
 2. `evaluate_script` → inject Blob interceptor (reset `__smokeBlobs = []`)
-3. `click` the Download PDF button `includeSnapshot: true`
-4. `wait_for` text `["Download PDF"]` timeout=30000 (button shows a loading state while generating + uploading; text reverts when done)
+3. `click` the Create report button `includeSnapshot: true`
+4. `wait_for` text `["Create report"]` timeout=30000 (button shows "Creating…" while generating + uploading; text reverts when done)
 5. `evaluate_script` → read `window.__smokeBlobs[0]`
 6. Record: `{ name: "Signoff PDF", blobSize: <size>, blobType: <type>, status: size > 1024 ? "PASS" : "FAIL" }`
 
-After the click completes, the Version History panel should show an entry for the selected release + environment. Confirm with a `wait_for` that the table row appears (at minimum, no `list_console_messages` errors).
+After the click completes, that row should gain a "Saved" chip and a "Download copy" button. Confirm with a `wait_for` (at minimum, no `list_console_messages` errors).
 
 If `/reports` has no data, mark A as `SKIPPED` with reason "no data".
 
@@ -395,7 +395,7 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
 - Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`) and assignment mutations (`POST /api/assignments`, `DELETE /api/assignments/[id]`) each append entries to the `events` collection (audit log). Entries carry `caseId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`.
 - `POST /api/releases/[id]/snapshot` is a **mutation**: it replaces the stored GridFS PDF for the given (release, environment) and appends an audit event (`category: export`, `action: pdf`). It accepts multipart form data with fields `file` (PDF blob), `environment` (string), and `filename` (string). Returns `200` with the snapshot metadata doc on success; `400` if `environment` or `file` is missing; `404` if the release does not exist.
-- `GET /api/snapshots` returns the team-scoped Version History list — one entry per (release, environment), newest first.
+- `GET /api/snapshots` returns the team-scoped saved-copy list — one entry per (release, environment), newest first.
 - `GET /api/snapshots/[id]/download` streams the stored PDF bytes with `Content-Type: application/pdf` and `Content-Disposition: attachment; filename="<original filename>"`. Returns `404` if the snapshot does not exist or belongs to a different team.
 - The `ReleaseContextBar` (persistent bar below TopNav) must be visible on every authenticated page; it shows the active release selector and environment toggle. If it is missing on any route, the context wiring is broken.
 - Archived releases must not appear in the default release selector dropdown; they must still be findable by typing in the selector's search input.

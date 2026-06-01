@@ -155,10 +155,11 @@ export function ReleaseEnvProvider({
       environments: activeRelease?.environments ?? [],
       environment,
       activeRelease,
+      releases,
       setRelease,
       setEnvironment,
     }),
-    [activeRelease, environment, setRelease, setEnvironment],
+    [activeRelease, environment, releases, setRelease, setEnvironment],
   );
 
   return (
@@ -178,6 +179,7 @@ export function ReleaseEnvProvider({
  *   environments: string[],
  *   environment: string|null,
  *   activeRelease: object|null,
+ *   releases: object[],
  *   setRelease: (release: object) => void,
  *   setEnvironment: (env: string) => void,
  * }}
