@@ -9,21 +9,18 @@ export default function ReportsLoading() {
     <Stack spacing={3}>
       {/* PageHeader skeleton */}
       <PageHeader
-        eyebrow={<Skeleton variant='text' width={60} height={14} />}
         title={<Skeleton variant='text' width={100} height={36} />}
-        sub={<Skeleton variant='text' width={320} height={16} />}
+        sub={<Skeleton variant='text' width={480} height={16} />}
       />
 
-      {/* Overview panel skeleton - 5 metric cards */}
-      <Panel
-        title={<Skeleton variant='text' width={80} height={28} />}
-        headerActions={
-          <Stack direction='row' spacing={1}>
-            <Skeleton variant='rounded' width={80} height={24} />
-            <Skeleton variant='rounded' width={64} height={24} />
-          </Stack>
-        }
-      >
+      {/* Context bar skeleton — release chip + environment chip */}
+      <Stack direction='row' spacing={1}>
+        <Skeleton variant='rounded' width={80} height={24} />
+        <Skeleton variant='rounded' width={64} height={24} />
+      </Stack>
+
+      {/* Overview panel skeleton — 5 metric cards + pass-rate bar */}
+      <Panel title={<Skeleton variant='text' width={80} height={28} />}>
         <Stack spacing={2} sx={{ p: 3 }}>
           <Grid container spacing={1.5}>
             {[1, 2, 3, 4, 5].map((n) => (
@@ -36,40 +33,50 @@ export default function ReportsLoading() {
         </Stack>
       </Panel>
 
-      {/* Application Breakdown panel skeleton */}
-      <Panel title={<Skeleton variant='text' width={180} height={28} />}>
-        <Stack>
-          {[1, 2, 3].map((n) => (
-            <Stack
-              key={n}
-              direction='row'
-              spacing={2}
-              sx={{
-                px: 2.5,
-                py: 1.5,
-                borderBottom: n < 3 ? 1 : 0,
-                borderColor: 'divider',
-                alignItems: 'center',
-              }}
-            >
-              <Skeleton variant='text' width={140} />
-              <Skeleton variant='text' width={36} sx={{ ml: 'auto' }} />
-              <Skeleton variant='text' width={36} />
-              <Skeleton variant='text' width={36} />
-              <Skeleton variant='text' width={36} />
-              <Skeleton variant='rounded' width={100} height={14} />
-            </Stack>
-          ))}
+      {/* Download PDF panel skeleton */}
+      <Panel title={<Skeleton variant='text' width={120} height={28} />}>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Skeleton variant='rounded' height={48} />
+          <Skeleton variant='rounded' width={144} height={36} />
         </Stack>
       </Panel>
 
-      {/* Export panel skeleton */}
-      <Panel title={<Skeleton variant='text' width={60} height={28} />}>
-        <Stack spacing={1.75} sx={{ p: 3 }}>
-          <Skeleton variant='rounded' height={56} sx={{ maxWidth: 320 }} />
-          <Stack direction='row' spacing={1.25}>
-            <Skeleton variant='rounded' width={128} height={36} />
-            <Skeleton variant='rounded' width={168} height={36} />
+      {/* Export Excel panel skeleton */}
+      <Panel title={<Skeleton variant='text' width={120} height={28} />}>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Skeleton variant='rounded' height={48} />
+          <Stack spacing={0.5}>
+            <Skeleton variant='rounded' width={144} height={36} />
+            <Skeleton variant='text' width={200} height={16} />
+          </Stack>
+        </Stack>
+      </Panel>
+
+      {/* Version History panel skeleton — alert + 3 table rows */}
+      <Panel title={<Skeleton variant='text' width={140} height={28} />}>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Skeleton variant='rounded' height={48} />
+          <Stack>
+            {[1, 2, 3].map((n) => (
+              <Stack
+                key={n}
+                direction='row'
+                spacing={2}
+                sx={{
+                  px: 2.5,
+                  py: 1.5,
+                  borderBottom: n < 3 ? 1 : 0,
+                  borderColor: 'divider',
+                  alignItems: 'center',
+                }}
+              >
+                <Skeleton variant='text' width={80} />
+                <Skeleton variant='rounded' width={64} height={24} />
+                <Skeleton variant='text' width={140} sx={{ ml: 'auto' }} />
+                <Skeleton variant='text' width={80} />
+                <Skeleton variant='rounded' width={90} height={30} />
+              </Stack>
+            ))}
           </Stack>
         </Stack>
       </Panel>

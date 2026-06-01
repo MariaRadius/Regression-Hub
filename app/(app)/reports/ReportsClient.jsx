@@ -1,13 +1,14 @@
 'use client';
 
-import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
-import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
 import {
   Alert,
   Button,
   Chip,
   Grid,
-  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -15,19 +16,24 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useCallback, useEffect, useState } from 'react';
+import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
 import PassRateBar from '@/components/PassRateBar';
-import ToastProvider, { showToast } from '@/components/Toast';
+import { showToast } from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { exportData as apiExportData } from '@/lib/api/exportData';
-import { listTestCasesForRelease } from '@/lib/api/releases';
 import { listResults } from '@/lib/api/results';
+import {
+  listSnapshots,
+  saveSnapshot,
+  snapshotDownloadUrl,
+} from '@/lib/api/snapshots';
 import { STATUS } from '@/lib/constants';
 import { dateStamp, normalizedStatus } from '@/utils/formatters';
 import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
@@ -72,6 +78,7 @@ function MetricCard({ label, value, color = 'text.primary' }) {
  *
  * @param {object[]} results
  * @returns {{ total: number, passed: number, failed: number, pending: number, passRate: number }}
+ * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
  */
 function computeSummary(results) {
   const total = results.length;
@@ -83,107 +90,158 @@ function computeSummary(results) {
 }
 
 /**
- * Reports page client — per-(release, environment) overview, per-app breakdown,
- * and export panel.
+ * Formats a generatedAt ISO string into a readable local date + time.
  *
- * Version-history table, complete/restore/delete version controls, and free-text
- * env/version inputs removed per the Releases × Environments refactor (RXR-11849).
- *
- * @param {{ applications: object[] }} props
+ * @param {string} iso
+ * @returns {string}
  */
-export default function ReportsClient({ applications }) {
-  const { releaseId, releaseName, environment, activeRelease } =
-    useReleaseEnv();
+function formatSnapshotDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
-  const [selectedApp, setSelectedApp] = useState('');
+/**
+ * Reports page client — context overview, PDF snapshot download, Excel export,
+ * and Version History table.
+ *
+ * Clean-slate rewrite per spec §2.1, §3.1, §4, §5 (RXR-11849):
+ *  - Application Breakdown table removed.
+ *  - PDF generates + downloads locally then uploads as a stored snapshot.
+ *  - Excel is always built from latest data and never stored or audited.
+ *  - Version History lists one stored PDF snapshot per (release, environment).
+ *
+ * @param {{ initialSnapshots: object[] }} props
+ * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
+ */
+export default function ReportsClient({ initialSnapshots }) {
+  const { releaseId, releaseName, environment } = useReleaseEnv();
+
   // summary: { total, passed, failed, pending, passRate } | null
   const [summary, setSummary] = useState(null);
-  // appBreakdown: { appId, appName, total, passed, failed, pending, passRate }[]
-  const [appBreakdown, setAppBreakdown] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [generatingExcel, setGeneratingExcel] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [snapshots, setSnapshots] = useState(initialSnapshots ?? []);
 
-  // ── Data fetching ─────────────────────────────────────────────
+  const hasContext = Boolean(releaseId && environment);
 
-  const fetchReportData = useCallback(async () => {
+  // ── Overview data fetching ────────────────────────────────────────────────
+
+  const fetchOverview = useCallback(async () => {
     if (!releaseId || !environment) {
       setSummary(null);
-      setAppBreakdown([]);
       return;
     }
     setDataLoading(true);
     try {
-      // Fetch the full results list and test-cases list in parallel.
-      // The results route returns all results for (release, env); the test-cases
-      // route carries applicationId per row. We join locally to build the
-      // per-app breakdown without requiring a server-side aggregation.
-      const [results, casesResp] = await Promise.all([
-        listResults(releaseId, { environment }, { silentFailure: true }),
-        listTestCasesForRelease(
-          releaseId,
-          { environment },
-          { silentFailure: true },
-        ),
-      ]);
-
+      const results = await listResults(
+        releaseId,
+        { environment },
+        { silentFailure: true },
+      );
       if (!results) return;
-
       setSummary(computeSummary(results));
-
-      // testCasesListResponseSchema: { data: [...], total, page, totalPages }
-      const caseRows = casesResp?.data ?? [];
-      const caseAppMap = Object.fromEntries(
-        caseRows
-          .filter((c) => c.caseId && c.applicationId)
-          .map((c) => [c.caseId, c.applicationId]),
-      );
-
-      // Group results by applicationId.
-      const appGroups = {};
-      for (const result of results) {
-        const appId = caseAppMap[result.caseId];
-        if (!appId) continue;
-        if (!appGroups[appId]) appGroups[appId] = [];
-        appGroups[appId].push(result);
-      }
-
-      // Build name lookup from the server-fetched applications list.
-      const appNameMap = Object.fromEntries(
-        applications.map((a) => [a._id, a.name]),
-      );
-
-      const rows = Object.entries(appGroups)
-        .map(([appId, appResults]) => ({
-          appId,
-          appName: appNameMap[appId] ?? 'Unknown Application',
-          ...computeSummary(appResults),
-        }))
-        .sort((a, b) => a.appName.localeCompare(b.appName));
-
-      setAppBreakdown(rows);
     } catch {
-      // silentFailure handles per-request errors; top-level catch is defensive.
+      // silentFailure handles per-request errors; defensive catch
     } finally {
       setDataLoading(false);
     }
-  }, [releaseId, environment, applications]);
+  }, [releaseId, environment]);
 
   useEffect(() => {
     setSummary(null);
-    setAppBreakdown([]);
-    fetchReportData();
-  }, [fetchReportData]);
+    fetchOverview();
+  }, [fetchOverview]);
 
-  // ── Exports ───────────────────────────────────────────────
+  // ── Snapshot list refresh ─────────────────────────────────────────────────
 
-  async function exportExcel() {
+  async function refreshSnapshots() {
+    try {
+      const updated = await listSnapshots({ silentFailure: true });
+      if (updated) setSnapshots(updated);
+    } catch {
+      // best-effort refresh; do not surface to the user
+    }
+  }
+
+  // ── PDF download + snapshot upload ───────────────────────────────────────
+
+  /**
+   * Generates a fresh PDF signoff report, downloads it locally, and uploads the
+   * same bytes as the stored snapshot for the active (release, environment).
+   *
+   * Local download always happens first. Upload failure surfaces a warning toast
+   * without blocking the user from having the file.
+   *
+   * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
+   */
+  async function onDownloadPdf() {
+    setGeneratingPdf(true);
+    try {
+      const cases = await apiExportData({ releaseId, environment });
+      if (!cases?.length) {
+        showToast('No test cases to export', 'info');
+        return;
+      }
+
+      const doc = await generateSignoffReport({
+        cases,
+        appName: 'All Applications',
+        environment: environment ?? '',
+        version: releaseName ?? '',
+      });
+
+      const safeName = (releaseName ?? 'export').replace(/\s+/g, '-');
+      const filename = `regression-signoff-${safeName}-${environment ?? ''}-${dateStamp()}.pdf`;
+
+      // 1. Download locally first — this must always succeed before we attempt upload.
+      doc.save(filename);
+
+      // 2. Upload the same bytes as the stored snapshot.
+      const blob = new Blob([doc.output('blob')], { type: 'application/pdf' });
+      const fd = new FormData();
+      fd.append('file', blob, filename);
+      fd.append('environment', environment);
+      fd.append('filename', filename);
+
+      try {
+        await saveSnapshot(releaseId, fd);
+        showToast('PDF downloaded and saved to Version History', 'success');
+        await refreshSnapshots();
+      } catch {
+        showToast(
+          'PDF downloaded, but saving to Version History failed',
+          'warning',
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('PDF export failed', 'error');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
+
+  // ── Excel export (client-side xlsx, no snapshot) ─────────────────────────
+
+  /**
+   * Exports the latest saved data for the active (release, environment) as an
+   * import-compatible Excel workbook. No snapshot is created or audited.
+   *
+   * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
+   */
+  async function onExportExcel() {
     setGeneratingExcel(true);
     try {
-      const query = { releaseId, environment };
-      if (selectedApp) query.applicationId = selectedApp;
-
-      const cases = await apiExportData(query);
+      const cases = await apiExportData({ releaseId, environment });
       if (!cases?.length) {
         showToast('No test cases to export', 'info');
         return;
@@ -207,13 +265,9 @@ export default function ReportsClient({ applications }) {
         Environment: tc.environment,
       }));
 
-      const appLabel = selectedApp
-        ? applications.find((a) => a._id === selectedApp)?.name
-        : 'All';
-
       const summaryRows = [
         ['Metric', 'Value'],
-        ['Application', appLabel],
+        ['Application', 'All'],
         ['Release', releaseName ?? ''],
         ['Environment', environment ?? ''],
         ['Total Test Cases', cases.length],
@@ -260,46 +314,7 @@ export default function ReportsClient({ applications }) {
     }
   }
 
-  async function exportPdf() {
-    setGeneratingPdf(true);
-    try {
-      const query = { releaseId, environment };
-      if (selectedApp) query.applicationId = selectedApp;
-
-      const cases = await apiExportData(query);
-      if (!cases?.length) {
-        showToast('No test cases to export', 'info');
-        return;
-      }
-
-      const appName = selectedApp
-        ? applications.find((a) => a._id === selectedApp)?.name
-        : 'All Applications';
-
-      const doc = await generateSignoffReport({
-        cases,
-        appName,
-        environment: environment ?? '',
-        version: releaseName ?? '',
-      });
-
-      const safeName = (releaseName ?? 'export').replace(/\s+/g, '-');
-      doc.save(
-        `regression-signoff-${safeName}-${environment ?? ''}-${dateStamp()}.pdf`,
-      );
-      showToast('PDF exported', 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('PDF export failed', 'error');
-    } finally {
-      setGeneratingPdf(false);
-    }
-  }
-
-  // ── Render ────────────────────────────────────────────────
-
-  const hasContext = Boolean(releaseId && environment);
-  const isArchived = Boolean(activeRelease?.archived);
+  // ── Metric cards ─────────────────────────────────────────────────────────
 
   const metricCards = [
     { label: 'Total', value: summary?.total, color: 'text.primary' },
@@ -317,79 +332,57 @@ export default function ReportsClient({ applications }) {
     },
   ];
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <>
-      <ToastProvider />
-      <Stack spacing={3}>
-        <PageHeader
-          eyebrow='Exports'
-          title='Reports'
-          sub='Overview and Excel / PDF exports for the active release and environment'
-        />
+    <Stack spacing={3}>
+      <PageHeader
+        title='Reports'
+        sub='Generate signed-off PDF snapshots and editable Excel exports for a release and environment.'
+      />
 
-        {/* Archived warning */}
-        {isArchived && (
-          <Alert severity='warning' variant='outlined'>
-            This release is archived — exports are still available but no
-            results can be recorded.
-          </Alert>
-        )}
-
-        {/* ── Overview panel ───────────────────────────────────────── */}
-        <Panel
-          title='Overview'
-          headerActions={
-            hasContext ? (
-              <Stack
-                direction='row'
-                spacing={1}
-                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-              >
-                <Typography
-                  variant='mono'
-                  component='span'
-                  sx={{
-                    bgcolor: teal10,
-                    border: `1px solid ${teal30}`,
-                    borderRadius: 0.75,
-                    px: 1.25,
-                    py: 0.25,
-                    color: 'success.dark',
-                  }}
-                >
-                  {releaseName}
-                </Typography>
-                <Chip
-                  label={environment}
-                  size='small'
-                  sx={{
-                    bgcolor: teal07,
-                    color: 'primary.dark',
-                    border: `1px solid ${teal30}`,
-                  }}
-                />
-              </Stack>
-            ) : null
-          }
+      {/* ── Context bar ─────────────────────────────────────────────── */}
+      {hasContext ? (
+        <Stack
+          direction='row'
+          spacing={1}
+          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
         >
-          {!hasContext ? (
-            <Stack
-              spacing={1}
-              sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
-            >
-              <AssessmentOutlinedIcon
-                sx={{ fontSize: 48, color: 'text.disabled' }}
-              />
-              <Typography variant='pageTitle' sx={{ fontSize: 18 }}>
-                No release selected
-              </Typography>
-              <Typography variant='pageSub' color='text.disabled'>
-                Select a release and environment in the bar above to view
-                metrics.
-              </Typography>
-            </Stack>
-          ) : (
-            <Stack spacing={2} sx={{ p: 3 }}>
+          <Typography
+            variant='mono'
+            component='span'
+            sx={{
+              bgcolor: teal10,
+              border: `1px solid ${teal30}`,
+              borderRadius: 0.75,
+              px: 1.25,
+              py: 0.25,
+              color: 'success.dark',
+            }}
+          >
+            {releaseName}
+          </Typography>
+          <Chip
+            label={environment}
+            size='small'
+            sx={{
+              bgcolor: teal07,
+              color: 'primary.dark',
+              border: `1px solid ${teal30}`,
+            }}
+          />
+        </Stack>
+      ) : (
+        <Alert severity='info'>
+          Select a release and environment from the top bar to generate reports.
+        </Alert>
+      )}
+
+      {/* ── Overview panel ───────────────────────────────────────────── */}
+      <Panel title='Overview'>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          {hasContext ? (
+            <>
               <Grid container spacing={1.5}>
                 {metricCards.map(({ label, value, color }) => (
                   <Grid key={label} size={{ xs: 6, sm: 4, md: 'grow' }}>
@@ -401,197 +394,157 @@ export default function ReportsClient({ applications }) {
                   </Grid>
                 ))}
               </Grid>
-
               {!dataLoading && summary && (
                 <PassRateBar
                   value={summary.passRate}
                   label={`Overall pass rate: ${summary.passRate}%`}
                 />
               )}
-            </Stack>
+            </>
+          ) : (
+            <Typography variant='tableCell' color='text.disabled'>
+              No release selected.
+            </Typography>
           )}
-        </Panel>
+        </Stack>
+      </Panel>
 
-        {/* ── Application Breakdown panel ───────────────────────────── */}
-        {hasContext && (
-          <Panel title='Application Breakdown'>
-            {dataLoading ? (
-              <Stack sx={{ py: 3, alignItems: 'center' }}>
-                <Typography variant='tableCell' color='text.disabled'>
-                  Loading…
-                </Typography>
-              </Stack>
-            ) : appBreakdown.length === 0 ? (
-              <Stack
-                spacing={1}
-                sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
-              >
-                <AssessmentOutlinedIcon
+      {/* ── Download PDF panel ───────────────────────────────────────── */}
+      <Panel title='Download PDF'>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Alert severity='info'>
+            Downloading a PDF generates a fresh report, downloads it to you, and
+            saves it as the snapshot for this release + environment. Generating
+            again replaces the previous snapshot.
+          </Alert>
+          <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Tooltip title='Generates and downloads a PDF, and stores it in Version History (one snapshot per release + environment).'>
+              <span>
+                <Button
+                  variant='contained'
+                  startIcon={<PictureAsPdfOutlinedIcon />}
+                  onClick={onDownloadPdf}
+                  disabled={!hasContext || generatingPdf}
+                  aria-busy={generatingPdf}
+                >
+                  {generatingPdf ? 'Generating…' : 'Download PDF'}
+                </Button>
+              </span>
+            </Tooltip>
+          </Stack>
+        </Stack>
+      </Panel>
+
+      {/* ── Export Excel panel ───────────────────────────────────────── */}
+      <Panel title='Export Excel'>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Alert severity='info'>
+            Excel exports reflect the latest saved data and can be re-imported
+            into this release. They are not saved to Version History or audited.
+          </Alert>
+          <Stack spacing={0.5}>
+            <Tooltip title='Exports the latest saved data as an import-compatible Excel workbook. Not stored.'>
+              <span>
+                <Button
+                  variant='outlined'
+                  startIcon={<TableChartOutlinedIcon />}
+                  onClick={onExportExcel}
+                  disabled={!hasContext || generatingExcel}
+                  aria-busy={generatingExcel}
+                >
+                  {generatingExcel ? 'Exporting…' : 'Export Excel'}
+                </Button>
+              </span>
+            </Tooltip>
+            <Typography variant='caption' color='text.disabled'>
+              Editable · import-compatible · not stored.
+            </Typography>
+          </Stack>
+        </Stack>
+      </Panel>
+
+      {/* ── Version History panel ────────────────────────────────────── */}
+      <Panel title='Version History'>
+        <Stack spacing={2} sx={{ p: 3 }}>
+          <Alert severity='info'>
+            Shows the latest stored PDF snapshot for each release + environment.
+            Only the most recent snapshot per combination is kept.
+          </Alert>
+          {snapshots.length === 0 ? (
+            <EmptyState
+              icon={
+                <HistoryOutlinedIcon
                   sx={{ fontSize: 48, color: 'text.disabled' }}
                 />
-                <Typography variant='pageTitle' sx={{ fontSize: 16 }}>
-                  No test cases yet
-                </Typography>
-                <Typography variant='pageSub' color='text.disabled'>
-                  Import test cases into this release to see per-application
-                  metrics.
-                </Typography>
-                <Button variant='contained' href='/import-cases'>
-                  Import Cases
-                </Button>
-              </Stack>
-            ) : (
-              <TableContainer>
-                <Table
-                  size='small'
-                  stickyHeader
-                  aria-label='Application breakdown'
-                >
-                  <TableHead
-                    sx={{
-                      '& th': {
-                        bgcolor: 'action.selected',
-                        borderBottomWidth: 2,
-                        borderBottomColor: 'divider',
-                      },
-                    }}
-                  >
-                    <TableRow>
-                      <TableCell>Application</TableCell>
-                      <TableCell align='center'>Total</TableCell>
-                      <TableCell align='center' sx={{ color: 'success.main' }}>
-                        Pass
-                      </TableCell>
-                      <TableCell align='center' sx={{ color: 'error.main' }}>
-                        Fail
-                      </TableCell>
-                      <TableCell align='center' sx={{ color: 'warning.main' }}>
-                        Pending
-                      </TableCell>
-                      <TableCell align='center'>Pass Rate</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {appBreakdown.map((row) => (
-                      <TableRow key={row.appId} hover>
-                        <TableCell>
-                          <Typography variant='tableCell' fontWeight={500}>
-                            {row.appName}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Typography variant='tableCell'>
-                            {row.total}
-                          </Typography>
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{ color: 'success.main' }}
-                        >
-                          <Typography variant='tableCell'>
-                            {row.passed}
-                          </Typography>
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{
-                            color:
-                              row.failed > 0 ? 'error.main' : 'text.disabled',
-                          }}
-                        >
-                          <Typography variant='tableCell'>
-                            {row.failed}
-                          </Typography>
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{
-                            color:
-                              row.pending > 0
-                                ? 'warning.main'
-                                : 'text.disabled',
-                          }}
-                        >
-                          <Typography variant='tableCell'>
-                            {row.pending}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <PassRateBar
-                            value={row.passRate}
-                            label={`${row.appName} pass rate: ${row.passRate}%`}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Panel>
-        )}
-
-        {/* ── Export panel ────────────────────────────────────────────── */}
-        <Panel
-          title='Export'
-          headerActions={
-            <FileDownloadOutlinedIcon
-              sx={{ color: 'text.disabled', fontSize: 20 }}
-            />
-          }
-        >
-          <Stack spacing={1.75} sx={{ p: 3 }}>
-            {!hasContext ? (
-              <Typography variant='tableCell' color='text.disabled'>
-                Select a release and environment above to enable exports.
+              }
+              title='No snapshots yet'
+            >
+              <Typography variant='pageSub' color='text.disabled'>
+                Download a PDF to create your first snapshot.
               </Typography>
-            ) : (
-              <>
-                <Stack direction='row' spacing={1.75} sx={{ flexWrap: 'wrap' }}>
-                  <TextField
-                    select
-                    label='Application / Scope'
-                    value={selectedApp}
-                    onChange={(e) => setSelectedApp(e.target.value)}
-                    sx={{ minWidth: 200, flex: 1, maxWidth: 360 }}
-                    slotProps={{
-                      inputLabel: { shrink: true },
-                      input: { notched: true },
-                      select: { displayEmpty: true },
-                    }}
-                  >
-                    <MenuItem value=''>All Applications</MenuItem>
-                    {applications.map((a) => (
-                      <MenuItem key={a._id} value={a._id}>
-                        {a.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Stack>
-
-                <Stack direction='row' spacing={1.25}>
-                  <Button
-                    variant='outlined'
-                    onClick={exportExcel}
-                    disabled={generatingExcel}
-                    aria-busy={generatingExcel}
-                  >
-                    {generatingExcel ? 'Exporting…' : 'Export Excel'}
-                  </Button>
-                  <Button
-                    variant='contained'
-                    onClick={exportPdf}
-                    disabled={generatingPdf}
-                    aria-busy={generatingPdf}
-                  >
-                    {generatingPdf ? 'Generating…' : 'Export PDF Signoff'}
-                  </Button>
-                </Stack>
-              </>
-            )}
-          </Stack>
-        </Panel>
-      </Stack>
-    </>
+            </EmptyState>
+          ) : (
+            <TableContainer>
+              <Table size='small' stickyHeader aria-label='Version history'>
+                <TableHead
+                  sx={{
+                    '& th': {
+                      bgcolor: 'action.selected',
+                      borderBottomWidth: 2,
+                      borderBottomColor: 'divider',
+                    },
+                  }}
+                >
+                  <TableRow>
+                    <TableCell>Release</TableCell>
+                    <TableCell>Environment</TableCell>
+                    <TableCell>Snapshot Timestamp</TableCell>
+                    <TableCell>Generated By</TableCell>
+                    <TableCell align='center'>Download</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {snapshots.map((s) => (
+                    <TableRow key={s._id} hover>
+                      <TableCell>
+                        <Typography variant='tableCell' fontWeight={500}>
+                          {s.releaseName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={s.environment} size='small' />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='tableCell'>
+                          {formatSnapshotDate(s.generatedAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='tableCell'>
+                          {s.generatedBy}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align='center'>
+                        <Tooltip title='Download the stored snapshot (no regeneration).'>
+                          <Button
+                            component='a'
+                            href={snapshotDownloadUrl(s._id)}
+                            download
+                            size='small'
+                            startIcon={<DownloadOutlinedIcon />}
+                          >
+                            Download
+                          </Button>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Stack>
+      </Panel>
+    </Stack>
   );
 }
