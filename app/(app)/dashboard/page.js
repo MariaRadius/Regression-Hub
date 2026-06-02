@@ -1,9 +1,9 @@
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { Suspense } from 'react';
 import MetricCards from '@/components/MetricCards';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
@@ -16,15 +16,17 @@ import {
   buildModuleBarData,
   buildTesterBarData,
 } from '@/lib/db/dashboardTransforms';
-import { getLatestRelease } from '@/lib/db/releasesData';
+import { resolveActiveReleaseEnv } from '@/lib/db/releasesData';
 import { getDb } from '@/lib/mongodb';
+import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 import { ChartHoverProvider } from './charts/ChartHoverContext';
 import DonutChart from './charts/DonutChart';
 import StackedBarChart from './charts/StackedBarChart';
-import DashboardUrlSync from './DashboardUrlSync';
+import DashboardRefresh from './DashboardRefresh';
 
 // Re-execute on every router.refresh() so the RSC re-runs the query with the
-// latest URL search params (which the client updates when the selection changes).
+// latest selection from the release-context cookie (which the client updates
+// when the selection changes).
 export const dynamic = 'force-dynamic';
 
 const APP_DISPLAY_ORDER = ['RadiusExam', 'Practice Admin'];
@@ -37,23 +39,24 @@ function compareAppOrder([a], [b]) {
   return a.localeCompare(b);
 }
 
-export default async function DashboardPage({ searchParams }) {
+export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const teamId = session?.user?.teamId;
   if (!teamId) redirect('/');
 
-  const sp = await searchParams;
-  let releaseId = sp?.releaseId ?? null;
-  let environment = sp?.environment ?? null;
-
-  // When either param is missing, resolve to the latest release and its first
-  // environment server-side so the dashboard is never empty on first load.
-  if (!releaseId || !environment) {
-    const db = await getDb();
-    const latest = await getLatestRelease(db, teamId);
-    releaseId = latest?._id ?? null;
-    environment = latest?.environments?.[0] ?? null;
-  }
+  // Read the active selection from the release-context cookie (the server-side
+  // mirror of the client working context). resolveActiveReleaseEnv validates it
+  // against live releases and falls back to the latest release when it is
+  // absent, archived, or stale — so the dashboard is never empty on first load.
+  const stored = parseReleaseCtxCookie(
+    (await cookies()).get(RELEASE_CTX_COOKIE)?.value,
+  );
+  const db = await getDb();
+  const { releaseId, environment } = await resolveActiveReleaseEnv(
+    db,
+    teamId,
+    stored,
+  );
 
   // No releases exist yet — render an empty state rather than crashing.
   if (!releaseId || !environment) {
@@ -64,9 +67,7 @@ export default async function DashboardPage({ searchParams }) {
           title='Dashboard'
           sub='No releases found — import test cases to get started'
         />
-        <Suspense>
-          <DashboardUrlSync />
-        </Suspense>
+        <DashboardRefresh />
       </Stack>
     );
   }
@@ -82,7 +83,7 @@ export default async function DashboardPage({ searchParams }) {
 
   return (
     <ChartHoverProvider>
-      <DashboardUrlSync />
+      <DashboardRefresh />
       <Stack spacing={2.5}>
         <PageHeader
           eyebrow='QA Regression Control Center'

@@ -1,12 +1,14 @@
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Toolbar from '@mui/material/Toolbar';
+import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import TopNav from '@/components/TopNav';
 import { ReleaseEnvProvider } from '@/contexts/ReleaseEnvContext';
 import { authOptions } from '@/lib/auth';
 import { listReleases } from '@/lib/db/releasesData';
 import { getDb } from '@/lib/mongodb';
+import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 
 export default async function AppLayout({ children }) {
   const session = await getServerSession(authOptions);
@@ -18,9 +20,17 @@ export default async function AppLayout({ children }) {
     ? await listReleases(await getDb(), user.teamId)
     : [];
 
+  // Seed the provider with the persisted selection from the release-context
+  // cookie so the server renders the same release the client will resolve to —
+  // avoiding a first-paint flash and hydration mismatch. The provider
+  // re-validates the seed against `releases`.
+  const ssrSeed = parseReleaseCtxCookie(
+    (await cookies()).get(RELEASE_CTX_COOKIE)?.value,
+  );
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <ReleaseEnvProvider releases={releases}>
+      <ReleaseEnvProvider releases={releases} ssrSeed={ssrSeed}>
         <TopNav user={user} />
         <Toolbar />
         <Container component='main' maxWidth='lg' sx={{ py: 4 }}>

@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { serializeReleaseCtxCookie } from '@/lib/releaseCtx';
 
 const SESSION_KEY = 'rh_release_ctx';
 
@@ -40,12 +41,17 @@ function readSessionStorage(releases) {
 }
 
 /**
- * Persists the active (releaseId, environment) pair to sessionStorage.
+ * Persists the active (releaseId, environment) pair to both sessionStorage (the
+ * per-tab working copy) and the release-context cookie (the per-browser,
+ * server-readable mirror that RSC pages read instead of URL params).
+ *
+ * Writes synchronously so a caller can `router.refresh()` immediately after and
+ * have the server re-read the fresh cookie.
  *
  * @param {string} releaseId
  * @param {string} environment
  */
-function writeSessionStorage(releaseId, environment) {
+function persistReleaseCtx(releaseId, environment) {
   if (typeof window === 'undefined') return;
   try {
     sessionStorage.setItem(
@@ -54,6 +60,11 @@ function writeSessionStorage(releaseId, environment) {
     );
   } catch {
     // sessionStorage unavailable — silently ignore
+  }
+  try {
+    document.cookie = serializeReleaseCtxCookie(releaseId, environment);
+  } catch {
+    // cookie write unavailable — silently ignore
   }
 }
 
@@ -122,6 +133,10 @@ export function ReleaseEnvProvider({
       if (release) {
         setActiveRelease(release);
         setEnvironmentState(stored.environment);
+        // Re-seed the server-readable cookie from this tab's sessionStorage so a
+        // fresh tab (empty cookie) and any router.refresh() converge on the same
+        // selection the server rendered against.
+        persistReleaseCtx(stored.releaseId, stored.environment);
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -131,7 +146,7 @@ export function ReleaseEnvProvider({
     if (!release.environments?.includes(env)) return;
     setActiveRelease(release);
     setEnvironmentState(env);
-    writeSessionStorage(release._id, env);
+    persistReleaseCtx(release._id, env);
   }, []);
 
   const value = useMemo(
