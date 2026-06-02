@@ -37,7 +37,7 @@
 - DO NOT redefine a function locally if it is already exported from utils/; import from the shared module instead
 - DO NOT reference an MUI icon by name without first verifying the exact export name exists in `@mui/icons-material`
 - DO NOT set font-family outside app/globals.css; self-host via app/fonts.js (next/font/google), no CDN links, no inline fontFamily props
-- DO NOT use a `<MenuItem value=''>` in a TextField select without `slotProps={{ select: { displayEmpty: true } }}`; the empty-string value renders blank without it
+- ALWAYS set `slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}` on a labeled TextField select that has a `<MenuItem value=''>`. `displayEmpty` renders the empty-value item (otherwise it shows blank); `inputLabel.shrink` floats the label into the notch so it never overlaps the placeholder. Clean as you go
 - DO NOT use ad-hoc or plain-text empty states; compose them with an MUI icon, bold title Typography, a subtitle Typography, and a primary MUI Button to go back
 - DO NOT use Box as a flex/grid layout wrapper; use Stack (spacing prop) or Grid for layout containers. Clean as you go
 - DO NOT use custom margin or padding values in sx; prefer MUI native `spacing={}` on Stack and `spacing`/`rowSpacing`/`columnSpacing` on Grid unless no native equivalent exists. Clean as you go

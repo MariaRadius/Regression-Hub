@@ -372,7 +372,10 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
                     caseName: tc?.testCase ?? '',
                   }));
                 }}
-                slotProps={{ select: { displayEmpty: true } }}
+                slotProps={{
+                  select: { displayEmpty: true },
+                  inputLabel: { shrink: true },
+                }}
                 required
                 disabled={loadingCases}
               >
@@ -407,7 +410,10 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, assignedTo: e.target.value }))
                 }
-                slotProps={{ select: { displayEmpty: true } }}
+                slotProps={{
+                  select: { displayEmpty: true },
+                  inputLabel: { shrink: true },
+                }}
                 required
               >
                 <MenuItem value=''>Select team member…</MenuItem>

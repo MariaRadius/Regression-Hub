@@ -210,6 +210,10 @@ export default function TestCaseDialog({
                     moduleId: '',
                   }))
                 }
+                slotProps={{
+                  select: { displayEmpty: true },
+                  inputLabel: { shrink: true },
+                }}
               >
                 <MenuItem value=''>Select application</MenuItem>
                 {applications.map((a) => (
@@ -240,6 +244,10 @@ export default function TestCaseDialog({
                     }));
                     setNewModuleName(null);
                   }
+                }}
+                slotProps={{
+                  select: { displayEmpty: true },
+                  inputLabel: { shrink: true },
                 }}
               >
                 <MenuItem value=''>Select module</MenuItem>
@@ -300,6 +308,10 @@ export default function TestCaseDialog({
                 name='priority'
                 value={form.priority}
                 onChange={handleField}
+                slotProps={{
+                  select: { displayEmpty: true },
+                  inputLabel: { shrink: true },
+                }}
               >
                 <MenuItem value=''>—</MenuItem>
                 <MenuItem value={PRIORITIES.HIGH}>High</MenuItem>

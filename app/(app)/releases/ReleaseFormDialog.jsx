@@ -395,7 +395,10 @@ export default function ReleaseFormDialog({
                       fullWidth
                       required
                       disabled={submitting || loadingReleases}
-                      slotProps={{ select: { displayEmpty: true } }}
+                      slotProps={{
+                        select: { displayEmpty: true },
+                        inputLabel: { shrink: true },
+                      }}
                     >
                       <MenuItem value=''>
                         <Typography

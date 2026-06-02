@@ -82,7 +82,10 @@ export default function BulkReassignModal({
             }}
             error={assigneeError}
             helperText={assigneeError ? 'Select a user to assign to' : ''}
-            slotProps={{ select: { displayEmpty: true } }}
+            slotProps={{
+              select: { displayEmpty: true },
+              inputLabel: { shrink: true },
+            }}
           >
             <MenuItem value=''>— Select user —</MenuItem>
             {qaUsers.map((u) => (
@@ -100,6 +103,10 @@ export default function BulkReassignModal({
             label='Priority (optional)'
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
+            slotProps={{
+              select: { displayEmpty: true },
+              inputLabel: { shrink: true },
+            }}
           >
             <MenuItem value=''>— No preference —</MenuItem>
             {Object.values(PRIORITIES).map((p) => (
