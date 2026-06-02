@@ -19,6 +19,48 @@ const STATUS_COLOR = {
 const INNER_RADIUS_FRACTION = 0.6;
 const ACTIVE_EXPAND = 6;
 const CORNER_RADIUS = 3;
+// Smallest angular span (radians, ~10°) any non-zero slice may occupy, so a
+// lone failure among thousands of pending stays a visible wedge.
+const MIN_SLICE_ANGLE = 0.18;
+const LABEL_ELBOW = 16; // gap from donut edge to the side label column
+const LABEL_TICK = 6; // short horizontal tick before the text
+const LABEL_VERT_MARGIN = 10; // top/bottom room for label text half-height
+const LABEL_SIDE_SPACE = 92; // horizontal room each side (elbow + tick + text)
+
+/**
+ * Convert raw slice values into pie fractions where every non-zero slice spans
+ * at least `minFraction` of the circle, conserving the whole by trimming the
+ * surplus proportionally from slices already above the floor. Zero-valued
+ * slices stay at 0 (no wedge). Returns fractions summing to ~1.
+ */
+function minSliceFractions(values, minFraction) {
+  const total = values.reduce((s, v) => s + (v > 0 ? v : 0), 0);
+  if (total <= 0) return values.map(() => 0);
+
+  const out = values.map((v) => (v > 0 ? v / total : 0));
+  let deficit = 0;
+  for (let i = 0; i < out.length; i++) {
+    if (out[i] > 0 && out[i] < minFraction) {
+      deficit += minFraction - out[i];
+      out[i] = minFraction;
+    }
+  }
+  if (deficit <= 0) return out;
+
+  let givable = 0;
+  for (let i = 0; i < out.length; i++) {
+    if (out[i] > minFraction) givable += out[i] - minFraction;
+  }
+  // Circle too crowded to seat every floor; slices keep the floor and the sum
+  // overflows slightly — unavoidable without dropping a slice.
+  if (givable <= 0) return out;
+
+  const ratio = Math.min(1, deficit / givable);
+  for (let i = 0; i < out.length; i++) {
+    if (out[i] > minFraction) out[i] -= (out[i] - minFraction) * ratio;
+  }
+  return out;
+}
 
 /**
  * Hollow donut chart — overall Pass/Fail/Pending summary.
@@ -40,7 +82,12 @@ export default function DonutChart({ donutData }) {
   } = useTooltip();
   const { parentRef, width, height } = useParentSize({ debounceTime: 50 });
 
-  const radius = Math.min(width, height) / 2 - 10;
+  // Height-led radius (small vertical margin); reserve just enough horizontal
+  // room for the side label columns so the donut stays as large as possible.
+  const radius = Math.max(
+    0,
+    Math.min(height / 2 - LABEL_VERT_MARGIN, width / 2 - LABEL_SIDE_SPACE),
+  );
   const innerRadius = radius * INNER_RADIUS_FRACTION;
 
   const total = donutData.reduce((s, d) => s + d.value, 0);
@@ -51,6 +98,17 @@ export default function DonutChart({ donutData }) {
             100,
         )
       : 0;
+
+  // Pie angles are driven by floored fractions (min slice size); labels and the
+  // tooltip keep reading the real `value`.
+  const displayFractions = minSliceFractions(
+    donutData.map((d) => d.value),
+    MIN_SLICE_ANGLE / (2 * Math.PI),
+  );
+  const pieData = donutData.map((d, i) => ({
+    ...d,
+    displayValue: displayFractions[i],
+  }));
 
   return (
     <div
@@ -70,62 +128,111 @@ export default function DonutChart({ donutData }) {
           </defs>
           <Group top={height / 2} left={width / 2}>
             <Pie
-              data={donutData}
-              pieValue={(d) => d.value}
+              data={pieData}
+              pieValue={(d) => d.displayValue}
               outerRadius={radius}
               innerRadius={innerRadius}
               padAngle={0.03}
             >
               {(pie) =>
                 pie.arcs.map((arc, i) => {
+                  const { name, value } = arc.data;
                   const isDirectlyHovered = activeIndex === i;
                   // Expand when directly hovered, or when another chart is
                   // hovering the same status (and no arc is locally hovered).
                   const shouldExpand =
                     isDirectlyHovered ||
                     (activeIndex === null &&
-                      hoveredStatus === arc.data.name &&
+                      hoveredStatus === name &&
                       hoveredStatus !== null);
                   const arcPath = d3Arc()
                     .innerRadius(innerRadius)
                     .outerRadius(shouldExpand ? radius + ACTIVE_EXPAND : radius)
                     .cornerRadius(CORNER_RADIUS)(arc);
+                  const dim = hoveredStatus !== null && hoveredStatus !== name;
+                  const color = STATUS_COLOR[name];
+
+                  // External `Name Count` label in a side column — uses the
+                  // empty left/right space so the donut keeps its full radius.
+                  // Present (value > 0) slices only.
+                  let label = null;
+                  if (value > 0) {
+                    const [ex, ey] = d3Arc()
+                      .innerRadius(radius)
+                      .outerRadius(radius)
+                      .centroid(arc);
+                    const dir = ex >= 0 ? 1 : -1; // right vs left column
+                    const colX = dir * (radius + LABEL_ELBOW);
+                    // Pin the label beside its slice but never past the donut's
+                    // vertical extent, so it stays within the svg bounds.
+                    const labelY = Math.max(
+                      -(radius - LABEL_VERT_MARGIN),
+                      Math.min(radius - LABEL_VERT_MARGIN, ey),
+                    );
+                    const textX = colX + dir * LABEL_TICK;
+                    label = (
+                      <g
+                        style={{
+                          opacity: dim ? 0.5 : 1,
+                          transition: 'opacity 0.15s ease',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <polyline
+                          points={`${ex},${ey} ${colX},${labelY} ${textX},${labelY}`}
+                          fill='none'
+                          stroke={color}
+                          strokeWidth={1}
+                        />
+                        <text
+                          x={textX + dir * 3}
+                          y={labelY}
+                          textAnchor={dir === 1 ? 'start' : 'end'}
+                          dominantBaseline='middle'
+                          fontSize={12}
+                          fontWeight={600}
+                          fill={color}
+                        >
+                          {name} {value}
+                        </text>
+                      </g>
+                    );
+                  }
+
                   return (
-                    // biome-ignore lint/a11y/noStaticElementInteractions: SVG path is a chart segment — no native interactive equivalent inside SVG
-                    <path
-                      key={arc.data.name}
-                      d={arcPath}
-                      fill={STATUS_COLOR[arc.data.name]}
-                      cursor='pointer'
-                      style={{
-                        opacity:
-                          hoveredStatus === null ||
-                          hoveredStatus === arc.data.name
-                            ? 1
-                            : 0.5,
-                        transition: 'opacity 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        setActiveIndex(i);
-                        setHoveredStatus(arc.data.name);
-                        const rect = e.currentTarget
-                          .closest('svg')
-                          .parentElement.getBoundingClientRect();
-                        showTooltip({
-                          tooltipData: arc.data,
-                          tooltipLeft: e.clientX - rect.left,
-                          tooltipTop: e.clientY - rect.top,
-                        });
-                      }}
-                      onMouseLeave={() => {
-                        setActiveIndex(null);
-                        setHoveredStatus(null);
-                        hideTooltip();
-                      }}
-                      onClick={() =>
-                        router.push(`/test-cases?status=${arc.data.name}`)
-                      }
-                    />
+                    <g key={name}>
+                      {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG path is a chart segment — no native interactive equivalent inside SVG */}
+                      <path
+                        d={arcPath}
+                        fill={color}
+                        cursor='pointer'
+                        style={{
+                          opacity: dim ? 0.5 : 1,
+                          transition: 'opacity 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          setActiveIndex(i);
+                          setHoveredStatus(name);
+                          const rect = e.currentTarget
+                            .closest('svg')
+                            .parentElement.getBoundingClientRect();
+                          showTooltip({
+                            tooltipData: arc.data,
+                            tooltipLeft: e.clientX - rect.left,
+                            tooltipTop: e.clientY - rect.top,
+                          });
+                        }}
+                        onMouseLeave={() => {
+                          setActiveIndex(null);
+                          setHoveredStatus(null);
+                          hideTooltip();
+                        }}
+                        onClick={() =>
+                          router.push(`/test-cases?status=${name}`)
+                        }
+                      />
+                      {label}
+                    </g>
                   );
                 })
               }

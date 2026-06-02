@@ -25,6 +25,10 @@ const STATUS_COLOR = {
   Pending: CHART_THEME.pending,
 };
 const CORNER_RADIUS = 3;
+// Minimum on-screen thickness for any present-but-tiny segment. A 1px line at
+// the baseline is half-swallowed by the axis stroke and imperceptible; 3px
+// guarantees a visible line (e.g. a lone failure among hundreds of pending).
+const SEGMENT_MIN_PX = 3;
 
 const DEFAULT_MARGIN = {
   vertical: { top: 10, right: 20, bottom: 48, left: 44 },
@@ -139,8 +143,12 @@ function wrapLabel(text, maxWidth, fontSize = 11) {
  *   When omitted the chart is display-only (no navigation, cursor stays default).
  * @param {'alpha'|'total'} [props.sortBy]  Client-side sort; omit for pass-through order.
  * @param {number} [props.minBarSize]
- *   Clamp minimum segment height (vertical) or width (horizontal).
- *   Only applied to segments whose data value is > 0.
+ *   Minimum segment height (vertical) or width (horizontal). Independent of this
+ *   prop, every non-zero metric (scaled value > 0, or raw `${key}Count` > 0 when
+ *   a percentage rounds to 0.0%) is floored to at least 1px so it always renders
+ *   a visible pixel. The floor is stack-aware — the bar's total length is
+ *   conserved by shrinking larger segments — so a floored sliver is never
+ *   overlapped by a neighbour. `minBarSize`, when larger, wins.
  * @param {boolean} [props.wrapLabels=true]
  *   Wrap category-axis labels (vertical x-axis only). Opt-out with false.
  * @param {boolean} [props.rotateLabels=false]
@@ -326,31 +334,109 @@ export default function StackedBarChart({
     );
   }
 
+  // ── Per-segment minimum size (stack-aware) ────────────────────────────────
+  // A segment represents a non-zero metric when its scaled value > 0 OR its raw
+  // count > 0 — in percentage mode a tiny count rounds to 0.0% (value 0) yet
+  // still has a count, so presence must consider both.
+  function segmentPresent(datum, key) {
+    const value = datum[key];
+    const count = datum[`${key.toLowerCase()}Count`];
+    return (
+      (Number.isFinite(value) && value > 0) ||
+      (Number.isFinite(count) && count > 0)
+    );
+  }
+
+  // Floor every present segment to `floorPx` while CONSERVING the bar's total
+  // length: the deficit added to sub-floor segments is removed proportionally
+  // from segments above the floor. Re-stacking the conserved sizes keeps
+  // segments contiguous, so a floored sliver is never overlapped (and hidden)
+  // by a larger neighbour painted after it. `minBarSize`, when larger, wins.
+  function flooredSizes(rawSizes, present, floorPx) {
+    const sizes = rawSizes.slice();
+    let deficit = 0;
+    for (let i = 0; i < sizes.length; i++) {
+      if (present[i] && sizes[i] < floorPx) {
+        deficit += floorPx - sizes[i];
+        sizes[i] = floorPx;
+      }
+    }
+    if (deficit <= 0) return sizes;
+
+    let givable = 0;
+    for (let i = 0; i < sizes.length; i++) {
+      if (sizes[i] > floorPx) givable += sizes[i] - floorPx;
+    }
+    // Bar too small to seat every floor; donors shrink to the floor and the
+    // remainder overflows slightly — unavoidable without dropping a segment.
+    if (givable <= 0) return sizes;
+
+    const ratio = Math.min(1, deficit / givable);
+    for (let i = 0; i < sizes.length; i++) {
+      if (sizes[i] > floorPx) sizes[i] -= (sizes[i] - floorPx) * ratio;
+    }
+    return sizes;
+  }
+
+  // Group a BarStack's segments by bar (datum) index, preserving KEYS order
+  // (barStacks[ki] === KEYS[ki]), so a whole stack can be laid out together.
+  function groupSegmentsByBar(barStacks) {
+    const byBar = new Map();
+    barStacks.forEach((barStack, ki) => {
+      for (const bar of barStack.bars) {
+        let arr = byBar.get(bar.index);
+        if (!arr) {
+          arr = [];
+          byBar.set(bar.index, arr);
+        }
+        arr[ki] = { barStack, bar };
+      }
+    });
+    return byBar;
+  }
+
   // ── Vertical bar render (BarStack) ────────────────────────────────────────
   function renderVerticalBars(barStacks) {
-    return barStacks.map((barStack) =>
-      barStack.bars.map((bar) => {
-        const rawH = Math.max(bar.height, 0);
-        const bh = minBarSize && rawH > 0 ? Math.max(rawH, minBarSize) : rawH;
-        // Pull bar top up when clamped so the bottom stays at the baseline.
-        const by = bh !== rawH ? Math.min(bar.y, innerHeight - bh) : bar.y;
-        const bw = Math.max(bar.width, 0);
-        return renderSegment(barStack, bar, bar.x, by, bw, bh);
-      }),
-    );
+    const floorPx = Math.max(minBarSize ?? 0, SEGMENT_MIN_PX);
+    const out = [];
+    groupSegmentsByBar(barStacks).forEach((arr) => {
+      const datum = arr[0].bar.bar.data;
+      const raw = arr.map((s) => Math.max(s.bar.height, 0));
+      const present = arr.map((s) => segmentPresent(datum, s.barStack.key));
+      const sizes = flooredSizes(raw, present, floorPx);
+      // Re-stack from the baseline (bottom = innerHeight) upward in KEYS order.
+      let cursor = innerHeight;
+      arr.forEach((s, i) => {
+        const bh = sizes[i];
+        const by = cursor - bh;
+        cursor = by;
+        const bw = Math.max(s.bar.width, 0);
+        out.push(renderSegment(s.barStack, s.bar, s.bar.x, by, bw, bh));
+      });
+    });
+    return out;
   }
 
   // ── Horizontal bar render (BarStackHorizontal) ────────────────────────────
   function renderHorizontalBars(barStacks) {
-    return barStacks.map((barStack) =>
-      barStack.bars.map((bar) => {
-        const rawW = Math.max(bar.width, 0);
-        // Clamp width; bar stays anchored at bar.x (no x adjustment needed).
-        const bw = minBarSize && rawW > 0 ? Math.max(rawW, minBarSize) : rawW;
-        const bh = yBandScale.bandwidth();
-        return renderSegment(barStack, bar, bar.x, bar.y, bw, bh);
-      }),
-    );
+    const floorPx = Math.max(minBarSize ?? 0, SEGMENT_MIN_PX);
+    const bh = yBandScale.bandwidth();
+    const out = [];
+    groupSegmentsByBar(barStacks).forEach((arr) => {
+      const datum = arr[0].bar.bar.data;
+      const raw = arr.map((s) => Math.max(s.bar.width, 0));
+      const present = arr.map((s) => segmentPresent(datum, s.barStack.key));
+      const sizes = flooredSizes(raw, present, floorPx);
+      // Re-stack from the baseline (left = 0) rightward in KEYS order.
+      let cursor = 0;
+      arr.forEach((s, i) => {
+        const bw = sizes[i];
+        const bx = cursor;
+        cursor += bw;
+        out.push(renderSegment(s.barStack, s.bar, bx, s.bar.y, bw, bh));
+      });
+    });
+    return out;
   }
 
   // ── Vertical category-axis tick (with optional label wrapping / rotation) ──
