@@ -2,8 +2,12 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import SessionWrapper from '../SessionWrapper';
 
+const { SessionProvider } = vi.hoisted(() => ({
+  SessionProvider: vi.fn(({ children }) => <>{children}</>),
+}));
+
 vi.mock('next-auth/react', () => ({
-  SessionProvider: ({ children }) => <>{children}</>,
+  SessionProvider,
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -15,6 +19,16 @@ vi.mock('@/lib/queryClient', () => ({
 }));
 
 describe('SessionWrapper', () => {
+  it('does not mount a client session provider', () => {
+    render(
+      <SessionWrapper>
+        <p>child content</p>
+      </SessionWrapper>,
+    );
+
+    expect(SessionProvider).not.toHaveBeenCalled();
+  });
+
   it('renders children', () => {
     render(
       <SessionWrapper>

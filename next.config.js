@@ -29,6 +29,9 @@ const securityHeaders = [
 
 const nextConfig = {
   serverExternalPackages: ['mongodb'],
+  turbopack: {
+    root: __dirname,
+  },
   experimental: {
     optimizePackageImports: ['@mui/material', '@mui/icons-material'],
   },
