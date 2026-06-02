@@ -14,7 +14,7 @@
  * Idempotent: only touches docs that still carry `caseId`; a second run is a
  * no-op. Run with:  node scripts/migrate-caseId-to-tcId.mjs
  */
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { MongoClient } from 'mongodb';
 
 function loadUri() {
@@ -45,7 +45,7 @@ for (const tc of testCases) {
     tc._id.toString(),
   );
 }
-console.log(
+console.warn(
   `Loaded ${lineageToId.size} (team::release::caseId) -> _id mappings`,
 );
 
@@ -93,12 +93,12 @@ async function migrateReferencing(collName) {
     });
   }
 
-  console.log(
+  console.warn(
     `${collName}: ${docs.length} docs (mapped=${mapped} null=${nulled} carried=${carried})`,
   );
   if (ops.length && !DRY_RUN) {
     const res = await coll.bulkWrite(ops, { ordered: false });
-    console.log(`  ${collName}: modified ${res.modifiedCount}`);
+    console.warn(`  ${collName}: modified ${res.modifiedCount}`);
   }
 }
 
@@ -129,12 +129,12 @@ if (arrDocs.length) {
       },
     },
   }));
-  console.log(`events caseIds[]: ${arrDocs.length} docs`);
+  console.warn(`events caseIds[]: ${arrDocs.length} docs`);
   if (!DRY_RUN) {
     const res = await db
       .collection('events')
       .bulkWrite(ops, { ordered: false });
-    console.log(`  events caseIds[]: modified ${res.modifiedCount}`);
+    console.warn(`  events caseIds[]: modified ${res.modifiedCount}`);
   }
 }
 
@@ -146,14 +146,14 @@ if (!DRY_RUN) {
       { testCaseId: { $exists: true } },
       { $rename: { testCaseId: 'externalCaseId' } },
     );
-  console.log(
+  console.warn(
     `testCases: renamed testCaseId->externalCaseId on ${renamed.modifiedCount}`,
   );
 
   const dropped = await db
     .collection('testCases')
     .updateMany({ caseId: { $exists: true } }, { $unset: { caseId: '' } });
-  console.log(`testCases: dropped legacy caseId on ${dropped.modifiedCount}`);
+  console.warn(`testCases: dropped legacy caseId on ${dropped.modifiedCount}`);
 } else {
   const toRename = await db
     .collection('testCases')
@@ -161,10 +161,10 @@ if (!DRY_RUN) {
   const toDrop = await db
     .collection('testCases')
     .countDocuments({ caseId: { $exists: true } });
-  console.log(
+  console.warn(
     `testCases (dry-run): wouldRename=${toRename} wouldDropCaseId=${toDrop}`,
   );
 }
 
 await client.close();
-console.log(DRY_RUN ? 'Dry run complete — no writes.' : 'Migration complete.');
+console.warn(DRY_RUN ? 'Dry run complete — no writes.' : 'Migration complete.');

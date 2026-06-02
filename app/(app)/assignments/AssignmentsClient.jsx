@@ -39,43 +39,14 @@ import {
   deleteAssignment as apiDeleteAssignment,
   listAssignments,
 } from '@/lib/api/assignments';
-import { ENVIRONMENT_SENTINEL } from '@/lib/constants';
 
 const EMPTY_FORM = {
   tcId: '',
   testKey: '',
   caseName: '',
   assignedTo: '',
-  environment: ENVIRONMENT_SENTINEL,
+  environment: '',
 };
-
-/**
- * Resolves a human-readable scope label for an assignment's environment.
- *
- * @param {string} environment - The environment value stored on the assignment.
- * @returns {string}
- */
-function scopeLabel(environment) {
-  if (!environment || environment === ENVIRONMENT_SENTINEL)
-    return 'Release-wide';
-  return environment;
-}
-
-/**
- * Returns true if the given environment scope matches the active filter.
- * When filter is ENVIRONMENT_SENTINEL (all), every assignment matches.
- * When filter is a specific env, both release-wide and that-env assignments match.
- *
- * @param {string} assignmentEnv
- * @param {string} filterScope
- * @returns {boolean}
- */
-function matchesScope(assignmentEnv, filterScope) {
-  if (filterScope === ENVIRONMENT_SENTINEL) return true;
-  return (
-    assignmentEnv === filterScope || assignmentEnv === ENVIRONMENT_SENTINEL
-  );
-}
 
 export default function AssignmentsClient({ isAdmin, qaUsers }) {
   const { releaseId, releaseName, environments, activeRelease } =
@@ -83,7 +54,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
 
   const isArchived = activeRelease?.archived ?? false;
 
-  const [scopeFilter, setScopeFilter] = useState(ENVIRONMENT_SENTINEL);
+  const [scopeFilter, setScopeFilter] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -99,7 +70,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
   // Reset scope filter when release changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: releaseId is the trigger; setScopeFilter is a stable setter
   useEffect(() => {
-    setScopeFilter(ENVIRONMENT_SENTINEL);
+    setScopeFilter('');
   }, [releaseId]);
 
   const fetchAssignments = useCallback(async () => {
@@ -125,7 +96,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
   // Fetch test cases for the create form.
   // Uses the first environment to satisfy the listTestCases invariant.
   async function openCreateModal() {
-    setForm({ ...EMPTY_FORM, environment: ENVIRONMENT_SENTINEL });
+    setForm({ ...EMPTY_FORM, environment: environments[0] ?? '' });
     setShowModal(true);
     const firstEnv = environments[0];
     if (!firstEnv) {
@@ -165,6 +136,10 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
       showToast('Select an assignee', 'info');
       return;
     }
+    if (!form.environment) {
+      showToast('Select an environment', 'info');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -172,10 +147,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
         tcIds: [form.tcId],
         releaseId,
         assignedTo: form.assignedTo,
-        environment:
-          form.environment === ENVIRONMENT_SENTINEL
-            ? undefined
-            : form.environment,
+        environment: form.environment,
       });
       showToast('Assignment created', 'success');
       closeModal();
@@ -199,8 +171,8 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
     }
   }
 
-  const visibleAssignments = assignments.filter((a) =>
-    matchesScope(a.environment, scopeFilter),
+  const visibleAssignments = assignments.filter(
+    (a) => scopeFilter === '' || a.environment === scopeFilter,
   );
 
   const noRelease = !releaseId;
@@ -258,11 +230,9 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
               exclusive
               size='small'
               value={scopeFilter}
-              onChange={(_, v) => v && setScopeFilter(v)}
+              onChange={(_, v) => v !== null && setScopeFilter(v)}
             >
-              <ToggleButton value={ENVIRONMENT_SENTINEL}>
-                Release-wide
-              </ToggleButton>
+              <ToggleButton value=''>All</ToggleButton>
               {environments.map((env) => (
                 <ToggleButton key={env} value={env}>
                   {env}
@@ -435,12 +405,9 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
                   fullWidth
                   value={form.environment}
                   onChange={(_, v) =>
-                    v && setForm((f) => ({ ...f, environment: v }))
+                    v !== null && setForm((f) => ({ ...f, environment: v }))
                   }
                 >
-                  <ToggleButton value={ENVIRONMENT_SENTINEL}>
-                    Release-wide
-                  </ToggleButton>
                   {environments.map((env) => (
                     <ToggleButton key={env} value={env}>
                       {env}
@@ -448,9 +415,9 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
                   ))}
                 </ToggleButtonGroup>
                 <Typography variant='metricSub' color='text.disabled'>
-                  {form.environment === ENVIRONMENT_SENTINEL
-                    ? 'This assignment applies across all environments in the release.'
-                    : `This assignment applies only to the ${form.environment} environment.`}
+                  {form.environment
+                    ? `This assignment applies only to the ${form.environment} environment.`
+                    : 'This release has no environments; add one before assigning.'}
                 </Typography>
               </Stack>
             </Stack>
@@ -488,10 +455,6 @@ function AssignmentRow({ assignment: a, isAdmin, isArchived, onDelete }) {
       }).format(new Date(a.createdAt))
     : '—';
 
-  const scopeValue = scopeLabel(a.environment);
-  const isReleaseWide =
-    !a.environment || a.environment === ENVIRONMENT_SENTINEL;
-
   return (
     <TableRow hover>
       {/* Test case */}
@@ -521,10 +484,10 @@ function AssignmentRow({ assignment: a, isAdmin, isArchived, onDelete }) {
       {/* Scope */}
       <TableCell>
         <Chip
-          label={scopeValue}
+          label={a.environment}
           size='small'
-          color={isReleaseWide ? 'default' : 'primary'}
-          variant={isReleaseWide ? 'outlined' : 'filled'}
+          color='primary'
+          variant='filled'
         />
       </TableCell>
 

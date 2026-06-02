@@ -72,15 +72,19 @@ function RichField({ label, value }) {
   );
 }
 
-function ReadField({ label, value, mono }) {
+function ReadField({ label, value, mono, loading }) {
   return (
     <Stack spacing={0.25}>
       <Typography variant='formLabel' color='text.disabled'>
         {label}
       </Typography>
-      <Typography variant={mono ? 'mono' : 'tableCell'}>
-        {value || '—'}
-      </Typography>
+      {loading ? (
+        <Skeleton variant='text' width='70%' />
+      ) : (
+        <Typography variant={mono ? 'mono' : 'tableCell'}>
+          {value || '—'}
+        </Typography>
+      )}
     </Stack>
   );
 }
@@ -158,6 +162,107 @@ function EnvResultsGrid({ environments, envResults, envLoading }) {
         );
       })}
     </Stack>
+  );
+}
+
+/**
+ * Picks the most recently executed env result (largest testedOn). Rows that
+ * were never executed (no testedOn — e.g. seeded Pending) are ignored.
+ *
+ * @param {Array<{env:string,result:object|null}>|null} envResults
+ * @returns {{env:string, result:object}|null}
+ */
+function latestExecution(envResults) {
+  if (!envResults?.length) return null;
+  let latest = null;
+  for (const row of envResults) {
+    if (!row.result?.testedOn) continue;
+    const ts = new Date(row.result.testedOn).getTime();
+    if (Number.isNaN(ts)) continue;
+    if (!latest || ts > latest.ts) latest = { ...row, ts };
+  }
+  if (!latest) return null;
+  const { ts, ...rest } = latest;
+  return rest;
+}
+
+/**
+ * Read-only summary of the most recent execution across environments:
+ * the fields the per-environment grid omits (notes, assignee, exact
+ * timestamp). Values are rendered straight from the result row returned by the
+ * API; fields with no value render as "—". Fed by the same `envResults` prop —
+ * no extra network call.
+ *
+ * @param {{ envResults: Array<{env:string,result:object|null}>|null, envLoading: boolean }} props
+ */
+function ExecutionDetails({ envResults, envLoading }) {
+  const latest = envLoading ? null : latestExecution(envResults);
+
+  // Loaded, but nothing has been executed across any environment yet.
+  if (!envLoading && !latest) {
+    return (
+      <Typography variant='tableCell' color='text.disabled'>
+        Not yet executed.
+      </Typography>
+    );
+  }
+
+  // During load the labels stay put; only the values become skeletons.
+  const env = latest?.env;
+  const result = latest?.result;
+  const st = result ? normalizedStatus(result.status) : null;
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <ReadField label='Environment' value={env} loading={envLoading} />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <Stack spacing={0.25}>
+          <Typography variant='formLabel' color='text.disabled'>
+            Status
+          </Typography>
+          {envLoading ? (
+            <Skeleton variant='rounded' width={72} height={24} />
+          ) : (
+            <Box>
+              <Chip
+                size='small'
+                label={st}
+                color={STATUS_COLOR[st] || 'default'}
+                sx={{ minWidth: 72 }}
+              />
+            </Box>
+          )}
+        </Stack>
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <ReadField
+          label='Tested By'
+          value={result?.testedBy}
+          loading={envLoading}
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <ReadField
+          label='Tested On'
+          value={
+            result?.testedOn ? new Date(result.testedOn).toLocaleString() : ''
+          }
+          loading={envLoading}
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <ReadField
+          label='Assignee'
+          value={result?.assignedTo}
+          loading={envLoading}
+        />
+      </Grid>
+      <Grid size={12}>
+        <ReadField label='Notes' value={result?.notes} loading={envLoading} />
+      </Grid>
+    </Grid>
   );
 }
 
@@ -361,7 +466,17 @@ export default function TestCaseDetail({
         </CardContent>
       </Card>
 
-      {/* Card 3 — Results by Environment */}
+      {/* Card 3 — Execution Details (most recent execution) */}
+      {releaseId && environments?.length > 0 && (
+        <Card variant='outlined'>
+          <CardContent>
+            <SectionLabel>Execution Details</SectionLabel>
+            <ExecutionDetails envResults={envResults} envLoading={envLoading} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Card 4 — Results by Environment */}
       {releaseId && environments?.length > 0 && (
         <Card variant='outlined'>
           <CardContent>

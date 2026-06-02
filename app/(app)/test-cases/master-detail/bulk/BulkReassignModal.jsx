@@ -8,14 +8,16 @@ import { showToast } from '@/utils/showToast';
 import BulkModalShell from './BulkModalShell';
 
 /**
- * Bulk reassign: creates a release-wide assignment for each selected test case.
- * Sends { tcIds, releaseId, assignedTo }. Required field: assignedTo.
+ * Bulk reassign: creates an assignment scoped to the active environment for each
+ * selected test case. Sends { tcIds, releaseId, assignedTo, environment }.
+ * Required field: assignedTo.
  */
 export default function BulkReassignModal({
   open,
   onClose,
   selection,
   releaseId,
+  environment,
   onSuccess,
 }) {
   const { data: qaUsers = [] } = useQaUserList();
@@ -39,6 +41,7 @@ export default function BulkReassignModal({
         tcIds: selection.map((s) => s.tcId),
         releaseId,
         assignedTo,
+        environment,
       });
       showToast(
         `↻ Assigned ${selection.length} cases to ${assignedTo}`,

@@ -2,7 +2,7 @@
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import { useEffect, useState } from 'react';
-import { listResults } from '@/lib/api/results';
+import { listCaseResults } from '@/lib/api/results';
 import TestCaseDetail from './TestCaseDetail';
 
 /**
@@ -38,19 +38,17 @@ export default function TestCaseDetailPanel({
     let cancelled = false;
     setEnvLoading(true);
 
-    Promise.all(
-      environments.map((env) =>
-        listResults(releaseId, { environment: env, tcId }).then((rows) => ({
-          env,
-          result: rows.find((r) => r.tcId === tcId) ?? null,
-        })),
-      ),
-    )
+    // One purpose-built request returns this case's rows for every
+    // environment; align them to the declared `environments` order so envs
+    // without a row still render (result: null).
+    listCaseResults(releaseId, tcId)
       .then((rows) => {
-        if (!cancelled) {
-          setEnvResults(rows);
-          setEnvLoading(false);
-        }
+        if (cancelled) return;
+        const byEnv = new Map(rows.map((r) => [r.environment, r]));
+        setEnvResults(
+          environments.map((env) => ({ env, result: byEnv.get(env) ?? null })),
+        );
+        setEnvLoading(false);
       })
       .catch(() => {
         if (!cancelled) setEnvLoading(false);

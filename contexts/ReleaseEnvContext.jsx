@@ -62,6 +62,7 @@ function persistReleaseCtx(releaseId, environment) {
     // sessionStorage unavailable — silently ignore
   }
   try {
+    // biome-ignore lint/suspicious/noDocumentCookie: synchronous SSR-readable write; CookieStore API is async and unsupported in Safari
     document.cookie = serializeReleaseCtxCookie(releaseId, environment);
   } catch {
     // cookie write unavailable — silently ignore

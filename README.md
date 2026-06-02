@@ -133,7 +133,7 @@ Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional comm
 
 ### Assignments
 
-- Assign test cases to QA users; scope release-wide or to a specific environment
+- Assign test cases to QA users, scoped to a specific environment
 - Most recent assignment per (case, environment) is the effective owner; history is retained
 - Assigned-to and tested-by are distinct — reports show them separately
 
@@ -169,6 +169,7 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | PATCH | `/api/releases/[id]/test-cases/[caseId]` | admin | Update test case |
 | DELETE | `/api/releases/[id]/test-cases/[caseId]` | admin | Delete test case |
 | GET | `/api/releases/[id]/results` | admin+qa | List results |
+| GET | `/api/releases/[id]/results/[tcId]` | admin+qa | Minimal per-environment execution rows for one test case (detail panel) |
 | POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
 | POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
 | POST | `/api/releases/[id]/snapshot` | admin+qa | Generate + store PDF snapshot (replaces prior snapshot for same release+environment; writes EXPORT/PDF audit event) |
