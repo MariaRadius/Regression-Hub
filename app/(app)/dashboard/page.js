@@ -23,8 +23,6 @@ import { ChartHoverProvider } from './charts/ChartHoverContext';
 import DonutChart from './charts/DonutChart';
 import StackedBarChart from './charts/StackedBarChart';
 
-export const dynamic = 'force-dynamic';
-
 const APP_DISPLAY_ORDER = ['RadiusExam', 'Practice Admin'];
 
 function compareAppOrder([a], [b]) {
