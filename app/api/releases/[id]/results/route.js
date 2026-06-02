@@ -20,16 +20,19 @@ import { withTeam } from '@/lib/server/withTeam';
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the names of all active QA users for the team.
+ * Returns the names of all active users for the team (any role).
+ *
+ * Mirrors the picker source (`getTeamSettings`), which lists all active
+ * users regardless of role — so any name selectable in the UI validates.
  *
  * @param {import('mongodb').Db} db
  * @param {string} teamId
  * @returns {Promise<string[]>}
  */
-async function getActiveQaUserNames(db, teamId) {
+async function getActiveUserNames(db, teamId) {
   const docs = await db
     .collection('users')
-    .find({ teamId, role: ROLES.QA, active: true }, { projection: { name: 1 } })
+    .find({ teamId, active: true }, { projection: { name: 1 } })
     .toArray();
   return docs.map((u) => u.name);
 }
@@ -38,7 +41,7 @@ async function getActiveQaUserNames(db, teamId) {
  * Enforces BR-15 and the admin-testedBy validation rule:
  *   - QA: `testedBy` is forced to `session.user.name` (returned as the
  *     resolved value; the caller's supplied value is silently overridden).
- *   - Admin: if `testedBy` is supplied it must be the name of an active QA
+ *   - Admin: if `testedBy` is supplied it must be the name of an active
  *     user on the team. Returns it unchanged when valid; throws 400 otherwise.
  *
  * @param {import('mongodb').Db} db
@@ -53,13 +56,13 @@ async function resolveTestedBy(db, teamId, session, testedBy) {
     return session.user.name;
   }
 
-  // Admin path: validate against active QA users when a value is supplied
+  // Admin path: validate against active users when a value is supplied
   if (testedBy) {
-    const qaNames = await getActiveQaUserNames(db, teamId);
-    if (!qaNames.includes(testedBy)) {
+    const names = await getActiveUserNames(db, teamId);
+    if (!names.includes(testedBy)) {
       throw new ApiError(
         400,
-        `"${testedBy}" is not an active QA user for this team`,
+        `"${testedBy}" is not an active user for this team`,
       );
     }
   }
