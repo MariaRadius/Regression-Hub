@@ -7,6 +7,7 @@ import { arc as d3Arc, Pie } from '@visx/shape';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { dashboardPercent } from '@/lib/dashboardPercent';
 import { useChartHover } from './ChartHoverContext';
 import { CHART_FADE_IN_STYLE, CHART_THEME, TOOLTIP_STYLE } from './chartTheme';
 
@@ -44,13 +45,10 @@ export default function DonutChart({ donutData }) {
   const innerRadius = radius * INNER_RADIUS_FRACTION;
 
   const total = donutData.reduce((s, d) => s + d.value, 0);
-  const passPercent =
-    total > 0
-      ? Math.round(
-          ((donutData.find((d) => d.name === 'Pass')?.value ?? 0) / total) *
-            100,
-        )
-      : 0;
+  const passPercent = dashboardPercent(
+    donutData.find((d) => d.name === 'Pass')?.value ?? 0,
+    total,
+  );
 
   return (
     <div
@@ -165,10 +163,7 @@ export default function DonutChart({ donutData }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {KEYS.map((key) => {
                 const d = donutData.find((x) => x.name === key);
-                const pct =
-                  tooltipData.total > 0
-                    ? Math.round(((d?.value ?? 0) / tooltipData.total) * 100)
-                    : 0;
+                const pct = dashboardPercent(d?.value ?? 0, tooltipData.total);
                 return (
                   <div
                     key={key}
