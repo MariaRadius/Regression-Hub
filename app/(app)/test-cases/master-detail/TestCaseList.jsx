@@ -1,9 +1,21 @@
 'use client';
-import { Box, CircularProgress, Fade, Skeleton, Stack } from '@mui/material';
+import { Box, CircularProgress, Fade, Stack } from '@mui/material';
 import EmptyState from '@/components/EmptyState';
 import TestCaseListHeader from './TestCaseListHeader';
 import TestCaseListItem from './TestCaseListItem';
+import TestCaseListItemSkeleton from './TestCaseListItemSkeleton';
 import TestCasePagination from './TestCasePagination';
+
+const SKELETON_ROWS = [
+  { id: 'sk0', titleWidth: '62%', metaWidth: '44%' },
+  { id: 'sk1', titleWidth: '48%', metaWidth: '36%' },
+  { id: 'sk2', titleWidth: '70%', metaWidth: '52%' },
+  { id: 'sk3', titleWidth: '55%', metaWidth: '40%' },
+  { id: 'sk4', titleWidth: '64%', metaWidth: '30%' },
+  { id: 'sk5', titleWidth: '42%', metaWidth: '48%' },
+  { id: 'sk6', titleWidth: '58%', metaWidth: '38%' },
+  { id: 'sk7', titleWidth: '66%', metaWidth: '43%' },
+];
 
 /**
  * Master list panel: header (search/bulk toolbar) + scrollable item list + pagination footer.
@@ -40,12 +52,14 @@ export default function TestCaseList({
       <Box sx={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
         {/* First-ever load with no rows yet → skeletons */}
         {loading && cases.length === 0 ? (
-          <Stack spacing={1} sx={{ p: 1 }}>
-            {['sk0', 'sk1', 'sk2', 'sk3', 'sk4', 'sk5', 'sk6', 'sk7'].map(
-              (k) => (
-                <Skeleton key={k} variant='rectangular' height={52} />
-              ),
-            )}
+          <Stack>
+            {SKELETON_ROWS.map((row) => (
+              <TestCaseListItemSkeleton
+                key={row.id}
+                titleWidth={row.titleWidth}
+                metaWidth={row.metaWidth}
+              />
+            ))}
           </Stack>
         ) : cases.length === 0 ? (
           <EmptyState title='No test cases match these filters' />
