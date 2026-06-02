@@ -143,12 +143,12 @@ Every result write (Pass / Fail / Pending reset) and every assign / unassign app
 
 ### Reports
 
-Per-(Release, Environment) scoped:
+One unified, release-grouped surface — every active Release × Environment is a card (no top-of-page selection):
 
-- Metric cards: total / passed / failed / pending + pass rate
-- Per-application breakdown
-- Excel export: carries `testKey` per row; scoped to the chosen release and environment
-- PDF signoff report
+- **Create report (PDF):** generates a fresh signed-off report, downloads it immediately, and saves it as the latest copy for that release + environment. Exactly one copy is kept per (release, environment) — creating again replaces the prior one and writes an EXPORT/PDF audit event.
+- **Download copy:** re-downloads the exact saved PDF without regeneration. Shown only when a copy exists.
+- **Export Excel:** always reflects the latest saved data; import-compatible (round-trips through the Excel importer). Never stored, never audited.
+- Archived/renamed releases with a saved copy still surface as download-only cards so no stored report is hidden.
 
 ## API Routes
 
@@ -171,6 +171,9 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | GET | `/api/releases/[id]/results` | admin+qa | List results |
 | POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
 | POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
+| POST | `/api/releases/[id]/snapshot` | admin+qa | Generate + store PDF snapshot (replaces prior snapshot for same release+environment; writes EXPORT/PDF audit event) |
+| GET | `/api/snapshots` | admin+qa | List stored PDF snapshots for team (Version History) |
+| GET | `/api/snapshots/[id]/download` | admin+qa | Download stored PDF bytes (no regeneration) |
 
 ## Excel Column Headers
 

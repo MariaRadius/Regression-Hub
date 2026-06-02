@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { listApplications } from '@/lib/db/applicationsData';
+import { listSnapshots } from '@/lib/db/reportSnapshotsData';
 import { getDb } from '@/lib/mongodb';
 import ReportsClient from './ReportsClient';
 
@@ -16,7 +16,7 @@ export default async function ReportsPage() {
   const session = await getServerSession(authOptions);
 
   const db = await getDb();
-  const applications = await listApplications(db, session.user.teamId);
+  const initialSnapshots = await listSnapshots(db, session.user.teamId);
 
-  return <ReportsClient applications={applications} />;
+  return <ReportsClient initialSnapshots={initialSnapshots} />;
 }

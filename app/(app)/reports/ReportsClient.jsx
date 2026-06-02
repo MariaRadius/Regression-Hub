@@ -1,196 +1,432 @@
 'use client';
 
-import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import GridOnOutlinedIcon from '@mui/icons-material/GridOnOutlined';
+import PostAddOutlinedIcon from '@mui/icons-material/PostAddOutlined';
 import {
   Alert,
+  AlertTitle,
   Button,
   Chip,
+  CircularProgress,
   Grid,
-  MenuItem,
+  IconButton,
+  Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
-import PassRateBar from '@/components/PassRateBar';
-import ToastProvider, { showToast } from '@/components/Toast';
+import { showToast } from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { exportData as apiExportData } from '@/lib/api/exportData';
-import { listTestCasesForRelease } from '@/lib/api/releases';
-import { listResults } from '@/lib/api/results';
+import {
+  listSnapshots,
+  saveSnapshot,
+  snapshotDownloadUrl,
+} from '@/lib/api/snapshots';
 import { STATUS } from '@/lib/constants';
 import { dateStamp, normalizedStatus } from '@/utils/formatters';
 import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
 
-// Teal palette aliases — matches primary.main (#0d9488) at various opacities
-const TEAL = '#0d9488';
-const teal07 = alpha(TEAL, 0.07);
-const teal30 = alpha(TEAL, 0.3);
-const teal10 = alpha(TEAL, 0.1);
+/** Composite key uniquely identifying a (release, environment) row. */
+function rowKey(releaseId, environment) {
+  return `${releaseId}::${environment}`;
+}
 
 /**
- * Metric card — displays a single labelled number.
+ * Derives the unified report rows from the active releases and stored snapshots.
  *
- * @param {{ label: string, value: string|number|null, color?: string }} props
+ * 1. One generatable row per non-archived release × environment, left-joining the
+ *    saved copy by `releaseId::environment` (null when none → "Not generated yet").
+ * 2. A download-only row for any saved copy whose (release, environment) is not
+ *    already covered above (release archived/renamed) so no stored report is hidden.
+ * 3. Stable sort by release name, then environment.
+ *
+ * Pure and exported for unit testing.
+ *
+ * @param {Array<{ _id: string, name: string, environments?: string[], archived?: boolean }>} releases
+ * @param {Array<{ _id: string, releaseId: string, releaseName: string, environment: string }>} snapshots
+ * @returns {Array<{ releaseId: string, releaseName: string, environment: string, snapshot: object|null, generatable: boolean }>}
+ * @see {@link app/(app)/reports/__tests__/buildReportRows.test.js}
  */
-function MetricCard({ label, value, color = 'text.primary' }) {
+export function buildReportRows(releases, snapshots) {
+  const snaps = snapshots ?? [];
+  const active = (releases ?? []).filter((r) => !r.archived);
+
+  const covered = new Set();
+  const rows = [];
+
+  for (const release of active) {
+    for (const environment of release.environments ?? []) {
+      covered.add(rowKey(release._id, environment));
+      const snapshot =
+        snaps.find(
+          (s) => s.releaseId === release._id && s.environment === environment,
+        ) ?? null;
+      rows.push({
+        releaseId: release._id,
+        releaseName: release.name,
+        environment,
+        snapshot,
+        generatable: true,
+      });
+    }
+  }
+
+  // Append download-only rows for stored copies whose release is no longer active.
+  for (const s of snaps) {
+    const key = rowKey(s.releaseId, s.environment);
+    if (covered.has(key)) continue;
+    covered.add(key);
+    rows.push({
+      releaseId: s.releaseId,
+      releaseName: s.releaseName,
+      environment: s.environment,
+      snapshot: s,
+      generatable: false,
+    });
+  }
+
+  rows.sort((a, b) => {
+    const byName = (a.releaseName ?? '').localeCompare(b.releaseName ?? '');
+    if (byName !== 0) return byName;
+    return (a.environment ?? '').localeCompare(b.environment ?? '');
+  });
+
+  return rows;
+}
+
+/**
+ * Groups sorted report rows by release for sectioned rendering.
+ * Preserves the incoming sort order (release name, then environment).
+ *
+ * @param {ReturnType<typeof buildReportRows>} rows
+ * @returns {Array<{ releaseId: string, releaseName: string, generatable: boolean, rows: object[] }>}
+ */
+function groupByRelease(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    if (!groups.has(row.releaseId)) {
+      groups.set(row.releaseId, {
+        releaseId: row.releaseId,
+        releaseName: row.releaseName,
+        generatable: row.generatable,
+        rows: [],
+      });
+    }
+    groups.get(row.releaseId).rows.push(row);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Formats a generatedAt ISO string into a readable local date + time.
+ *
+ * @param {string} iso
+ * @returns {string}
+ */
+function formatSnapshotDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * A single environment card: shows the latest saved copy (or its absence) and
+ * the in-place actions for that (release, environment).
+ *
+ * @param {{
+ *   row: object,
+ *   busy: 'create' | 'excel' | undefined,
+ *   onCreate: (row: object) => void,
+ *   onExcel: (row: object) => void,
+ * }} props
+ */
+function ReportCard({ row, busy, onCreate, onExcel }) {
+  const { snapshot, generatable } = row;
+  const creating = busy === 'create';
+  const exporting = busy === 'excel';
+  const rowBusy = Boolean(busy);
+
   return (
-    <Stack
-      spacing={0.5}
+    <Paper
+      variant='outlined'
       sx={{
-        bgcolor: 'background.default',
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: 1,
-        p: '14px 20px',
-        textAlign: 'center',
-        minWidth: 100,
+        p: 2,
+        height: '100%',
+        borderLeftWidth: 4,
+        borderLeftColor: snapshot ? 'success.main' : 'divider',
+        transition: 'box-shadow 120ms ease',
+        '&:hover': { boxShadow: 2 },
       }}
     >
-      <Typography variant='metricLabel' color='text.disabled'>
-        {label}
-      </Typography>
-      <Typography variant='metricValue' component='p' sx={{ color }}>
-        {value ?? '—'}
-      </Typography>
-    </Stack>
+      <Stack spacing={2} sx={{ height: '100%' }}>
+        <Stack spacing={2} sx={{ flexGrow: 1 }}>
+          <Typography
+            variant='mono'
+            component='span'
+            sx={{
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              color: 'text.primary',
+            }}
+          >
+            {row.environment}
+          </Typography>
+
+          {snapshot ? (
+            <Stack spacing={0.25}>
+              <Stack
+                direction='row'
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Typography
+                  variant='caption'
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: 'text.secondary',
+                  }}
+                >
+                  Last snapshot
+                </Typography>
+                <Tooltip title='Download the saved copy — the exact same PDF, no rebuild.'>
+                  <IconButton
+                    component='a'
+                    href={snapshotDownloadUrl(snapshot._id)}
+                    download
+                    size='small'
+                    color='primary'
+                    aria-label={`Download saved copy for ${row.releaseName} ${row.environment}`}
+                  >
+                    <FileDownloadOutlinedIcon fontSize='small' />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              <Typography variant='tableCell' sx={{ fontWeight: 500 }}>
+                {formatSnapshotDate(snapshot.generatedAt)}
+              </Typography>
+              <Typography variant='caption' color='text.disabled'>
+                by {snapshot.generatedBy}
+              </Typography>
+            </Stack>
+          ) : (
+            <Stack spacing={0.25}>
+              <Typography variant='tableCell' color='text.secondary'>
+                No snapshot yet
+              </Typography>
+              <Typography variant='caption' color='text.disabled'>
+                Create one to download and save it here.
+              </Typography>
+            </Stack>
+          )}
+        </Stack>
+
+        {generatable && (
+          <Stack spacing={1}>
+            <Tooltip title='Builds a fresh PDF and replaces the current saved copy.'>
+              <span>
+                <Button
+                  fullWidth
+                  variant='contained'
+                  size='small'
+                  startIcon={
+                    creating ? (
+                      <CircularProgress size={16} color='inherit' />
+                    ) : (
+                      <PostAddOutlinedIcon />
+                    )
+                  }
+                  onClick={() => onCreate(row)}
+                  disabled={rowBusy}
+                  aria-busy={creating}
+                  aria-label={`Create report for ${row.releaseName} ${row.environment}`}
+                >
+                  {creating ? 'Creating…' : 'Create report'}
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title='Editable spreadsheet of the latest data — not saved here.'>
+              <span>
+                <Button
+                  fullWidth
+                  variant='text'
+                  size='small'
+                  startIcon={
+                    exporting ? (
+                      <CircularProgress size={16} color='inherit' />
+                    ) : (
+                      <GridOnOutlinedIcon />
+                    )
+                  }
+                  onClick={() => onExcel(row)}
+                  disabled={rowBusy}
+                  aria-busy={exporting}
+                  aria-label={`Export Excel for ${row.releaseName} ${row.environment}`}
+                >
+                  {exporting ? 'Exporting…' : 'Export Excel'}
+                </Button>
+              </span>
+            </Tooltip>
+          </Stack>
+        )}
+      </Stack>
+    </Paper>
   );
 }
 
 /**
- * Computes pass/fail/pending counts and integer pass rate from a results array.
+ * Reports page client — a single guided surface over every active Release ×
+ * Environment, grouped into release cards. Each environment card can create a
+ * fresh regression report (PDF, downloaded + saved as the latest copy),
+ * re-download the saved copy without rebuilding it, or export an editable,
+ * import-ready Excel spreadsheet (never stored).
  *
- * @param {object[]} results
- * @returns {{ total: number, passed: number, failed: number, pending: number, passRate: number }}
+ * Clean-slate rewrite per spec §2.1, §3.1, §4, §5 (RXR-11849): no Overview,
+ * no Application Breakdown, no single active-selection scoping — the page lists
+ * every combo with per-row, keyed busy state.
+ *
+ * @param {{ initialSnapshots: object[] }} props
+ * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
+ * @see {@link app/(app)/reports/__tests__/buildReportRows.test.js}
  */
-function computeSummary(results) {
-  const total = results.length;
-  const passed = results.filter((r) => r.status === STATUS.PASS).length;
-  const failed = results.filter((r) => r.status === STATUS.FAIL).length;
-  const pending = results.filter((r) => r.status === STATUS.PENDING).length;
-  const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
-  return { total, passed, failed, pending, passRate };
-}
+export default function ReportsClient({ initialSnapshots }) {
+  const { releases } = useReleaseEnv();
 
-/**
- * Reports page client — per-(release, environment) overview, per-app breakdown,
- * and export panel.
- *
- * Version-history table, complete/restore/delete version controls, and free-text
- * env/version inputs removed per the Releases × Environments refactor (RXR-11849).
- *
- * @param {{ applications: object[] }} props
- */
-export default function ReportsClient({ applications }) {
-  const { releaseId, releaseName, environment, activeRelease } =
-    useReleaseEnv();
+  const [snapshots, setSnapshots] = useState(initialSnapshots ?? []);
+  // busy: { [rowKey]: 'create' | 'excel' } — one in-flight action per row.
+  const [busy, setBusy] = useState({});
 
-  const [selectedApp, setSelectedApp] = useState('');
-  // summary: { total, passed, failed, pending, passRate } | null
-  const [summary, setSummary] = useState(null);
-  // appBreakdown: { appId, appName, total, passed, failed, pending, passRate }[]
-  const [appBreakdown, setAppBreakdown] = useState([]);
-  const [dataLoading, setDataLoading] = useState(false);
-  const [generatingExcel, setGeneratingExcel] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const groups = useMemo(
+    () => groupByRelease(buildReportRows(releases, snapshots)),
+    [releases, snapshots],
+  );
 
-  // ── Data fetching ─────────────────────────────────────────────
+  function setRowBusy(key, action) {
+    setBusy((b) => ({ ...b, [key]: action }));
+  }
 
-  const fetchReportData = useCallback(async () => {
-    if (!releaseId || !environment) {
-      setSummary(null);
-      setAppBreakdown([]);
-      return;
-    }
-    setDataLoading(true);
+  function clearRowBusy(key) {
+    setBusy((b) => {
+      const next = { ...b };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function refreshSnapshots() {
+    const updated = await listSnapshots({ silentFailure: true });
+    if (updated) setSnapshots(updated);
+  }
+
+  // ── Create report: generate PDF, download locally, save as latest copy ─────
+
+  /**
+   * Generates a fresh signoff PDF for the row, downloads it locally, then uploads
+   * the same bytes as the latest stored copy. The local download always happens
+   * first; an upload failure surfaces a warning without blocking the file.
+   *
+   * @param {{ releaseId: string, releaseName: string, environment: string }} row
+   * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
+   */
+  async function onCreateReport(row) {
+    const key = rowKey(row.releaseId, row.environment);
+    setRowBusy(key, 'create');
     try {
-      // Fetch the full results list and test-cases list in parallel.
-      // The results route returns all results for (release, env); the test-cases
-      // route carries applicationId per row. We join locally to build the
-      // per-app breakdown without requiring a server-side aggregation.
-      const [results, casesResp] = await Promise.all([
-        listResults(releaseId, { environment }, { silentFailure: true }),
-        listTestCasesForRelease(
-          releaseId,
-          { environment },
-          { silentFailure: true },
-        ),
-      ]);
-
-      if (!results) return;
-
-      setSummary(computeSummary(results));
-
-      // testCasesListResponseSchema: { data: [...], total, page, totalPages }
-      const caseRows = casesResp?.data ?? [];
-      const caseAppMap = Object.fromEntries(
-        caseRows
-          .filter((c) => c.caseId && c.applicationId)
-          .map((c) => [c.caseId, c.applicationId]),
-      );
-
-      // Group results by applicationId.
-      const appGroups = {};
-      for (const result of results) {
-        const appId = caseAppMap[result.caseId];
-        if (!appId) continue;
-        if (!appGroups[appId]) appGroups[appId] = [];
-        appGroups[appId].push(result);
+      const cases = await apiExportData({
+        releaseId: row.releaseId,
+        environment: row.environment,
+      });
+      if (!cases?.length) {
+        showToast(
+          'No test cases to report on for this release and environment',
+          'info',
+        );
+        return;
       }
 
-      // Build name lookup from the server-fetched applications list.
-      const appNameMap = Object.fromEntries(
-        applications.map((a) => [a._id, a.name]),
-      );
+      const doc = await generateSignoffReport({
+        cases,
+        appName: 'All Applications',
+        environment: row.environment,
+        version: row.releaseName ?? '',
+      });
 
-      const rows = Object.entries(appGroups)
-        .map(([appId, appResults]) => ({
-          appId,
-          appName: appNameMap[appId] ?? 'Unknown Application',
-          ...computeSummary(appResults),
-        }))
-        .sort((a, b) => a.appName.localeCompare(b.appName));
+      const safeName = (row.releaseName ?? 'export').replace(/\s+/g, '-');
+      const filename = `regression-signoff-${safeName}-${row.environment}-${dateStamp()}.pdf`;
 
-      setAppBreakdown(rows);
-    } catch {
-      // silentFailure handles per-request errors; top-level catch is defensive.
+      // 1. Download locally first — must succeed before we attempt the upload.
+      doc.save(filename);
+
+      // 2. Upload the same bytes as the latest stored copy.
+      const blob = new Blob([doc.output('blob')], { type: 'application/pdf' });
+      const fd = new FormData();
+      fd.append('file', blob, filename);
+      fd.append('environment', row.environment);
+      fd.append('filename', filename);
+
+      try {
+        await saveSnapshot(row.releaseId, fd);
+        showToast('Regression report created and downloaded', 'success');
+        await refreshSnapshots();
+      } catch {
+        showToast(
+          'Report downloaded, but saving the copy failed — try again',
+          'warning',
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Creating the regression report failed', 'error');
     } finally {
-      setDataLoading(false);
+      clearRowBusy(key);
     }
-  }, [releaseId, environment, applications]);
+  }
 
-  useEffect(() => {
-    setSummary(null);
-    setAppBreakdown([]);
-    fetchReportData();
-  }, [fetchReportData]);
+  // ── Export Excel: client-side xlsx, never stored or audited ────────────────
 
-  // ── Exports ───────────────────────────────────────────────
-
-  async function exportExcel() {
-    setGeneratingExcel(true);
+  /**
+   * Exports the latest saved data for the row as an import-compatible Excel
+   * workbook. Creates no stored copy, audit event, or table change.
+   *
+   * @param {{ releaseId: string, releaseName: string, environment: string }} row
+   * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
+   */
+  async function onExportExcel(row) {
+    const key = rowKey(row.releaseId, row.environment);
+    setRowBusy(key, 'excel');
     try {
-      const query = { releaseId, environment };
-      if (selectedApp) query.applicationId = selectedApp;
-
-      const cases = await apiExportData(query);
+      const cases = await apiExportData({
+        releaseId: row.releaseId,
+        environment: row.environment,
+      });
       if (!cases?.length) {
-        showToast('No test cases to export', 'info');
+        showToast(
+          'No test cases to report on for this release and environment',
+          'info',
+        );
         return;
       }
 
       const { utils, writeFile } = await import('xlsx');
-      const rows = cases.map((tc) => ({
+      const dataRows = cases.map((tc) => ({
         'Test Key': tc.testKey,
         'Platform/Application': tc.applicationName,
         Module: tc.moduleName,
@@ -207,15 +443,11 @@ export default function ReportsClient({ applications }) {
         Environment: tc.environment,
       }));
 
-      const appLabel = selectedApp
-        ? applications.find((a) => a._id === selectedApp)?.name
-        : 'All';
-
       const summaryRows = [
         ['Metric', 'Value'],
-        ['Application', appLabel],
-        ['Release', releaseName ?? ''],
-        ['Environment', environment ?? ''],
+        ['Application', 'All'],
+        ['Release', row.releaseName ?? ''],
+        ['Environment', row.environment],
         ['Total Test Cases', cases.length],
         [
           'Passed',
@@ -240,358 +472,96 @@ export default function ReportsClient({ applications }) {
       wsSummary['!cols'] = [{ wch: 24 }, { wch: 30 }];
       utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-      const wsData = utils.json_to_sheet(rows);
+      const wsData = utils.json_to_sheet(dataRows);
       wsData['!cols'] = [
         14, 22, 18, 24, 18, 18, 24, 10, 14, 10, 30, 12, 14, 14,
       ].map((wch) => ({ wch }));
       utils.book_append_sheet(wb, wsData, 'Test Cases');
 
-      const safeName = (releaseName ?? 'export').replace(/\s+/g, '-');
+      const safeName = (row.releaseName ?? 'export').replace(/\s+/g, '-');
       writeFile(
         wb,
-        `regression-report-${safeName}-${environment ?? ''}-${dateStamp()}.xlsx`,
+        `regression-report-${safeName}-${row.environment}-${dateStamp()}.xlsx`,
       );
       showToast('Excel report exported', 'success');
     } catch (e) {
       console.error(e);
       showToast('Export failed', 'error');
     } finally {
-      setGeneratingExcel(false);
+      clearRowBusy(key);
     }
   }
 
-  async function exportPdf() {
-    setGeneratingPdf(true);
-    try {
-      const query = { releaseId, environment };
-      if (selectedApp) query.applicationId = selectedApp;
-
-      const cases = await apiExportData(query);
-      if (!cases?.length) {
-        showToast('No test cases to export', 'info');
-        return;
-      }
-
-      const appName = selectedApp
-        ? applications.find((a) => a._id === selectedApp)?.name
-        : 'All Applications';
-
-      const doc = await generateSignoffReport({
-        cases,
-        appName,
-        environment: environment ?? '',
-        version: releaseName ?? '',
-      });
-
-      const safeName = (releaseName ?? 'export').replace(/\s+/g, '-');
-      doc.save(
-        `regression-signoff-${safeName}-${environment ?? ''}-${dateStamp()}.pdf`,
-      );
-      showToast('PDF exported', 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('PDF export failed', 'error');
-    } finally {
-      setGeneratingPdf(false);
-    }
-  }
-
-  // ── Render ────────────────────────────────────────────────
-
-  const hasContext = Boolean(releaseId && environment);
-  const isArchived = Boolean(activeRelease?.archived);
-
-  const metricCards = [
-    { label: 'Total', value: summary?.total, color: 'text.primary' },
-    { label: 'Passed', value: summary?.passed, color: 'success.main' },
-    {
-      label: 'Failed',
-      value: summary?.failed,
-      color: (summary?.failed ?? 0) > 0 ? 'error.main' : 'text.disabled',
-    },
-    { label: 'Pending', value: summary?.pending, color: 'warning.main' },
-    {
-      label: 'Pass Rate',
-      value: summary ? `${summary.passRate}%` : null,
-      color: (summary?.passRate ?? 0) >= 80 ? 'success.main' : 'warning.main',
-    },
-  ];
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <>
-      <ToastProvider />
-      <Stack spacing={3}>
-        <PageHeader
-          eyebrow='Exports'
-          title='Reports'
-          sub='Overview and Excel / PDF exports for the active release and environment'
-        />
+    <Stack spacing={3}>
+      <PageHeader
+        title='Reports'
+        sub='Signed-off PDF reports for every release and environment, kept here for re-download — plus editable Excel exports.'
+      />
 
-        {/* Archived warning */}
-        {isArchived && (
-          <Alert severity='warning' variant='outlined'>
-            This release is archived — exports are still available but no
-            results can be recorded.
-          </Alert>
-        )}
+      <Alert severity='info'>
+        <AlertTitle>How reports work</AlertTitle>
+        Pick a release and environment below and select{' '}
+        <strong>Create report</strong>: we build a fresh PDF from the latest
+        results, download it to you right away, and keep a copy here — so you or
+        a teammate can re-download the exact same file later with{' '}
+        <strong>Download copy</strong>, without rebuilding it. Creating again
+        replaces the kept copy. Prefer the raw data?{' '}
+        <strong>Export Excel</strong> gives you an editable, import-ready
+        spreadsheet that is not saved here.
+      </Alert>
 
-        {/* ── Overview panel ───────────────────────────────────────── */}
-        <Panel
-          title='Overview'
-          headerActions={
-            hasContext ? (
-              <Stack
-                direction='row'
-                spacing={1}
-                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-              >
-                <Typography
-                  variant='mono'
-                  component='span'
-                  sx={{
-                    bgcolor: teal10,
-                    border: `1px solid ${teal30}`,
-                    borderRadius: 0.75,
-                    px: 1.25,
-                    py: 0.25,
-                    color: 'success.dark',
-                  }}
-                >
-                  {releaseName}
-                </Typography>
-                <Chip
-                  label={environment}
-                  size='small'
-                  sx={{
-                    bgcolor: teal07,
-                    color: 'primary.dark',
-                    border: `1px solid ${teal30}`,
-                  }}
-                />
-              </Stack>
-            ) : null
-          }
-        >
-          {!hasContext ? (
-            <Stack
-              spacing={1}
-              sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
-            >
-              <AssessmentOutlinedIcon
-                sx={{ fontSize: 48, color: 'text.disabled' }}
-              />
-              <Typography variant='pageTitle' sx={{ fontSize: 18 }}>
-                No release selected
-              </Typography>
-              <Typography variant='pageSub' color='text.disabled'>
-                Select a release and environment in the bar above to view
-                metrics.
-              </Typography>
-            </Stack>
-          ) : (
-            <Stack spacing={2} sx={{ p: 3 }}>
-              <Grid container spacing={1.5}>
-                {metricCards.map(({ label, value, color }) => (
-                  <Grid key={label} size={{ xs: 6, sm: 4, md: 'grow' }}>
-                    <MetricCard
-                      label={label}
-                      value={dataLoading ? '…' : value}
-                      color={color}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-
-              {!dataLoading && summary && (
-                <PassRateBar
-                  value={summary.passRate}
-                  label={`Overall pass rate: ${summary.passRate}%`}
-                />
-              )}
-            </Stack>
-          )}
-        </Panel>
-
-        {/* ── Application Breakdown panel ───────────────────────────── */}
-        {hasContext && (
-          <Panel title='Application Breakdown'>
-            {dataLoading ? (
-              <Stack sx={{ py: 3, alignItems: 'center' }}>
-                <Typography variant='tableCell' color='text.disabled'>
-                  Loading…
-                </Typography>
-              </Stack>
-            ) : appBreakdown.length === 0 ? (
-              <Stack
-                spacing={1}
-                sx={{ py: 5, alignItems: 'center', textAlign: 'center' }}
-              >
-                <AssessmentOutlinedIcon
+      {groups.length === 0 ? (
+        <Panel title='Regression reports'>
+          <Stack sx={{ p: 3 }}>
+            <EmptyState
+              icon={
+                <DescriptionOutlinedIcon
                   sx={{ fontSize: 48, color: 'text.disabled' }}
                 />
-                <Typography variant='pageTitle' sx={{ fontSize: 16 }}>
-                  No test cases yet
-                </Typography>
-                <Typography variant='pageSub' color='text.disabled'>
-                  Import test cases into this release to see per-application
-                  metrics.
-                </Typography>
-                <Button variant='contained' href='/import-cases'>
-                  Import Cases
-                </Button>
-              </Stack>
-            ) : (
-              <TableContainer>
-                <Table
-                  size='small'
-                  stickyHeader
-                  aria-label='Application breakdown'
-                >
-                  <TableHead
-                    sx={{
-                      '& th': {
-                        bgcolor: 'action.selected',
-                        borderBottomWidth: 2,
-                        borderBottomColor: 'divider',
-                      },
-                    }}
-                  >
-                    <TableRow>
-                      <TableCell>Application</TableCell>
-                      <TableCell align='center'>Total</TableCell>
-                      <TableCell align='center' sx={{ color: 'success.main' }}>
-                        Pass
-                      </TableCell>
-                      <TableCell align='center' sx={{ color: 'error.main' }}>
-                        Fail
-                      </TableCell>
-                      <TableCell align='center' sx={{ color: 'warning.main' }}>
-                        Pending
-                      </TableCell>
-                      <TableCell align='center'>Pass Rate</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {appBreakdown.map((row) => (
-                      <TableRow key={row.appId} hover>
-                        <TableCell>
-                          <Typography variant='tableCell' fontWeight={500}>
-                            {row.appName}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Typography variant='tableCell'>
-                            {row.total}
-                          </Typography>
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{ color: 'success.main' }}
-                        >
-                          <Typography variant='tableCell'>
-                            {row.passed}
-                          </Typography>
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{
-                            color:
-                              row.failed > 0 ? 'error.main' : 'text.disabled',
-                          }}
-                        >
-                          <Typography variant='tableCell'>
-                            {row.failed}
-                          </Typography>
-                        </TableCell>
-                        <TableCell
-                          align='center'
-                          sx={{
-                            color:
-                              row.pending > 0
-                                ? 'warning.main'
-                                : 'text.disabled',
-                          }}
-                        >
-                          <Typography variant='tableCell'>
-                            {row.pending}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <PassRateBar
-                            value={row.passRate}
-                            label={`${row.appName} pass rate: ${row.passRate}%`}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Panel>
-        )}
-
-        {/* ── Export panel ────────────────────────────────────────────── */}
-        <Panel
-          title='Export'
-          headerActions={
-            <FileDownloadOutlinedIcon
-              sx={{ color: 'text.disabled', fontSize: 20 }}
-            />
-          }
-        >
-          <Stack spacing={1.75} sx={{ p: 3 }}>
-            {!hasContext ? (
-              <Typography variant='tableCell' color='text.disabled'>
-                Select a release and environment above to enable exports.
+              }
+              title='No releases yet'
+            >
+              <Typography variant='pageSub' color='text.disabled'>
+                Create a release to start generating regression reports.
               </Typography>
-            ) : (
-              <>
-                <Stack direction='row' spacing={1.75} sx={{ flexWrap: 'wrap' }}>
-                  <TextField
-                    select
-                    label='Application / Scope'
-                    value={selectedApp}
-                    onChange={(e) => setSelectedApp(e.target.value)}
-                    sx={{ minWidth: 200, flex: 1, maxWidth: 360 }}
-                    slotProps={{
-                      inputLabel: { shrink: true },
-                      input: { notched: true },
-                      select: { displayEmpty: true },
-                    }}
-                  >
-                    <MenuItem value=''>All Applications</MenuItem>
-                    {applications.map((a) => (
-                      <MenuItem key={a._id} value={a._id}>
-                        {a.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Stack>
-
-                <Stack direction='row' spacing={1.25}>
-                  <Button
-                    variant='outlined'
-                    onClick={exportExcel}
-                    disabled={generatingExcel}
-                    aria-busy={generatingExcel}
-                  >
-                    {generatingExcel ? 'Exporting…' : 'Export Excel'}
-                  </Button>
-                  <Button
-                    variant='contained'
-                    onClick={exportPdf}
-                    disabled={generatingPdf}
-                    aria-busy={generatingPdf}
-                  >
-                    {generatingPdf ? 'Generating…' : 'Export PDF Signoff'}
-                  </Button>
-                </Stack>
-              </>
-            )}
+              <Button component='a' href='/releases' variant='contained'>
+                Go to releases
+              </Button>
+            </EmptyState>
           </Stack>
         </Panel>
-      </Stack>
-    </>
+      ) : (
+        groups.map((group) => (
+          <Panel
+            key={group.releaseId}
+            title={group.releaseName}
+            headerActions={
+              group.generatable ? null : (
+                <Chip label='Archived' size='small' variant='outlined' />
+              )
+            }
+          >
+            <Grid container spacing={2} sx={{ p: 3 }}>
+              {group.rows.map((row) => (
+                <Grid
+                  key={rowKey(row.releaseId, row.environment)}
+                  size={{ xs: 12, sm: 6, md: 4 }}
+                >
+                  <ReportCard
+                    row={row}
+                    busy={busy[rowKey(row.releaseId, row.environment)]}
+                    onCreate={onCreateReport}
+                    onExcel={onExportExcel}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Panel>
+        ))
+      )}
+    </Stack>
   );
 }
