@@ -1,5 +1,5 @@
 'use client';
-import { Box, Checkbox, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Checkbox, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { PRIORITIES, STATUS } from '@/lib/constants';
 import { formatTcId } from '@/utils/formatters';
 
@@ -13,6 +13,37 @@ const PRIORITY_BAR = {
   [PRIORITIES.MEDIUM]: 'warning.main',
   [PRIORITIES.LOW]: 'text.disabled',
 };
+const META_CHIP_SX = {
+  height: 18,
+  borderRadius: 1,
+  bgcolor: 'background.paper',
+  borderColor: 'divider',
+  color: 'text.secondary',
+  '& .MuiChip-label': {
+    px: 0.6,
+    fontSize: 11,
+    fontWeight: 500,
+    lineHeight: 1.2,
+    textTransform: 'none',
+  },
+};
+
+function MetadataChip({ label, value, color = 'text.secondary', empty }) {
+  return (
+    <Chip
+      aria-label={label}
+      variant='outlined'
+      size='small'
+      label={value}
+      sx={{
+        ...META_CHIP_SX,
+        color,
+        borderColor: empty ? 'pending.border' : 'divider',
+        bgcolor: empty ? 'pending.light' : 'background.paper',
+      }}
+    />
+  );
+}
 
 /**
  * Single row in the master list. Checkbox for bulk selection + priority bar
@@ -81,7 +112,7 @@ export default function TestCaseListItem({
         />
       </Tooltip>
 
-      <Stack sx={{ flex: 1, minWidth: 0 }}>
+      <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
         <Stack
           direction='row'
           spacing={0.5}
@@ -101,39 +132,28 @@ export default function TestCaseListItem({
 
         <Stack
           direction='row'
-          spacing={0.5}
+          spacing={0.75}
           sx={{ alignItems: 'center', flexWrap: 'wrap' }}
         >
           {tc.moduleName && (
-            <Tooltip title='Application / Module'>
-              <Typography
-                component='span'
-                variant='tableCell'
-                color='text.disabled'
-              >
-                {tc.applicationName}/{tc.moduleName} ·{' '}
-              </Typography>
-            </Tooltip>
+            <MetadataChip
+              label='Application and module'
+              value={`${tc.applicationName} / ${tc.moduleName}`}
+              color='text.primary'
+            />
           )}
-          <Tooltip title='Assignee'>
-            <Typography
-              component='span'
-              variant='tableCell'
-              color={tc.assignedTo ? 'text.secondary' : 'text.disabled'}
-            >
-              {tc.assignedTo || 'unassigned'}
-            </Typography>
-          </Tooltip>
+          <MetadataChip
+            label='Assignee'
+            value={tc.assignedTo || 'Unassigned'}
+            color={tc.assignedTo ? 'text.secondary' : 'pending.main'}
+            empty={!tc.assignedTo}
+          />
           {tc.testedBy && tc.testedBy !== tc.assignedTo && (
-            <Tooltip title='Tested by'>
-              <Typography
-                component='span'
-                variant='tableCell'
-                color='text.secondary'
-              >
-                {' · '}tested by {tc.testedBy}
-              </Typography>
-            </Tooltip>
+            <MetadataChip
+              label='Tester'
+              value={tc.testedBy}
+              color='success.main'
+            />
           )}
         </Stack>
       </Stack>
