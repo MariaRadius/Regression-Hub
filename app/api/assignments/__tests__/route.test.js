@@ -35,13 +35,13 @@ beforeEach(() => {
 });
 
 describe('assignments route', () => {
-  it('GET lists assignments', async () => {
+  it('GET lists assignments for a release', async () => {
     listAssignments.mockResolvedValue([]);
-    const res = await GET(new Request('http://x/api/assignments?view=mine'));
+    const res = await GET(new Request('http://x/api/assignments?releaseId=r1'));
     expect(res.status).toBe(200);
     expect(listAssignments).toHaveBeenCalledWith(db, 't1', {
-      view: 'mine',
-      userName: 'Alice',
+      releaseId: 'r1',
+      assignedTo: undefined,
     });
   });
 

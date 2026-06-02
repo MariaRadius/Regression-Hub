@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server';
 import { createAssignment, listAssignments } from '@/lib/db/assignmentsData';
 import { withTeam } from '@/lib/server/withTeam';
 
-export const GET = withTeam(async (request, _ctx, { teamId, db, session }) => {
-  const view = new URL(request.url).searchParams.get('view') || 'mine';
-  const enriched = await listAssignments(db, teamId, {
-    view,
-    userName: session.user.name,
-  });
+export const GET = withTeam(async (request, _ctx, { teamId, db }) => {
+  const params = new URL(request.url).searchParams;
+  const releaseId = params.get('releaseId');
+  const assignedTo = params.get('assignedTo') || undefined;
+  const enriched = await listAssignments(db, teamId, { releaseId, assignedTo });
   return NextResponse.json(enriched);
 });
 

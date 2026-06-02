@@ -59,9 +59,12 @@ function writeSessionStorage(releaseId, environment) {
 
 /**
  * Resolves the initial active release + environment from:
- * 1. A valid stored session-storage context (validated against `releases`).
- * 2. An SSR seed object `{ releaseId, environment }` validated the same way.
- * 3. Fallback: the first (newest) non-archived release and its first environment.
+ * 1. An SSR seed object `{ releaseId, environment }` validated against `releases`.
+ * 2. Fallback: the first (newest) non-archived release and its first environment.
+ *
+ * Deliberately does NOT read sessionStorage: initial state must be identical on
+ * server and client to avoid a hydration mismatch. The stored context is applied
+ * after mount by the provider's hydration-guard effect.
  *
  * @param {object[]} releases
  * @param {{ releaseId?: string, environment?: string }|null} ssrSeed
@@ -69,13 +72,6 @@ function writeSessionStorage(releaseId, environment) {
  */
 function resolveInitial(releases, ssrSeed) {
   const nonArchived = releases?.filter((r) => !r.archived) ?? [];
-
-  // Try sessionStorage first (client-only — will be null on SSR)
-  const stored = readSessionStorage(nonArchived);
-  if (stored) {
-    const release = nonArchived.find((r) => r._id === stored.releaseId) ?? null;
-    if (release) return { release, environment: stored.environment };
-  }
 
   // Try SSR seed
   if (ssrSeed?.releaseId && ssrSeed?.environment) {
