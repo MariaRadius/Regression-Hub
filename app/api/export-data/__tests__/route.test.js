@@ -38,22 +38,7 @@ describe('GET /api/export-data', () => {
     });
   });
 
-  it('includes applicationId filter when provided', async () => {
-    getExportData.mockResolvedValue([]);
-    const res = await GET(
-      new Request(
-        'http://x/api/export-data?releaseId=6642f000000000000000001a&environment=QA&applicationId=app1',
-      ),
-    );
-    expect(res.status).toBe(200);
-    expect(getExportData).toHaveBeenCalledWith(db, 't1', {
-      releaseId: '6642f000000000000000001a',
-      environment: 'QA',
-      applicationId: 'app1',
-    });
-  });
-
-  it('omits applicationId from db call when not provided', async () => {
+  it('passes empty strings when params are absent', async () => {
     getExportData.mockResolvedValue([]);
     await GET(
       new Request('http://x/api/export-data?releaseId=r1&environment=Sandbox'),

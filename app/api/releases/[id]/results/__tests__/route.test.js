@@ -50,6 +50,10 @@ vi.mock('@/lib/db/testResultsData', () => ({
 }));
 vi.mock('@/lib/db/releasesData', () => ({ getRelease }));
 vi.mock('@/lib/rateLimit', () => ({ checkRateLimit }));
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
 
 import { GET, PATCH, POST } from '../route';
 
@@ -102,7 +106,7 @@ describe('POST /api/releases/[id]/results — BR-15 (QA forces self)', () => {
     const req = new Request('http://x', {
       method: 'POST',
       body: JSON.stringify({
-        caseId: 'case-1',
+        tcId: '6642f000000000000000abc1',
         environment: 'QA',
         status: 'Pass',
         testedBy: 'SomeoneElse', // should be silently overridden for QA
@@ -114,7 +118,7 @@ describe('POST /api/releases/[id]/results — BR-15 (QA forces self)', () => {
       db,
       't1',
       RELEASE_ID,
-      'case-1',
+      '6642f000000000000000abc1',
       'QA',
       expect.objectContaining({ status: 'Pass', testedBy: 'Alice' }),
     );
@@ -123,7 +127,7 @@ describe('POST /api/releases/[id]/results — BR-15 (QA forces self)', () => {
   it('returns 400 when required fields are missing', async () => {
     const req = new Request('http://x', {
       method: 'POST',
-      body: JSON.stringify({ environment: 'QA' }), // missing caseId and status
+      body: JSON.stringify({ environment: 'QA' }), // missing tcId and status
     });
     const res = await POST(req, PARAMS);
     expect(res.status).toBe(400);
@@ -135,7 +139,7 @@ describe('POST /api/releases/[id]/results — BR-15 (QA forces self)', () => {
     const req = new Request('http://x', {
       method: 'POST',
       body: JSON.stringify({
-        caseId: 'case-1',
+        tcId: '6642f000000000000000abc1',
         environment: 'QA',
         status: 'Pass',
       }),
@@ -150,7 +154,7 @@ describe('POST /api/releases/[id]/results — BR-15 (QA forces self)', () => {
     const req = new Request('http://x', {
       method: 'POST',
       body: JSON.stringify({
-        caseId: 'case-1',
+        tcId: '6642f000000000000000abc1',
         environment: 'QA',
         status: 'Pass',
       }),
@@ -168,7 +172,7 @@ describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
       body: JSON.stringify({
         environment: 'QA',
         status: 'Pass',
-        caseIds: ['c1', 'c2'],
+        tcIds: ['6642f000000000000000abc1', '6642f000000000000000abc2'],
       }),
     });
     const res = await PATCH(req, PARAMS);
@@ -179,16 +183,22 @@ describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
       RELEASE_ID,
       'QA',
       expect.arrayContaining([
-        expect.objectContaining({ caseId: 'c1', status: 'Pass' }),
-        expect.objectContaining({ caseId: 'c2', status: 'Pass' }),
+        expect.objectContaining({
+          tcId: '6642f000000000000000abc1',
+          status: 'Pass',
+        }),
+        expect.objectContaining({
+          tcId: '6642f000000000000000abc2',
+          status: 'Pass',
+        }),
       ]),
     );
   });
 
-  it('returns 400 when caseIds is empty', async () => {
+  it('returns 400 when tcIds is empty', async () => {
     const req = new Request('http://x', {
       method: 'PATCH',
-      body: JSON.stringify({ environment: 'QA', status: 'Pass', caseIds: [] }),
+      body: JSON.stringify({ environment: 'QA', status: 'Pass', tcIds: [] }),
     });
     const res = await PATCH(req, PARAMS);
     expect(res.status).toBe(400);
@@ -202,7 +212,7 @@ describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
       body: JSON.stringify({
         environment: 'QA',
         status: 'Pass',
-        caseIds: ['c1'],
+        tcIds: ['6642f000000000000000abc1'],
       }),
     });
     const res = await PATCH(req, PARAMS);
@@ -217,7 +227,7 @@ describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
       body: JSON.stringify({
         environment: 'QA',
         status: 'Pass',
-        caseIds: ['c1'],
+        tcIds: ['6642f000000000000000abc1'],
       }),
     });
     const res = await PATCH(req, PARAMS);

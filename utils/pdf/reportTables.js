@@ -34,7 +34,9 @@ export const failedCasesRow = (t, i) => [
   i + 1,
   t.applicationName || '—',
   t.moduleName || '—',
-  t.testCaseId ? `${t.testCaseId} — ${t.testCase || ''}` : t.testCase || '—',
+  t.externalCaseId
+    ? `${t.externalCaseId} — ${t.testCase || ''}`
+    : t.testCase || '—',
   t.notes || '—',
   t.testedBy || '—',
 ];

@@ -32,6 +32,8 @@ export const GET = withTeam(async (request, { params }, { teamId, db }) => {
     applicationId: searchParams.get('applicationId') || '',
     moduleId: searchParams.get('moduleId') || '',
     status: searchParams.get('status') || '',
+    testedBy: searchParams.get('testedBy') || '',
+    assignedTo: searchParams.get('assignedTo') || '',
     priority: searchParams.get('priority') || '',
     jiraStory: searchParams.get('jiraStory') || '',
     testCase: searchParams.get('testCase') || '',

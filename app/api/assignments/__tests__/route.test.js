@@ -26,6 +26,10 @@ vi.mock('@/lib/db/assignmentsData', () => ({
   listAssignments,
   createAssignment,
 }));
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
 
 import { GET, POST } from '../route';
 
@@ -55,8 +59,8 @@ describe('assignments route', () => {
       method: 'POST',
       body: JSON.stringify({
         assignedTo: 'Bob',
-        type: 'selection',
-        testCaseIds: ['1', '2'],
+        releaseId: 'r1',
+        tcIds: ['abc001', 'abc002'],
       }),
     });
     const res = await POST(req);

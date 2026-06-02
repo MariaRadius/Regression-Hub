@@ -26,12 +26,12 @@ export default function TestCaseDetailPanel({
   onAction,
   onClose,
 }) {
-  const caseId = displayCase?.caseId ?? null;
+  const tcId = displayCase?._id ?? null;
   const [envResults, setEnvResults] = useState(null);
   const [envLoading, setEnvLoading] = useState(true);
 
   useEffect(() => {
-    if (!releaseId || !caseId || !environments?.length) {
+    if (!releaseId || !tcId || !environments?.length) {
       setEnvLoading(false);
       return;
     }
@@ -40,9 +40,9 @@ export default function TestCaseDetailPanel({
 
     Promise.all(
       environments.map((env) =>
-        listResults(releaseId, { environment: env, caseId }).then((rows) => ({
+        listResults(releaseId, { environment: env, tcId }).then((rows) => ({
           env,
-          result: rows.find((r) => r.caseId === caseId) ?? null,
+          result: rows.find((r) => r.tcId === tcId) ?? null,
         })),
       ),
     )
@@ -59,7 +59,7 @@ export default function TestCaseDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [releaseId, caseId, environments]);
+  }, [releaseId, tcId, environments]);
 
   return (
     <>

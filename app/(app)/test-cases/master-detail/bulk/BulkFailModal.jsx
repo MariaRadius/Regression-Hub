@@ -12,7 +12,7 @@ import BulkStatusFields from './BulkStatusFields';
 /**
  * Bulk mark as Fail: sets status, notes (required), jiraStory,
  * testedBy, testedOn.
- * Sends { releaseId, environment } for the new results model.
+ * Sends { releaseId, environment, tcIds } for the new results model.
  * BR-15: QA testedBy is locked to self; admin may pick any active QA user.
  */
 export default function BulkFailModal({
@@ -57,7 +57,7 @@ export default function BulkFailModal({
         releaseId,
         environment,
         status: STATUS.FAIL,
-        caseIds: selection.map((s) => s.caseId),
+        tcIds: selection.map((s) => s.tcId),
         testedBy,
         testedOn,
         notes,

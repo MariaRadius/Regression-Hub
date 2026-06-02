@@ -26,7 +26,7 @@ const STATUS_DOT = {
  * Renders: header (title + close), selection summary box (first 6 + "N more"),
  * optional helper note, children (modal-specific fields), footer (Cancel + Confirm).
  *
- * Selection items are expected to have `testKey` (new model) or `caseId` for display.
+ * Selection items are expected to have `testKey` for display.
  */
 export default function BulkModalShell({
   open,
@@ -121,7 +121,7 @@ export default function BulkModalShell({
                     variant='mono'
                     sx={{ flexShrink: 0, color: 'text.secondary' }}
                   >
-                    {s.testKey || s.caseId || '—'}
+                    {s.testKey || '—'}
                   </Typography>
                   <Typography
                     variant='tableCell'

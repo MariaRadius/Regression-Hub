@@ -14,15 +14,20 @@ import { withAdmin, withTeam } from '@/lib/server/withTeam';
  *
  * Returns a single test case. Open to admin and QA.
  *
- * Note: `caseId` here is the testCase MongoDB `_id`, not the lineage `caseId`
- * field. The URL segment name is `[caseId]` per the plan but the DB lookup uses
- * the document `_id`.
+ * Note: `tcId` is the testCase MongoDB `_id` extracted from the `[caseId]` URL
+ * segment (segment name is kept for routing; the variable is renamed to `tcId`
+ * to match the DB field).
  *
  * @see {@link app/api/releases/[id]/test-cases/[caseId]/__tests__/route.test.js}
  */
-export const GET = withTeam(async (_request, { params }, { teamId, db }) => {
-  const { caseId } = await params;
-  const tc = await getTestCase(db, teamId, caseId);
+export const GET = withTeam(async (request, { params }, { teamId, db }) => {
+  const { id: releaseId, caseId: tcId } = await params;
+  const { searchParams } = new URL(request.url);
+  const environment = searchParams.get('environment') || '';
+  const tc = await getTestCase(db, teamId, tcId, {
+    releaseId,
+    environment: environment || undefined,
+  });
   return NextResponse.json(tc);
 });
 
@@ -40,7 +45,7 @@ export const GET = withTeam(async (_request, { params }, { teamId, db }) => {
  */
 export const PATCH = withAdmin(
   async (request, { params }, { teamId, db, session }) => {
-    const { caseId } = await params;
+    const { caseId: tcId } = await params;
     const body = await request.json();
 
     const parsed = updateTestCaseBodySchema.safeParse(body);
@@ -51,7 +56,7 @@ export const PATCH = withAdmin(
       );
     }
 
-    const result = await updateTestCase(db, teamId, caseId, parsed.data, {
+    const result = await updateTestCase(db, teamId, tcId, parsed.data, {
       actor: session.user.name,
     });
 
@@ -74,7 +79,7 @@ export const PATCH = withAdmin(
  */
 export const DELETE = withAdmin(
   async (request, { params }, { teamId, db, session }) => {
-    const { caseId } = await params;
+    const { caseId: tcId } = await params;
     const body = await request.json().catch(() => ({}));
 
     if (body?.confirm !== 'DELETE') {
@@ -84,7 +89,7 @@ export const DELETE = withAdmin(
       );
     }
 
-    const result = await deleteTestCase(db, teamId, caseId, {
+    const result = await deleteTestCase(db, teamId, tcId, {
       actor: session.user.name,
     });
 

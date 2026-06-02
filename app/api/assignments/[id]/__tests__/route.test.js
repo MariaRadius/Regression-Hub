@@ -24,6 +24,10 @@ vi.mock('@/lib/server/withTeam', () => ({
 vi.mock('@/lib/db/assignmentsData', () => ({
   deleteAssignment,
 }));
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
 
 import { DELETE } from '../route';
 

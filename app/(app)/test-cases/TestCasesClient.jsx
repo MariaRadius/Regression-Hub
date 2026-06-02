@@ -268,7 +268,11 @@ function TestCasesPage({ user }) {
           setSingleActionId(null);
           selection.clear();
           if (activeId && releaseId) {
-            getTestCaseForRelease(releaseId, activeId)
+            getTestCaseForRelease(
+              releaseId,
+              activeId,
+              environment ? { environment } : {},
+            )
               .then(setActiveCase)
               .catch(() => {});
           }

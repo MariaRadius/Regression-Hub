@@ -207,7 +207,7 @@ export default function ImportConfirmationDialog({
                   .slice(0, 20)
                   .map((r) => (
                     <Typography
-                      key={r.caseId ?? r.testKey ?? r.rowIndex}
+                      key={r.testKey ?? r.rowIndex}
                       variant='body2'
                       color='text.secondary'
                     >

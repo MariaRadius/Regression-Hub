@@ -19,7 +19,7 @@ const REL_B = { _id: 'b', name: 'Bravo 2.0', environments: ['QA'] };
 
 function snap(overrides) {
   return {
-    _id: 's-' + overrides.releaseId + '-' + overrides.environment,
+    _id: `s-${overrides.releaseId}-${overrides.environment}`,
     releaseId: overrides.releaseId,
     releaseName: overrides.releaseName ?? 'snap-name',
     environment: overrides.environment,

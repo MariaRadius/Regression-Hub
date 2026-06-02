@@ -7,9 +7,6 @@ export const GET = withTeam(async (request, _ctx, { teamId, db }) => {
   const query = {
     releaseId: searchParams.get('releaseId') || '',
     environment: searchParams.get('environment') || '',
-    ...(searchParams.get('applicationId')
-      ? { applicationId: searchParams.get('applicationId') }
-      : {}),
   };
   const enriched = await getExportData(db, teamId, query);
   return NextResponse.json(enriched);

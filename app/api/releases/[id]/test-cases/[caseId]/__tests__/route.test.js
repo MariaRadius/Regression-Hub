@@ -59,7 +59,24 @@ describe('GET /api/releases/[id]/test-cases/[caseId]', () => {
     const res = await GET(new Request('http://x'), PARAMS);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ name: 'Login test' });
-    expect(getTestCase).toHaveBeenCalledWith(db, 't1', 'tc123');
+    expect(getTestCase).toHaveBeenCalledWith(
+      db,
+      't1',
+      'tc123',
+      expect.any(Object),
+    );
+  });
+
+  it('forwards environment query param to getTestCase', async () => {
+    getTestCase.mockResolvedValue({ _id: 'tc123', status: 'Pass' });
+    const res = await GET(new Request('http://x?environment=QA'), PARAMS);
+    expect(res.status).toBe(200);
+    expect(getTestCase).toHaveBeenCalledWith(
+      db,
+      't1',
+      'tc123',
+      expect.objectContaining({ environment: 'QA' }),
+    );
   });
 });
 

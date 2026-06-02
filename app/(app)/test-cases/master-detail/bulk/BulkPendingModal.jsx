@@ -8,7 +8,7 @@ import BulkModalShell from './BulkModalShell';
 
 /**
  * Bulk mark as Pending: clears tester/date. Requires a reason.
- * Sends { releaseId, environment } for the new results model.
+ * Sends { releaseId, environment, tcIds } for the new results model.
  */
 export default function BulkPendingModal({
   open,
@@ -34,7 +34,7 @@ export default function BulkPendingModal({
         releaseId,
         environment,
         status: STATUS.PENDING,
-        caseIds: selection.map((s) => s.caseId),
+        tcIds: selection.map((s) => s.tcId),
         reason: reason.trim(),
       });
       showToast(`Marked ${selection.length} as Pending`, 'success');

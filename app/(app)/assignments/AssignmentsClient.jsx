@@ -42,7 +42,7 @@ import {
 import { ENVIRONMENT_SENTINEL } from '@/lib/constants';
 
 const EMPTY_FORM = {
-  caseId: '',
+  tcId: '',
   testKey: '',
   caseName: '',
   assignedTo: '',
@@ -157,7 +157,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
 
   async function handleCreate(e) {
     e.preventDefault();
-    if (!form.caseId) {
+    if (!form.tcId) {
       showToast('Select a test case', 'info');
       return;
     }
@@ -169,7 +169,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
     setSaving(true);
     try {
       await apiCreateAssignment({
-        caseId: form.caseId,
+        tcIds: [form.tcId],
         releaseId,
         assignedTo: form.assignedTo,
         environment:
@@ -361,12 +361,12 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
                 size='small'
                 fullWidth
                 label='Test Case'
-                value={form.caseId}
+                value={form.tcId}
                 onChange={(e) => {
-                  const tc = testCases.find((c) => c.caseId === e.target.value);
+                  const tc = testCases.find((c) => c._id === e.target.value);
                   setForm((f) => ({
                     ...f,
-                    caseId: e.target.value,
+                    tcId: e.target.value,
                     testKey: tc?.testKey ?? '',
                     // listTestCases returns 'testCase' as the display name field
                     caseName: tc?.testCase ?? '',
@@ -380,7 +380,7 @@ export default function AssignmentsClient({ isAdmin, qaUsers }) {
                   {loadingCases ? 'Loading…' : 'Select a test case…'}
                 </MenuItem>
                 {testCases.map((tc) => (
-                  <MenuItem key={tc.caseId} value={tc.caseId}>
+                  <MenuItem key={tc._id} value={tc._id}>
                     <Stack
                       direction='row'
                       spacing={1}
@@ -496,7 +496,7 @@ function AssignmentRow({ assignment: a, isAdmin, isArchived, onDelete }) {
               {a.testKey}
             </Typography>
           )}
-          <Typography variant='tableCell'>{a.caseName || a.caseId}</Typography>
+          <Typography variant='tableCell'>{a.caseName || a.testKey}</Typography>
         </Stack>
       </TableCell>
 

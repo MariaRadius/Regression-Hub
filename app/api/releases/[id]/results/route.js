@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { ROLES } from '@/lib/constants';
 import { getRelease } from '@/lib/db/releasesData';
@@ -102,7 +103,7 @@ export const GET = withTeam(async (request, { params }, { teamId, db }) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Records a single (caseId × environment) result for the release.
+ * Records a single (tcId × environment) result for the release.
  *
  * BR-15: QA users are forced to `testedBy = self`. Admins may supply any
  * active QA user's name.
@@ -110,7 +111,7 @@ export const GET = withTeam(async (request, { params }, { teamId, db }) => {
  * `expectedResult` on the test case.
  *
  * Body (application/json):
- *   caseId, releaseId, environment, status, testedBy?, testedOn?, notes?, reason?
+ *   tcId, releaseId, environment, status, testedBy?, testedOn?, notes?, reason?
  *
  * Open to admin and QA (withTeam).
  *
@@ -137,8 +138,7 @@ export const POST = withTeam(
       );
     }
 
-    const { caseId, environment, status, testedOn, notes, reason } =
-      parsed.data;
+    const { tcId, environment, status, testedOn, notes, reason } = parsed.data;
 
     // Validate the release exists and the environment is declared
     const release = await getRelease(db, teamId, releaseId);
@@ -158,7 +158,7 @@ export const POST = withTeam(
       parsed.data.testedBy,
     );
 
-    await recordResult(db, teamId, releaseId, caseId, environment, {
+    await recordResult(db, teamId, releaseId, tcId, environment, {
       status,
       testedBy,
       testedOn,
@@ -166,6 +166,7 @@ export const POST = withTeam(
       reason,
     });
 
+    revalidatePath('/dashboard');
     return NextResponse.json({ ok: true });
   },
 );
@@ -180,7 +181,7 @@ export const POST = withTeam(
  * BR-15 and admin testedBy validation apply identically to POST.
  *
  * Body (application/json):
- *   releaseId, environment, status, caseIds[], testedBy?, testedOn?, notes?, reason?
+ *   releaseId, environment, status, tcIds[], testedBy?, testedOn?, notes?, reason?
  *
  * Open to admin and QA (withTeam).
  *
@@ -207,8 +208,7 @@ export const PATCH = withTeam(
       );
     }
 
-    const { environment, status, caseIds, testedOn, notes, reason } =
-      parsed.data;
+    const { environment, status, tcIds, testedOn, notes, reason } = parsed.data;
 
     // Validate the release exists and the environment is declared
     const release = await getRelease(db, teamId, releaseId);
@@ -228,8 +228,8 @@ export const PATCH = withTeam(
       parsed.data.testedBy,
     );
 
-    const entries = caseIds.map((caseId) => ({
-      caseId,
+    const entries = tcIds.map((tcId) => ({
+      tcId,
       status,
       testedBy,
       testedOn,
@@ -239,6 +239,7 @@ export const PATCH = withTeam(
 
     await bulkRecordResult(db, teamId, releaseId, environment, entries);
 
+    revalidatePath('/dashboard');
     return NextResponse.json({ ok: true });
   },
 );

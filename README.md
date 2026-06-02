@@ -61,7 +61,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 **Release → Test Case → Result (per Environment)**
 
 - A **Release** is a named testing cycle (e.g. `v2.9`). Admins create releases; a release owns its test cases and declares its environments (QA / Sandbox / Production by default).
-- A **Test Case** belongs to exactly one release. All environments in that release share the same test-case definition. Every test case carries a stable `caseId` (lineage across releases) and a DB-unique `testKey` display id (e.g. `SAP-0001`).
+- A **Test Case** belongs to exactly one release. All environments in that release share the same test-case definition. Every test case carries a DB-unique `testKey` (display identifier and import dedup key, e.g. `SAP-0001`); test cases are referenced across collections by their MongoDB `_id`.
 - A **Result** records Pass / Fail / Pending for one (test case × environment). Every valid pair always has exactly one result row (dense invariant — no "missing = Pending" special case).
 - **Applications and Modules** are team-global; referenced by stable ID so renaming never breaks lineage. Auto-created on import; cannot be deleted while any test case references them.
 - The active **(Release, Environment)** working context is a persistent bar below the top nav, stored in session only — never on the user record.
@@ -87,7 +87,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 Admin-managed list of named testing cycles. Actions per release:
 
 - **Create** — empty, clone from an existing release, or start from Excel import
-- **Clone** — copies test cases (same `caseId` lineage, fresh Pending results); assignments opt-in only
+- **Clone** — copies test cases with new `_id`s; fresh Pending results for each new `_id`; assignments opt-in only
 - **Archive / Unarchive** — frozen and hidden from default selectors while archived; fully reversible
 - **Delete** — cascades to test cases, results, and assignments (confirmation dialog restates cascade)
 - **Add / Remove Environment** — fan-out generates / removes result rows for all cases in the release
@@ -139,7 +139,7 @@ Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional comm
 
 ### Audit Log
 
-Every result write (Pass / Fail / Pending reset) and every assign / unassign appends an immutable entry to the `events` collection — `caseId`, `releaseId`, `environment`, actor, and timestamp included.
+Every result write (Pass / Fail / Pending reset) and every assign / unassign appends an immutable entry to the `events` collection — `tcId`, `releaseId`, `environment`, actor, and timestamp included.
 
 ### Reports
 

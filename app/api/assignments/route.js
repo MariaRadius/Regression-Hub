@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createAssignment, listAssignments } from '@/lib/db/assignmentsData';
 import { withTeam } from '@/lib/server/withTeam';
@@ -15,5 +16,6 @@ export const POST = withTeam(async (request, _ctx, { teamId, db, session }) => {
   const result = await createAssignment(db, teamId, body, {
     assignedBy: session.user.name,
   });
+  revalidatePath('/dashboard');
   return NextResponse.json(result);
 });

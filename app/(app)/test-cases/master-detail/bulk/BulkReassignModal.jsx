@@ -8,13 +8,14 @@ import { showToast } from '@/utils/showToast';
 import BulkModalShell from './BulkModalShell';
 
 /**
- * Bulk reassign: creates a new assignment (type="selection") for the selected
- * test cases. Required field: assignedTo.
+ * Bulk reassign: creates a release-wide assignment for each selected test case.
+ * Sends { tcIds, releaseId, assignedTo }. Required field: assignedTo.
  */
 export default function BulkReassignModal({
   open,
   onClose,
   selection,
+  releaseId,
   onSuccess,
 }) {
   const { data: qaUsers = [] } = useQaUserList();
@@ -35,13 +36,9 @@ export default function BulkReassignModal({
     setLoading(true);
     try {
       await createAssignment({
-        type: 'selection',
-        testCaseIds: selection.map((s) => s._id),
+        tcIds: selection.map((s) => s.tcId),
+        releaseId,
         assignedTo,
-        ...(title.trim() ? { title: title.trim() } : {}),
-        ...(priority ? { priority } : {}),
-        ...(dueDate ? { dueDate } : {}),
-        ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
       showToast(
         `↻ Assigned ${selection.length} cases to ${assignedTo}`,

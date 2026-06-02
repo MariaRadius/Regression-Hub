@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { deleteAssignment } from '@/lib/db/assignmentsData';
 import { withTeam } from '@/lib/server/withTeam';
@@ -8,6 +9,7 @@ export const DELETE = withTeam(
     const result = await deleteAssignment(db, teamId, id, {
       actor: session.user.name,
     });
+    revalidatePath('/dashboard');
     return NextResponse.json(result);
   },
 );

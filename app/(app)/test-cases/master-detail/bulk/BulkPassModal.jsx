@@ -10,7 +10,7 @@ import BulkStatusFields from './BulkStatusFields';
 
 /**
  * Bulk mark as Pass: sets status, testedBy, testedOn, notes.
- * Sends { releaseId, environment } for the new results model.
+ * Sends { releaseId, environment, tcIds } for the new results model.
  * BR-15: QA testedBy is locked to self; admin may pick any active QA user.
  */
 export default function BulkPassModal({
@@ -39,7 +39,7 @@ export default function BulkPassModal({
         releaseId,
         environment,
         status: STATUS.PASS,
-        caseIds: selection.map((s) => s.caseId),
+        tcIds: selection.map((s) => s.tcId),
         testedBy,
         testedOn,
         notes,
