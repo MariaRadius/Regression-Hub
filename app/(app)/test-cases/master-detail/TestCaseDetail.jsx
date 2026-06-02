@@ -19,9 +19,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
 import RichTextDisplay from '@/components/RichTextDisplay';
-import { listResults } from '@/lib/api/results';
 import { STATUS } from '@/lib/constants';
 import { normalizedStatus } from '@/utils/formatters';
 
@@ -89,46 +87,13 @@ function ReadField({ label, value, mono }) {
 
 /**
  * Per-environment results grid for a single test case.
- * Fetches all environments' results from the active release.
+ * Results are fetched by the parent (TestCaseDetailPanel) and passed as props
+ * so both the mobile and desktop instances share one network round-trip.
  *
- * @param {{ releaseId: string, caseId: string, environments: string[] }} props
+ * @param {{ environments: string[], envResults: Array<{env:string,result:object|null}>|null, envLoading: boolean }} props
  */
-function EnvResultsGrid({ releaseId, caseId, environments }) {
-  const [envResults, setEnvResults] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!releaseId || !caseId || !environments?.length) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-
-    Promise.all(
-      environments.map((env) =>
-        listResults(releaseId, { environment: env, caseId }).then((rows) => ({
-          env,
-          result: rows.find((r) => r.caseId === caseId) ?? null,
-        })),
-      ),
-    )
-      .then((rows) => {
-        if (!cancelled) {
-          setEnvResults(rows);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [releaseId, caseId, environments]);
-
-  if (loading) {
+function EnvResultsGrid({ environments, envResults, envLoading }) {
+  if (envLoading) {
     return (
       <Stack spacing={1}>
         {(environments ?? []).map((env) => (
@@ -207,6 +172,8 @@ export default function TestCaseDetail({
   tc,
   releaseId,
   environments,
+  envResults,
+  envLoading,
   onEdit,
   onAction,
   onClose,
@@ -400,9 +367,9 @@ export default function TestCaseDetail({
           <CardContent>
             <SectionLabel>Results by Environment</SectionLabel>
             <EnvResultsGrid
-              releaseId={releaseId}
-              caseId={tc.caseId}
               environments={environments}
+              envResults={envResults}
+              envLoading={envLoading}
             />
           </CardContent>
         </Card>

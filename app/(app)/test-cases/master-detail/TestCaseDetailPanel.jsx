@@ -1,6 +1,8 @@
 'use client';
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
+import { useEffect, useState } from 'react';
+import { listResults } from '@/lib/api/results';
 import TestCaseDetail from './TestCaseDetail';
 
 /**
@@ -24,6 +26,41 @@ export default function TestCaseDetailPanel({
   onAction,
   onClose,
 }) {
+  const caseId = displayCase?.caseId ?? null;
+  const [envResults, setEnvResults] = useState(null);
+  const [envLoading, setEnvLoading] = useState(true);
+
+  useEffect(() => {
+    if (!releaseId || !caseId || !environments?.length) {
+      setEnvLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setEnvLoading(true);
+
+    Promise.all(
+      environments.map((env) =>
+        listResults(releaseId, { environment: env, caseId }).then((rows) => ({
+          env,
+          result: rows.find((r) => r.caseId === caseId) ?? null,
+        })),
+      ),
+    )
+      .then((rows) => {
+        if (!cancelled) {
+          setEnvResults(rows);
+          setEnvLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setEnvLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [releaseId, caseId, environments]);
+
   return (
     <>
       {/* ── Mobile: fullscreen bottom sheet ──────────────────── */}
@@ -61,6 +98,8 @@ export default function TestCaseDetailPanel({
           tc={displayCase}
           releaseId={releaseId}
           environments={environments}
+          envResults={envResults}
+          envLoading={envLoading}
           onEdit={onEdit}
           onAction={onAction}
           onClose={onClose}
@@ -88,6 +127,8 @@ export default function TestCaseDetailPanel({
           tc={displayCase}
           releaseId={releaseId}
           environments={environments}
+          envResults={envResults}
+          envLoading={envLoading}
           onEdit={onEdit}
           onAction={onAction}
           onClose={onClose}
