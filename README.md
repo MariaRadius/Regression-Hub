@@ -100,6 +100,10 @@ Master·Detail layout: scannable list (left 46%) + detail panel (right 54%).
 
 List is driven from `testResults` for the active (Release, Environment); switching either resets to page 1.
 
+Search is server-backed and matches test-case title, application name, module name, and assignee name across the full release/environment result set.
+
+Sort is explicit from the list header (not column-click) and supports oldest/newest, title A→Z / Z→A, and assignee A→Z / Z→A.
+
 **Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
 
 **Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Reassign / Edit modals. Single-row actions are also available from the detail panel.
@@ -163,7 +167,7 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | DELETE | `/api/releases/[id]` | admin | Delete with cascade |
 | POST | `/api/releases/[id]/environments` | admin | Add environment |
 | DELETE | `/api/releases/[id]/environments` | admin | Remove environment |
-| GET | `/api/releases/[id]/test-cases` | admin+qa | List test cases |
+| GET | `/api/releases/[id]/test-cases` | admin+qa | List test cases (`environment` required; supports `q`, `sortBy`, `sortDir`, filters, paging) |
 | POST | `/api/releases/[id]/test-cases` | admin | Create test case |
 | GET | `/api/releases/[id]/test-cases/[caseId]` | admin+qa | Get test case |
 | PATCH | `/api/releases/[id]/test-cases/[caseId]` | admin | Update test case |

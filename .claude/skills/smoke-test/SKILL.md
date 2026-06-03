@@ -184,6 +184,14 @@ Record result:
 
 **Do not stop on FAIL** — continue walking all routes and collect results.
 
+#### Extra `/test-cases` checks (run for both admin and QA walks)
+
+After the route walk lands on `/test-cases`, verify the list controls actually work:
+
+1. Type `maria` into the list search box and confirm the document request URL for `/api/releases/[id]/test-cases` includes `q=maria`.
+2. Clear the search, click the sort button, choose a non-default option (for example `Title A-Z`), and confirm the next document request includes both `sortBy` and `sortDir`.
+3. After each interaction, confirm there are still no console errors and the page remains interactive.
+
 #### Download A — PDF snapshot (on /reports) — **opt-in only**
 
 > **Skip unless the user explicitly asked to test downloads.**

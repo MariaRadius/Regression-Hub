@@ -13,7 +13,7 @@ import { withAdmin, withTeam } from '@/lib/server/withTeam';
  *
  * Query params:
  *   environment (required), applicationId, moduleId, status, priority,
- *   jiraStory, testCase, page, limit, includeMeta
+ *   jiraStory, testCase, q, sortBy, sortDir, page, limit, includeMeta
  *
  * @see {@link app/api/releases/[id]/test-cases/__tests__/route.test.js}
  */
@@ -37,6 +37,9 @@ export const GET = withTeam(async (request, { params }, { teamId, db }) => {
     priority: searchParams.get('priority') || '',
     jiraStory: searchParams.get('jiraStory') || '',
     testCase: searchParams.get('testCase') || '',
+    q: searchParams.get('q') || '',
+    sortBy: searchParams.get('sortBy') || '',
+    sortDir: searchParams.get('sortDir') || '',
     page: searchParams.get('page') || '1',
     limit: searchParams.get('limit') || '50',
     includeMeta: searchParams.get('includeMeta') === 'true',

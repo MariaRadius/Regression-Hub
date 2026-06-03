@@ -64,6 +64,29 @@ describe('GET /api/releases/[id]/test-cases', () => {
     );
   });
 
+  it('forwards search and sort query params', async () => {
+    listTestCases.mockResolvedValue({ rows: [], total: 0 });
+    const res = await GET(
+      new Request(
+        `http://x/api/releases/${RELEASE_ID}/test-cases?environment=QA&q=maria&sortBy=testCase&sortDir=desc`,
+      ),
+      PARAMS,
+    );
+
+    expect(res.status).toBe(200);
+    expect(listTestCases).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.objectContaining({
+        releaseId: RELEASE_ID,
+        environment: 'QA',
+        q: 'maria',
+        sortBy: 'testCase',
+        sortDir: 'desc',
+      }),
+    );
+  });
+
   it('returns 400 when environment param is missing', async () => {
     const res = await GET(
       new Request(`http://x/api/releases/${RELEASE_ID}/test-cases`),

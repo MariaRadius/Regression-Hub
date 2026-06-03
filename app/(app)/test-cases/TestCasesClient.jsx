@@ -70,6 +70,7 @@ function TestCasesPage({ user }) {
   }, [activeId, cases]);
 
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState({ sortBy: 'createdAt', sortDir: 'asc' });
   const [openModal, setOpenModal] = useState(null); // 'pass'|'fail'|'pending'|'reassign'|'edit'|null
   const [singleActionId, setSingleActionId] = useState(null);
   useTestCaseKeyNav({
@@ -104,34 +105,42 @@ function TestCasesPage({ user }) {
    * stale-closure issues when context changes trigger concurrent re-fetches.
    * @see app/(app)/test-cases/__tests__/TestCasesClient.test.jsx
    */
-  const fetchPage = useCallback(async ({ active, page, size, rid, env }) => {
-    if (!rid || !env) return;
-    setLoading(true);
-    try {
-      const query = {
-        ...active,
-        environment: env,
-        page,
-        limit: size,
-        includeMeta: !appsModsLoaded.current || undefined,
-      };
-      const data = await listTestCasesForRelease(rid, query);
-      setCases(data.data);
-      setTotalCount(data.total);
-      if (!appsModsLoaded.current) {
-        setApplications(data.applications || []);
-        setModules(data.modules || []);
-        appsModsLoaded.current = true;
+  const fetchPage = useCallback(
+    async ({ active, page, size, rid, env }) => {
+      if (!rid || !env) return;
+      setLoading(true);
+      try {
+        const query = {
+          ...active,
+          environment: env,
+          q: search,
+          sortBy: sort.sortBy,
+          sortDir: sort.sortDir,
+          page,
+          limit: size,
+          includeMeta: !appsModsLoaded.current || undefined,
+        };
+        const data = await listTestCasesForRelease(rid, query);
+        setCases(data.data);
+        setTotalCount(data.total);
+        if (!appsModsLoaded.current) {
+          setApplications(data.applications || []);
+          setModules(data.modules || []);
+          appsModsLoaded.current = true;
+        }
+      } catch (e) {
+        console.error('fetchPage error:', e);
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.error('fetchPage error:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [search, sort.sortBy, sort.sortDir],
+  );
 
   const prevFiltersRef = useRef(filters.active);
   const prevContextRef = useRef({ releaseId, environment });
+  const prevSearchRef = useRef(search);
+  const prevSortRef = useRef(sort);
 
   // Reset to page 1 and reload app/module lists when release/environment changes
   useEffect(() => {
@@ -150,6 +159,23 @@ function TestCasesPage({ user }) {
       prevFiltersRef.current = filters.active;
     }
   }, [filters.active, pagination]);
+
+  useEffect(() => {
+    if (prevSearchRef.current !== search) {
+      pagination.setPage(DEFAULT_PAGE);
+      prevSearchRef.current = search;
+    }
+  }, [pagination, search]);
+
+  useEffect(() => {
+    if (
+      prevSortRef.current.sortBy !== sort.sortBy ||
+      prevSortRef.current.sortDir !== sort.sortDir
+    ) {
+      pagination.setPage(DEFAULT_PAGE);
+      prevSortRef.current = sort;
+    }
+  }, [pagination, sort]);
 
   useEffect(() => {
     fetchPage({
@@ -222,6 +248,9 @@ function TestCasesPage({ user }) {
           selection={selection}
           search={search}
           onSearchChange={setSearch}
+          sortBy={sort.sortBy}
+          sortDir={sort.sortDir}
+          onSortChange={setSort}
           onAction={(a) => {
             setSingleActionId(null);
             setOpenModal(a);

@@ -31,6 +31,9 @@ export default function TestCaseList({
   selection,
   search,
   onSearchChange,
+  sortBy,
+  sortDir,
+  onSortChange,
   onAction,
   page,
   size,
@@ -46,6 +49,9 @@ export default function TestCaseList({
         someOnPage={selection.someOnPage}
         search={search}
         onSearchChange={onSearchChange}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSortChange={onSortChange}
         onToggleAll={selection.toggleAll}
         onAction={onAction}
       />

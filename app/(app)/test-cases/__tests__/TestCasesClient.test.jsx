@@ -234,6 +234,66 @@ describe('TestCasesClient — fetch behaviour', () => {
     );
   });
 
+  it('re-fetches after search changes with the query term', async () => {
+    const { rerender } = await act(async () =>
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />),
+    );
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      lastTestCaseListProps.onSearchChange('maria');
+    });
+
+    await act(async () => {
+      rerender(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
+    });
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(2);
+    expect(listTestCasesForRelease).toHaveBeenLastCalledWith(
+      'rel-1',
+      expect.objectContaining({
+        q: 'maria',
+        environment: 'QA',
+        page: 1,
+        limit: 50,
+      }),
+    );
+    expect(mockSetPage).toHaveBeenCalledWith(1);
+  });
+
+  it('re-fetches after sort changes with sort params', async () => {
+    const { rerender } = await act(async () =>
+      render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />),
+    );
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      lastTestCaseListProps.onSortChange({
+        sortBy: 'testCase',
+        sortDir: 'desc',
+      });
+    });
+
+    await act(async () => {
+      rerender(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />);
+    });
+
+    expect(listTestCasesForRelease).toHaveBeenCalledTimes(2);
+    expect(listTestCasesForRelease).toHaveBeenLastCalledWith(
+      'rel-1',
+      expect.objectContaining({
+        sortBy: 'testCase',
+        sortDir: 'desc',
+        environment: 'QA',
+        page: 1,
+        limit: 50,
+      }),
+    );
+    expect(mockSetPage).toHaveBeenCalledWith(1);
+  });
+
   it('resets to page 1 when release context changes', async () => {
     const { rerender } = await act(async () =>
       render(<TestCasesClient user={{ name: 'Tester', role: 'qa' }} />),

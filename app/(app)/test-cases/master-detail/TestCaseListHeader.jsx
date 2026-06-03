@@ -11,11 +11,23 @@ import {
   Divider,
   IconButton,
   InputAdornment,
+  Menu,
+  MenuItem,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
+import { useMemo, useState } from 'react';
+
+const SORT_OPTIONS = [
+  { sortBy: 'createdAt', sortDir: 'asc', label: 'Oldest first' },
+  { sortBy: 'createdAt', sortDir: 'desc', label: 'Newest first' },
+  { sortBy: 'testCase', sortDir: 'asc', label: 'Title A-Z' },
+  { sortBy: 'testCase', sortDir: 'desc', label: 'Title Z-A' },
+  { sortBy: 'assignedTo', sortDir: 'asc', label: 'Assignee A-Z' },
+  { sortBy: 'assignedTo', sortDir: 'desc', label: 'Assignee Z-A' },
+];
 
 /**
  * List header that swaps between default (search) mode and Gmail-style bulk
@@ -29,9 +41,21 @@ export default function TestCaseListHeader({
   someOnPage,
   search,
   onSearchChange,
+  sortBy,
+  sortDir,
+  onSortChange,
   onToggleAll,
   onAction,
 }) {
+  const [sortAnchor, setSortAnchor] = useState(null);
+  const activeSortLabel = useMemo(
+    () =>
+      SORT_OPTIONS.find(
+        (option) => option.sortBy === sortBy && option.sortDir === sortDir,
+      )?.label || 'Oldest first',
+    [sortBy, sortDir],
+  );
+
   if (selectedCount > 0) {
     return (
       <Stack
@@ -115,10 +139,19 @@ export default function TestCaseListHeader({
       <TextField
         size='small'
         fullWidth
-        placeholder='Search test cases…'
+        placeholder='Search by title, application, module, or assignee…'
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
+        sx={{
+          '& .MuiInputBase-input': {
+            fontSize: '0.875rem',
+          },
+        }}
         slotProps={{
+          htmlInput: {
+            'aria-label':
+              'Search test cases by title, application, module, or assignee',
+          },
           input: {
             startAdornment: (
               <InputAdornment position='start'>
@@ -128,11 +161,41 @@ export default function TestCaseListHeader({
           },
         }}
       />
-      <Tooltip title='Sort'>
-        <IconButton size='small' aria-label='Sort test cases'>
+      <Tooltip title={`Sort: ${activeSortLabel}`}>
+        <IconButton
+          size='small'
+          aria-label='Sort test cases'
+          onClick={(event) => setSortAnchor(event.currentTarget)}
+        >
           <SwapVertIcon fontSize='small' />
         </IconButton>
       </Tooltip>
+      <Menu
+        anchorEl={sortAnchor}
+        open={Boolean(sortAnchor)}
+        onClose={() => setSortAnchor(null)}
+      >
+        {SORT_OPTIONS.map((option) => {
+          const selected =
+            option.sortBy === sortBy && option.sortDir === sortDir;
+          return (
+            <MenuItem
+              key={`${option.sortBy}-${option.sortDir}`}
+              selected={selected}
+              onClick={() => {
+                onSortChange({
+                  sortBy: option.sortBy,
+                  sortDir: option.sortDir,
+                });
+                setSortAnchor(null);
+              }}
+              sx={{ fontSize: '0.875rem' }}
+            >
+              {option.label}
+            </MenuItem>
+          );
+        })}
+      </Menu>
     </Stack>
   );
 }
