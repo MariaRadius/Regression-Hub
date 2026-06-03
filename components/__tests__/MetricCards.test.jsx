@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import MetricCards from '../MetricCards';
+import MetricCards, { resolveMetricAccent } from '../MetricCards';
 
 const CARDS = [
   { label: 'Total', value: 42 },
@@ -33,5 +33,14 @@ describe('MetricCards', () => {
     render(<MetricCards cards={CARDS} />);
     const cardEls = screen.getAllByTestId('metric-card');
     expect(cardEls).toHaveLength(CARDS.length);
+  });
+
+  it('resolves an accent color for every card, including cards without cls', () => {
+    expect(resolveMetricAccent({ cls: 'pass' })).toBe('pass.main');
+    expect(resolveMetricAccent({ cls: 'fail' })).toBe('fail.main');
+    expect(resolveMetricAccent({ cls: 'pending' })).toBe('pending.main');
+    expect(resolveMetricAccent({ label: 'Total Test Cases' })).toBe('grey.300');
+    expect(resolveMetricAccent({ label: 'Pass Rate' })).toBe('pass.border');
+    expect(resolveMetricAccent({ label: 'Fail Rate' })).toBe('fail.border');
   });
 });

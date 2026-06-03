@@ -39,6 +39,10 @@ function compareAppOrder([a], [b]) {
   return a.localeCompare(b);
 }
 
+function formatPercent(value) {
+  return `${Number(value || 0).toFixed(1)}%`;
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const teamId = session?.user?.teamId;
@@ -119,12 +123,12 @@ export default async function DashboardPage() {
             },
             {
               label: 'Pass Rate',
-              value: `${summary.passPercent}%`,
+              value: formatPercent(summary.passPercent),
               sub: 'Of total',
             },
             {
               label: 'Fail Rate',
-              value: `${summary.failPercent}%`,
+              value: formatPercent(summary.failPercent),
               sub: 'Of total',
             },
           ]}

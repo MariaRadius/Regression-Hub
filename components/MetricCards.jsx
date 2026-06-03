@@ -13,6 +13,16 @@ const CLS_TO_PALETTE = {
   pending: 'pending.main',
 };
 
+const LABEL_TO_ACCENT = {
+  'Total Test Cases': 'grey.300',
+  'Pass Rate': 'pass.border',
+  'Fail Rate': 'fail.border',
+};
+
+export function resolveMetricAccent({ cls, label }) {
+  return CLS_TO_PALETTE[cls] ?? LABEL_TO_ACCENT[label] ?? 'divider';
+}
+
 /**
  * Renders a responsive row of metric summary cards.
  * Cards fill the row equally on md+, 2-col on sm, 1-col on xs.
@@ -47,7 +57,7 @@ export default function MetricCards({ cards, loading = false }) {
             <Box
               sx={{
                 height: 4,
-                bgcolor: CLS_TO_PALETTE[cls] ?? 'transparent',
+                bgcolor: resolveMetricAccent({ cls, label }),
                 borderRadius: '0 0 10px 10px',
               }}
             />

@@ -25,7 +25,8 @@ const MIN_SLICE_ANGLE = 0.18;
 const LABEL_ELBOW = 16; // gap from donut edge to the side label column
 const LABEL_TICK = 6; // short horizontal tick before the text
 const LABEL_VERT_MARGIN = 10; // top/bottom room for label text half-height
-const LABEL_SIDE_SPACE = 92; // horizontal room each side (elbow + tick + text)
+const LABEL_SIDE_SPACE = 82; // horizontal room each side (elbow + tick + stacked text)
+const LABEL_GAP = 24; // minimum vertical separation between same-side labels
 
 /**
  * Convert raw slice values into pie fractions where every non-zero slice spans
@@ -60,6 +61,101 @@ function minSliceFractions(values, minFraction) {
     if (out[i] > minFraction) out[i] -= (out[i] - minFraction) * ratio;
   }
   return out;
+}
+
+export function buildSideLabelLayout(
+  labels,
+  {
+    radius,
+    labelElbow = LABEL_ELBOW,
+    labelTick = LABEL_TICK,
+    labelVertMargin = LABEL_VERT_MARGIN,
+    labelGap = LABEL_GAP,
+  },
+) {
+  const minY = -(radius - labelVertMargin);
+  const maxY = radius - labelVertMargin;
+
+  function layoutSide(sideLabels, dir) {
+    const sorted = [...sideLabels]
+      .map((label) => ({
+        ...label,
+        baseY: Math.max(minY, Math.min(maxY, label.ey)),
+      }))
+      .sort((a, b) => a.baseY - b.baseY);
+
+    let previousY = minY - labelGap;
+    for (const label of sorted) {
+      label.labelY = Math.max(label.baseY, previousY + labelGap);
+      previousY = label.labelY;
+    }
+
+    const overflow = sorted.at(-1)?.labelY - maxY;
+    if (overflow > 0) {
+      sorted.forEach((label) => {
+        label.labelY -= overflow;
+      });
+    }
+
+    for (let i = sorted.length - 2; i >= 0; i--) {
+      sorted[i].labelY = Math.min(
+        sorted[i].labelY,
+        sorted[i + 1].labelY - labelGap,
+      );
+    }
+
+    const underflow = minY - (sorted[0]?.labelY ?? minY);
+    if (underflow > 0) {
+      sorted.forEach((label) => {
+        label.labelY += underflow;
+      });
+    }
+
+    return sorted.map((label) => {
+      const colX = dir * (radius + labelElbow);
+      const textX = colX + dir * labelTick;
+      return {
+        ...label,
+        dir,
+        colX,
+        textX,
+        labelY: Math.max(minY, Math.min(maxY, label.labelY)),
+      };
+    });
+  }
+
+  const totalAssignments = 2 ** labels.length;
+  let bestLayout = [];
+  let bestPenalty = Number.POSITIVE_INFINITY;
+
+  for (let mask = 0; mask < totalAssignments; mask++) {
+    const left = [];
+    const right = [];
+
+    labels.forEach((label, index) => {
+      const dir = mask & (1 << index) ? 1 : -1;
+      if (dir === -1) left.push(label);
+      else right.push(label);
+    });
+
+    const positioned = [...layoutSide(left, -1), ...layoutSide(right, 1)];
+    const penalty = positioned.reduce((sum, label) => {
+      const preferredDir = label.ex >= 0 ? 1 : -1;
+      const flipPenalty = preferredDir === label.dir ? 0 : 8;
+      return sum + Math.abs(label.labelY - label.ey) + flipPenalty;
+    }, 0);
+
+    if (penalty < bestPenalty) {
+      bestPenalty = penalty;
+      bestLayout = positioned;
+    }
+  }
+
+  return bestLayout;
+}
+
+export function buildSideLabelText({ name, value }) {
+  return [name, String(value)];
 }
 
 /**
@@ -134,8 +230,32 @@ export default function DonutChart({ donutData }) {
               innerRadius={innerRadius}
               padAngle={0.03}
             >
-              {(pie) =>
-                pie.arcs.map((arc, i) => {
+              {(pie) => {
+                const positionedLabels = buildSideLabelLayout(
+                  pie.arcs
+                    .map((arc, index) => {
+                      if (arc.data.value <= 0) return null;
+                      const [ex, ey] = d3Arc()
+                        .innerRadius(radius)
+                        .outerRadius(radius)
+                        .centroid(arc);
+                      return {
+                        index,
+                        name: arc.data.name,
+                        value: arc.data.value,
+                        color: STATUS_COLOR[arc.data.name],
+                        ex,
+                        ey,
+                      };
+                    })
+                    .filter(Boolean),
+                  { radius },
+                );
+                const labelsByIndex = new Map(
+                  positionedLabels.map((label) => [label.index, label]),
+                );
+
+                return pie.arcs.map((arc, i) => {
                   const { name, value } = arc.data;
                   const isDirectlyHovered = activeIndex === i;
                   // Expand when directly hovered, or when another chart is
@@ -161,15 +281,7 @@ export default function DonutChart({ donutData }) {
                       .innerRadius(radius)
                       .outerRadius(radius)
                       .centroid(arc);
-                    const dir = ex >= 0 ? 1 : -1; // right vs left column
-                    const colX = dir * (radius + LABEL_ELBOW);
-                    // Pin the label beside its slice but never past the donut's
-                    // vertical extent, so it stays within the svg bounds.
-                    const labelY = Math.max(
-                      -(radius - LABEL_VERT_MARGIN),
-                      Math.min(radius - LABEL_VERT_MARGIN, ey),
-                    );
-                    const textX = colX + dir * LABEL_TICK;
+                    const positionedLabel = labelsByIndex.get(i);
                     label = (
                       <g
                         style={{
@@ -179,21 +291,35 @@ export default function DonutChart({ donutData }) {
                         }}
                       >
                         <polyline
-                          points={`${ex},${ey} ${colX},${labelY} ${textX},${labelY}`}
+                          points={`${ex},${ey} ${positionedLabel.colX},${positionedLabel.labelY} ${positionedLabel.textX},${positionedLabel.labelY}`}
                           fill='none'
                           stroke={color}
                           strokeWidth={1}
                         />
                         <text
-                          x={textX + dir * 3}
-                          y={labelY}
-                          textAnchor={dir === 1 ? 'start' : 'end'}
-                          dominantBaseline='middle'
+                          x={positionedLabel.textX + positionedLabel.dir * 3}
+                          y={positionedLabel.labelY}
+                          textAnchor={
+                            positionedLabel.dir === 1 ? 'start' : 'end'
+                          }
                           fontSize={12}
                           fontWeight={600}
                           fill={color}
                         >
-                          {name} {value}
+                          {buildSideLabelText({ name, value }).map(
+                            (line, lineIndex) => (
+                              <tspan
+                                key={`${name}-${line}`}
+                                x={
+                                  positionedLabel.textX +
+                                  positionedLabel.dir * 3
+                                }
+                                dy={lineIndex === 0 ? '-0.15em' : '1.15em'}
+                              >
+                                {line}
+                              </tspan>
+                            ),
+                          )}
                         </text>
                       </g>
                     );
@@ -234,8 +360,8 @@ export default function DonutChart({ donutData }) {
                       {label}
                     </g>
                   );
-                })
-              }
+                });
+              }}
             </Pie>
             {/* Centre label — fontFamily intentionally omitted; inherits from page CSS */}
             <text
