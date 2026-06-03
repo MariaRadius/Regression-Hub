@@ -7,14 +7,14 @@ import TestCaseListItemSkeleton from './TestCaseListItemSkeleton';
 import TestCasePagination from './TestCasePagination';
 
 const SKELETON_ROWS = [
-  { id: 'sk0', titleWidth: '62%', metaWidth: '44%' },
-  { id: 'sk1', titleWidth: '48%', metaWidth: '36%' },
-  { id: 'sk2', titleWidth: '70%', metaWidth: '52%' },
-  { id: 'sk3', titleWidth: '55%', metaWidth: '40%' },
-  { id: 'sk4', titleWidth: '64%', metaWidth: '30%' },
-  { id: 'sk5', titleWidth: '42%', metaWidth: '48%' },
-  { id: 'sk6', titleWidth: '58%', metaWidth: '38%' },
-  { id: 'sk7', titleWidth: '66%', metaWidth: '43%' },
+  { id: 'sk0', titleWidth: '62%', metaWidths: ['28%', '20%', '24%'] },
+  { id: 'sk1', titleWidth: '48%', metaWidths: ['24%', '18%'] },
+  { id: 'sk2', titleWidth: '70%', metaWidths: ['32%', '18%', '22%'] },
+  { id: 'sk3', titleWidth: '55%', metaWidths: ['30%', '20%', '18%'] },
+  { id: 'sk4', titleWidth: '64%', metaWidths: ['22%', '16%'] },
+  { id: 'sk5', titleWidth: '42%', metaWidths: ['26%', '18%', '20%'] },
+  { id: 'sk6', titleWidth: '58%', metaWidths: ['30%', '22%'] },
+  { id: 'sk7', titleWidth: '66%', metaWidths: ['34%', '20%', '18%'] },
 ];
 
 /**
@@ -57,7 +57,7 @@ export default function TestCaseList({
               <TestCaseListItemSkeleton
                 key={row.id}
                 titleWidth={row.titleWidth}
-                metaWidth={row.metaWidth}
+                metaWidths={row.metaWidths}
               />
             ))}
           </Stack>

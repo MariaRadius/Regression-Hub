@@ -1,5 +1,8 @@
 'use client';
-import { Box, Checkbox, Stack, Tooltip, Typography } from '@mui/material';
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import FolderIcon from '@mui/icons-material/Folder';
+import PersonIcon from '@mui/icons-material/Person';
+import { Box, Checkbox, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { PRIORITIES, STATUS } from '@/lib/constants';
 
 const STATUS_COLOR = {
@@ -12,6 +15,48 @@ const PRIORITY_BAR = {
   [PRIORITIES.MEDIUM]: 'warning.main',
   [PRIORITIES.LOW]: 'text.disabled',
 };
+
+function toDisplayCase(value) {
+  if (!value) return '';
+  return value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function MetaChip({
+  icon,
+  label,
+  color = 'default',
+  variant = 'filled',
+  sx = {},
+}) {
+  return (
+    <Chip
+      size='small'
+      icon={icon}
+      label={label}
+      color={color}
+      variant={variant}
+      sx={{
+        maxWidth: '100%',
+        height: 24,
+        borderRadius: 1.5,
+        textTransform: 'none',
+        fontWeight: 500,
+        '& .MuiChip-label': {
+          display: 'block',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          px: 1,
+          textTransform: 'none',
+        },
+        '& .MuiChip-icon': {
+          color: 'inherit',
+        },
+        ...sx,
+      }}
+    />
+  );
+}
 
 /**
  * Single row in the master list. Checkbox for bulk selection + priority bar
@@ -100,38 +145,59 @@ export default function TestCaseListItem({
 
         <Stack
           direction='row'
-          spacing={0.5}
-          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+          spacing={0.75}
+          useFlexGap
+          sx={{ flexWrap: 'wrap' }}
         >
           {tc.moduleName && (
             <Tooltip title='Application / Module'>
-              <Typography
-                component='span'
-                variant='tableCell'
-                color='text.disabled'
-              >
-                {tc.applicationName}/{tc.moduleName} ·{' '}
-              </Typography>
+              <span>
+                <MetaChip
+                  icon={<FolderIcon fontSize='small' />}
+                  label={`${toDisplayCase(tc.applicationName)} / ${toDisplayCase(tc.moduleName)}`}
+                  sx={{
+                    bgcolor: 'grey.100',
+                    color: 'text.secondary',
+                  }}
+                />
+              </span>
             </Tooltip>
           )}
           <Tooltip title='Assignee'>
-            <Typography
-              component='span'
-              variant='tableCell'
-              color={tc.assignedTo ? 'text.secondary' : 'text.disabled'}
-            >
-              {tc.assignedTo || 'unassigned'}
-            </Typography>
+            <span>
+              <MetaChip
+                icon={<AssignmentIndIcon fontSize='small' />}
+                label={
+                  tc.assignedTo
+                    ? `Assigned: ${toDisplayCase(tc.assignedTo)}`
+                    : 'Unassigned'
+                }
+                sx={
+                  tc.assignedTo
+                    ? {
+                        bgcolor: '#E8F5EE',
+                        color: '#1F6B45',
+                      }
+                    : {
+                        bgcolor: '#FFF1E6',
+                        color: '#9A4D12',
+                      }
+                }
+              />
+            </span>
           </Tooltip>
           {tc.testedBy && tc.testedBy !== tc.assignedTo && (
             <Tooltip title='Tested by'>
-              <Typography
-                component='span'
-                variant='tableCell'
-                color='text.secondary'
-              >
-                {' · '}tested by {tc.testedBy}
-              </Typography>
+              <span>
+                <MetaChip
+                  icon={<PersonIcon fontSize='small' />}
+                  label={`Tested by: ${toDisplayCase(tc.testedBy)}`}
+                  sx={{
+                    bgcolor: 'grey.100',
+                    color: 'text.secondary',
+                  }}
+                />
+              </span>
             </Tooltip>
           )}
         </Stack>

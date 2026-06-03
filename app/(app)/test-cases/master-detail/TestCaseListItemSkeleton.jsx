@@ -10,7 +10,7 @@ import Stack from '@mui/material/Stack';
  */
 export default function TestCaseListItemSkeleton({
   titleWidth = '55%',
-  metaWidth = '38%',
+  metaWidths = ['30%', '20%', '24%'],
 }) {
   return (
     <Stack
@@ -33,7 +33,17 @@ export default function TestCaseListItemSkeleton({
       {/* Text block */}
       <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.4}>
         <Skeleton variant='text' width={titleWidth} height={18} />
-        <Skeleton variant='text' width={metaWidth} height={14} />
+        <Stack direction='row' spacing={0.75}>
+          {metaWidths.map((width) => (
+            <Skeleton
+              key={width}
+              variant='rounded'
+              width={width}
+              height={24}
+              sx={{ borderRadius: 999 }}
+            />
+          ))}
+        </Stack>
       </Stack>
     </Stack>
   );
