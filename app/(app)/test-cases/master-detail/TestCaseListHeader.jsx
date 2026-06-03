@@ -139,7 +139,7 @@ export default function TestCaseListHeader({
       <TextField
         size='small'
         fullWidth
-        placeholder='Search by title, application, module, or assignee…'
+        placeholder='Search by ID, title, application, module, or assignee…'
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         sx={{
@@ -150,7 +150,7 @@ export default function TestCaseListHeader({
         slotProps={{
           htmlInput: {
             'aria-label':
-              'Search test cases by title, application, module, or assignee',
+              'Search test cases by ID, title, application, module, or assignee',
           },
           input: {
             startAdornment: (
