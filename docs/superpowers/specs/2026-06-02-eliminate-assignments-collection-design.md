@@ -56,6 +56,7 @@ There is **no** `assignments` collection.
 ## Changes by Unit
 
 ### 1. Data layer — `lib/db/assignmentsData.js`
+
 - Collapse to a single export `assignTestCases(db, teamId, body, { assignedBy })`
   where `body = { releaseId, assignedTo, tcIds?, applicationIds?, moduleIds?,
   environments }`.
@@ -73,6 +74,7 @@ There is **no** `assignments` collection.
   page and unassign path are removed).
 
 ### 2. Schema — `lib/schemas/assignments.js`
+
 - `createAssignmentBodySchema` → `{ releaseId: objectIdString, assignedTo:
   z.string().min(1), tcIds?: z.array(z.string().min(1)), applicationIds?:
   z.array(z.string().min(1)), moduleIds?: z.array(z.string().min(1)),
@@ -84,22 +86,26 @@ There is **no** `assignments` collection.
   `assignmentsListSchema`.
 
 ### 3. API routes
+
 - `app/api/assignments/route.js` — keep `POST` only, re-pointed to
   `assignTestCases`; response shape `{ ok, testCaseCount }`. **Delete** the `GET`
   handler.
 - **Delete** `app/api/assignments/[id]/route.js` (the whole `[id]` folder).
 
 ### 4. Client API — `lib/api/assignments.js`
+
 - Keep `createAssignment(body)` (passthrough; new response schema). **Delete**
   `listAssignments` and `deleteAssignment`.
 
 ### 5. New counts endpoint — `GET /api/releases/[id]/scope-counts`
+
 - Returns `{ byApplication: { [appId]: n }, byModule: { [moduleId]: n } }` from a
   `testCases` aggregation grouped per `applicationId` and per `moduleId` for the
   release (env-independent — definition counts). Backs the Bulk Assign picker.
 - Query extracted to `lib/db/...Data.js` (no inline query in the route).
 
 ### 6. Cascade cleanup — `lib/db/releasesData.js`, `lib/db/testCasesData.js`
+
 - Remove every `db.collection('assignments')` read/delete in release clone,
   release delete, and test-case delete paths (and the now-unused imports).
 - **Cascade-delete `events`** for the removed entity: on release delete, delete
@@ -112,11 +118,13 @@ There is **no** `assignments` collection.
   already handled by the `testResults` mirror per the source-of-truth spec.
 
 ### 7. Indexes — `lib/indexes.js`
+
 - Drop the three `assignments` indexes (the `teamId/createdAt` and the two
   scoped ones). No new index required (writes hit existing `testResults`/`events`
   indexes).
 
 ### 8. Migrations — `scripts/`
+
 - **Delete** `migrate-eliminate-release-wide-assignments.mjs` (release-wide is moot).
 - **Add** `migrate-drop-assignments-collection.mjs`: clean-slate
   `db.collection('assignments').drop()` (idempotent — ignore "ns not found"),
@@ -124,16 +132,19 @@ There is **no** `assignments` collection.
   No backfill into `events`.
 
 ### 9. Remove the page — `app/(app)/assignments/`
+
 - Delete `page.js`, `AssignmentsClient.jsx`, `error.js`, `loading.js`.
 - Remove the `/assignments` nav link in `components/TopNav.jsx`.
 
 ### 10. Reassign modal — `app/(app)/test-cases/master-detail/bulk/BulkReassignModal.jsx`
+
 - Trim to **assignee-only**: remove Priority, Title, Due Date, Notes fields and
   the `PRIORITIES` import (they were collected but never persisted).
 - Send `{ tcIds, releaseId, assignedTo, environments: [environment] }`.
 - Reword title/subtitle/helper to "Reassign" (selection-scoped, active env).
 
 ### 11. New Bulk Assign modal — `app/(app)/test-cases/master-detail/bulk/BulkAssignModal.jsx`
+
 - Selection-independent. Fields:
   - **Scope type** — exclusive `ToggleButtonGroup`: By Application / By Module
     (switching clears the picked items).
@@ -150,12 +161,14 @@ There is **no** `assignments` collection.
   shell (no selection-summary box). Visual design: see the companion mockup.
 
 ### 12. Entry point — `app/(app)/test-cases/master-detail/FilterStrip.jsx`
+
 - Add a **`Bulk Assign`** button (admin-only via a passed `isAdmin`/`user.role`)
   on the saved-view row, right-aligned, always enabled regardless of selection.
 - `BulkModalRenderer` / `TestCasesClient` wire the new modal open-state and the
   `scope-counts` fetch.
 
 ### 13. Docs (same-commit, per project rules)
+
 - `README.md` (~line 136) — drop release-wide/assignments-tab language; describe
   bulk assign from `/test-cases`.
 - `.claude/skills/smoke-test/SKILL.md` — remove `/assignments` route checks; add
@@ -163,6 +176,7 @@ There is **no** `assignments` collection.
   surface changed.
 
 ### 14. Tests (confirm before adding/changing, per standing preference)
+
 - Data: scope expansion (app/module → tcId union + dedup), multi-env mirror,
   empty-scope → 400, response shape.
 - Cascade: release/case delete removes the scoped `events`.
@@ -172,6 +186,7 @@ There is **no** `assignments` collection.
   asserted on the collection).
 
 ## Risks & Verification
+
 - **Stray `assignments` reference breaks build.** Repo-wide grep for
   `collection('assignments')`, `listAssignments`, `deleteAssignment`,
   `assignmentSchema` must return zero non-doc hits after the change; lint once at
@@ -185,6 +200,7 @@ There is **no** `assignments` collection.
   environment; delete a release/case and confirm its events are gone.
 
 ## Implementation Strategy
+
 Parallel multi-agent development on file-disjoint slices, then a parallel review
 pass (per `superpowers:dispatching-parallel-agents`): (A) data layer + schema +
 routes + client API, (B) cascades + indexes + migrations, (C) page removal + nav,

@@ -43,7 +43,7 @@ export const POST = withAdmin(
  * DELETE /api/releases/[id]/environments
  *
  * Removes an environment from a release. Cascades: deletes that environment's
- * results and env-scoped assignments; release-wide assignments are untouched.
+ * results and its assignment events from the audit log.
  * The release must have at least two environments before this can succeed.
  * Admin only.
  *

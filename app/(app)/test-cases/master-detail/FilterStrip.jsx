@@ -19,11 +19,13 @@ function resolvePresetValue(preset, user) {
 /**
  * Filter strip: ToggleButtonGroup saved-view row + active filter chips + "+ Add filter".
  *
- * @param {object} props.filters      Return value of useTestCaseFilters()
- * @param {object} props.user         Session user ({ name, email, ... })
- * @param {Array}  props.applications List of { _id, name } application objects
- * @param {Array}  props.modules      List of { _id, name } module objects
- * @param {object} props.counts       Optional { all: number } for "All" label
+ * @param {object}   props.filters      Return value of useTestCaseFilters()
+ * @param {object}   props.user         Session user ({ name, email, ... })
+ * @param {Array}    props.applications List of { _id, name } application objects
+ * @param {Array}    props.modules      List of { _id, name } module objects
+ * @param {object}   props.counts       Optional { all: number } for "All" label
+ * @param {boolean}  props.isAdmin      Whether the session user has the admin role
+ * @param {Function} props.onBulkAssign Called when the Bulk Assign button is clicked
  */
 export default function FilterStrip({
   filters,
@@ -31,6 +33,8 @@ export default function FilterStrip({
   applications,
   modules,
   counts,
+  isAdmin,
+  onBulkAssign,
 }) {
   const { active, setFilter, removeFilter, clearAll, valuesOf, toggleValue } =
     filters;
@@ -86,28 +90,40 @@ export default function FilterStrip({
   return (
     <Stack spacing={1} sx={{ borderBottom: 1, borderColor: 'divider' }}>
       {/* Row 1: Saved-view toggles */}
-      <Stack direction='row' spacing={1} sx={{ alignItems: 'center', px: 2 }}>
-        <Button
-          size='small'
-          variant={allActive ? 'contained' : 'text'}
-          disableElevation
-          onClick={clearAll}
-        >
-          {`All${counts?.all != null ? ` (${counts.all})` : ''}`}
-        </Button>
+      <Stack
+        direction='row'
+        spacing={1}
+        sx={{ alignItems: 'center', px: 2, justifyContent: 'space-between' }}
+      >
+        <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+          <Button
+            size='small'
+            variant={allActive ? 'contained' : 'text'}
+            disableElevation
+            onClick={clearAll}
+          >
+            {`All${counts?.all != null ? ` (${counts.all})` : ''}`}
+          </Button>
 
-        <ToggleButtonGroup
-          value={selectedPresets}
-          onChange={handlePresetChange}
-          size='small'
-          aria-label='saved view presets'
-        >
-          {VIEW_PRESETS.map((p) => (
-            <ToggleButton key={p.id} value={p.id} aria-label={p.label}>
-              {p.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
+          <ToggleButtonGroup
+            value={selectedPresets}
+            onChange={handlePresetChange}
+            size='small'
+            aria-label='saved view presets'
+          >
+            {VIEW_PRESETS.map((p) => (
+              <ToggleButton key={p.id} value={p.id} aria-label={p.label}>
+                {p.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Stack>
+
+        {isAdmin && (
+          <Button size='small' variant='outlined' onClick={onBulkAssign}>
+            Bulk Assign
+          </Button>
+        )}
       </Stack>
 
       {/* Row 2: Active chips + "+ Add filter" */}

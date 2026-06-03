@@ -23,6 +23,8 @@ import {
   getTestCaseForRelease,
   listTestCasesForRelease,
 } from '@/lib/api/releases';
+import { ROLES } from '@/lib/constants';
+import BulkAssignModal from './master-detail/bulk/BulkAssignModal';
 import BulkModalRenderer from './master-detail/bulk/BulkModalRenderer';
 import FilterStrip from './master-detail/FilterStrip';
 import TestCaseDetailPanel from './master-detail/TestCaseDetailPanel';
@@ -39,6 +41,13 @@ function TestCasesPage({ user }) {
   const [applications, setApplications] = useState([]);
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const isAdmin = user?.role === ROLES.ADMIN;
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [scopeCounts, setScopeCounts] = useState({
+    byApplication: {},
+    byModule: {},
+  });
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -194,6 +203,21 @@ function TestCasesPage({ user }) {
     environment,
   ]);
 
+  useEffect(() => {
+    if (!bulkAssignOpen || !releaseId) return;
+    setScopeCounts({ byApplication: {}, byModule: {} });
+    let active = true;
+    fetch(`/api/releases/${releaseId}/scope-counts`)
+      .then((r) => (r.ok ? r.json() : { byApplication: {}, byModule: {} }))
+      .then((data) => {
+        if (active) setScopeCounts(data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [bulkAssignOpen, releaseId]);
+
   return (
     <Stack sx={{ height: '100%', minHeight: 0 }}>
       <ToastProvider />
@@ -235,6 +259,8 @@ function TestCasesPage({ user }) {
         applications={applications}
         modules={modules}
         counts={{ all: totalCount }}
+        isAdmin={isAdmin}
+        onBulkAssign={() => setBulkAssignOpen(true)}
       />
 
       {/* List — full width on all breakpoints */}
@@ -276,6 +302,29 @@ function TestCasesPage({ user }) {
         }}
         onClose={handleClose}
       />
+
+      {bulkAssignOpen && (
+        <BulkAssignModal
+          open
+          onClose={() => setBulkAssignOpen(false)}
+          releaseId={releaseId}
+          environment={environment}
+          environments={environments}
+          applications={applications}
+          modules={modules}
+          counts={scopeCounts}
+          onSuccess={() => {
+            setBulkAssignOpen(false);
+            fetchPage({
+              active: filters.active,
+              page: pagination.page,
+              size: pagination.size,
+              rid: releaseId,
+              env: environment,
+            });
+          }}
+        />
+      )}
 
       <BulkModalRenderer
         openModal={openModal}

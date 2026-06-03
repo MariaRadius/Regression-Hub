@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
 const { db, reset } = createMockDb();
-const { listAssignments, createAssignment } = vi.hoisted(() => ({
-  listAssignments: vi.fn(),
-  createAssignment: vi.fn(),
-}));
+const { assignTestCases } = vi.hoisted(() => ({ assignTestCases: vi.fn() }));
 
 vi.mock('@/lib/server/withTeam', () => ({
   withTeam: (handler) => (req, ctx) =>
@@ -21,49 +18,33 @@ vi.mock('@/lib/server/withTeam', () => ({
       db,
     }),
 }));
-
-vi.mock('@/lib/db/assignmentsData', () => ({
-  listAssignments,
-  createAssignment,
-}));
+vi.mock('@/lib/db/assignmentsData', () => ({ assignTestCases }));
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
 }));
 
-import { GET, POST } from '../route';
+import { POST } from '../route';
 
 beforeEach(() => {
   reset();
-  vi.clearAllMocks();
+  assignTestCases.mockReset();
 });
 
 describe('assignments route', () => {
-  it('GET lists assignments for a release', async () => {
-    listAssignments.mockResolvedValue([]);
-    const res = await GET(new Request('http://x/api/assignments?releaseId=r1'));
-    expect(res.status).toBe(200);
-    expect(listAssignments).toHaveBeenCalledWith(db, 't1', {
-      releaseId: 'r1',
-      assignedTo: undefined,
+  it('POST assigns test cases and returns the count', async () => {
+    assignTestCases.mockResolvedValue({ ok: true, testCaseCount: 3 });
+    const body = {
+      releaseId: 'a'.repeat(24),
+      assignedTo: 'bob',
+      moduleIds: ['m1'],
+      environments: ['QA'],
+    };
+    const req = { json: async () => body };
+    const res = await POST(req, {});
+    expect(assignTestCases).toHaveBeenCalledWith(db, 't1', body, {
+      assignedBy: 'Alice',
     });
-  });
-
-  it('POST creates assignment', async () => {
-    createAssignment.mockResolvedValue({
-      ok: true,
-      id: 'a1',
-      testCaseCount: 2,
-    });
-    const req = new Request('http://x', {
-      method: 'POST',
-      body: JSON.stringify({
-        assignedTo: 'Bob',
-        releaseId: 'r1',
-        tcIds: ['abc001', 'abc002'],
-      }),
-    });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, testCaseCount: 3 });
   });
 });

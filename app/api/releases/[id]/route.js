@@ -56,7 +56,7 @@ export const PATCH = withAdmin(
 /**
  * DELETE /api/releases/[id]
  *
- * Deletes a release and cascades to test cases, results, assignments, and events.
+ * Deletes a release and cascades to test cases, results, and events (assignment history is part of the events log).
  * Admin only. Requires body `{ confirm: 'DELETE' }`.
  *
  * The release must not be archived (unarchive it first).

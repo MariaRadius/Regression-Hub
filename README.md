@@ -53,8 +53,8 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 | Role      | Can do                                                                              |
 | --------- | ----------------------------------------------------------------------------------- |
-| **QA**    | Sign in, record results, view assignments, view dashboards and reports              |
-| **Admin** | All QA permissions + manage users, manage releases, import cases, manage assignments |
+| **QA**    | Sign in, record results, reassign cases (from `/test-cases`), view dashboards and reports |
+| **Admin** | All QA permissions + manage users, manage releases, import cases, bulk-assign cases       |
 
 ## Domain Model
 
@@ -87,12 +87,12 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 Admin-managed list of named testing cycles. Actions per release:
 
 - **Create** — empty, clone from an existing release, or start from Excel import
-- **Clone** — copies test cases with new `_id`s; fresh Pending results for each new `_id`; assignments opt-in only
+- **Clone** — copies test cases with new `_id`s; fresh Pending results for each new `_id`; assignees opt-in only
 - **Archive / Unarchive** — frozen and hidden from default selectors while archived; fully reversible
-- **Delete** — cascades to test cases, results, and assignments (confirmation dialog restates cascade)
+- **Delete** — cascades to test cases, results, and events including assignment history (confirmation dialog restates cascade)
 - **Add / Remove Environment** — fan-out generates / removes result rows for all cases in the release
 
-An archived release is read-only — no results, edits, assignments, or imports until unarchived.
+An archived release is read-only — no results, edits, reassignments, or imports until unarchived.
 
 ### Test Cases
 
@@ -137,8 +137,10 @@ Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional comm
 
 ### Assignments
 
-- Assign test cases to QA users, scoped to a specific environment
-- Most recent assignment per (case, environment) is the effective owner; history is retained
+- Assign test cases to QA users from `/test-cases`: **Reassign** (selected cases,
+  active environment) is available to all team members; **Bulk Assign** (every case
+  in chosen applications/modules, active or all environments) is Admin-only.
+- Live assignee is stored on the result row; history lives in the audit log (events)
 - Assigned-to and tested-by are distinct — reports show them separately
 
 ### Audit Log

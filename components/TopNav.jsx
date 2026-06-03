@@ -2,7 +2,6 @@
 
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import AssignmentIcon from '@mui/icons-material/Assignment';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -39,7 +38,6 @@ import { ROLES } from '@/lib/constants';
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/test-cases', label: 'Test Cases', Icon: BugReportIcon },
-  { href: '/assignments', label: 'Assignments', Icon: AssignmentIcon },
   { href: '/releases', label: 'Releases', Icon: NewReleasesIcon },
   { href: '/reports', label: 'Reports', Icon: AssessmentIcon },
   {

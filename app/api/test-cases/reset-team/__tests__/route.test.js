@@ -49,7 +49,6 @@ describe('POST /api/test-cases/reset-team', () => {
       testCases: 10,
       modules: 3,
       applications: 1,
-      assignments: 0,
       events: 5,
     });
     const req = new Request('http://x', {
@@ -64,7 +63,6 @@ describe('POST /api/test-cases/reset-team', () => {
         testCases: 10,
         modules: 3,
         applications: 1,
-        assignments: 0,
         events: 5,
       },
     });

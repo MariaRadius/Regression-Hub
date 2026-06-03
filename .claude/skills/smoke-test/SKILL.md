@@ -60,8 +60,8 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 
 ## Route inventory
 
-**All-role routes (5)** — both admin and QA walks visit these:
-`/dashboard`, `/test-cases`, `/assignments`, `/releases`, `/reports`
+**All-role routes (4)** — both admin and QA walks visit these:
+`/dashboard`, `/test-cases`, `/releases`, `/reports`
 
 **Admin-only routes (3)** — admin walk only:
 `/admin`, `/users`, `/import-cases`
@@ -77,13 +77,12 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 | -------------- | ----- | --------------- |
 | `/releases`    | PASS  | PASS (read-only mutations blocked) |
 | `/test-cases`  | PASS  | PASS            |
-| `/assignments` | PASS  | PASS (mutations blocked) |
 | `/reports`     | PASS  | PASS            |
 | `/import-cases`| PASS  | REDIRECT → `/dashboard` |
 | `/admin`       | PASS  | REDIRECT → `/dashboard` |
 | `/users`       | PASS  | REDIRECT → `/dashboard` |
 
-Mutation routes (POST/PATCH/DELETE on `/api/releases/**`, `/api/assignments`, `/api/test-cases/**`) require admin except result recording (`/api/releases/[id]/results`) and snapshot generation (`POST /api/releases/[id]/snapshot`) which are open to QA.
+Mutation routes (POST/PATCH/DELETE on `/api/releases/**`, `/api/test-cases/**`) require admin except result recording (`/api/releases/[id]/results`) and snapshot generation (`POST /api/releases/[id]/snapshot`) which are open to QA. `POST /api/assignments` is open to any team member (`withTeam`) — the admin gate is on the Bulk Assign button in the test-cases FilterStrip (UI only). The `/assignments` page route no longer exists.
 
 ---
 
@@ -160,7 +159,7 @@ Confirm URL is `/dashboard`. If still on `/login`, fail with "Admin sign-in fail
 #### Walk all 8 admin routes
 
 For each route in order:
-`/dashboard`, `/test-cases`, `/assignments`, `/releases`, `/reports`, `/admin`, `/users`, `/import-cases`
+`/dashboard`, `/test-cases`, `/releases`, `/reports`, `/admin`, `/users`, `/import-cases`
 
 Per route:
 
@@ -269,10 +268,10 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="qa-smoke"
 
 Confirm URL is `/dashboard`. If not, fail "QA sign-in failed".
 
-#### Walk 5 QA-visible routes
+#### Walk 4 QA-visible routes
 
 Same per-route check as admin walk (navigate → console errors → HTTP 200):
-`/dashboard`, `/test-cases`, `/assignments`, `/releases`, `/reports`
+`/dashboard`, `/test-cases`, `/releases`, `/reports`
 
 Record same fields as admin walk.
 
@@ -317,7 +316,6 @@ Assemble and print the following JSON (fill in real values):
   "adminWalk": [
     { "route": "/dashboard",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-cases",   "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
-    { "route": "/assignments",  "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/releases",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/admin",        "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
@@ -327,7 +325,6 @@ Assemble and print the following JSON (fill in real values):
   "qaWalk": [
     { "route": "/dashboard",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-cases",   "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
-    { "route": "/assignments",  "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/releases",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" }
   ],
@@ -401,10 +398,12 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - The download interceptor patches `URL.createObjectURL` for the lifetime of the page tab. If multiple downloads are tested on the same page, reset `window.__smokeBlobs = []` before each click (the injector script above already does this).
 - Port may be 3000–3099 depending on what is already running. Always parse from the server log.
 - `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
-- Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`) and assignment mutations (`POST /api/assignments`, `DELETE /api/assignments/[id]`) each append entries to the `events` collection (audit log). Entries carry `tcId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`.
+- Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`) and assignment mutations (`POST /api/assignments`) each append entries to the `events` collection (audit log). Entries carry `tcId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`.
 - Opening a test case's detail panel on `/test-cases` fires a single `GET /api/releases/[id]/results/[tcId]` returning the minimal per-environment execution rows (`environment`, `status`, `testedBy`, `testedOn`, `assignedTo`, `notes`) for that one case. It is a read route (admin+qa); it must not appear more than once per panel open and must not fan out per environment.
 - The release/environment selector is a single combined searchable dropdown inside TopNav (right side, before the profile avatar), visible on every authenticated route including mobile. If it is missing on any route, the context wiring is broken.
 - `POST /api/releases/[id]/snapshot` is a **mutation**: it replaces the stored GridFS PDF for the given (release, environment) and appends an audit event (`category: export`, `action: pdf`). It accepts multipart form data with fields `file` (PDF blob), `environment` (string), and `filename` (string). Returns `200` with the snapshot metadata doc on success; `400` if `environment` or `file` is missing; `404` if the release does not exist.
+- `GET /api/releases/[id]/scope-counts` (read-only, `withTeam`) backs the Bulk Assign picker — returns test-case counts by scope for a given release. Admin and QA can call it; no mutation occurs.
+- The Bulk Assign button in the test-cases FilterStrip is admin-only (UI gate); it is hidden for QA. Clicking it triggers `POST /api/assignments`, which is open to any team member at the API level.
 - `GET /api/snapshots` returns the team-scoped saved-copy list — one entry per (release, environment), newest first.
 - `GET /api/snapshots/[id]/download` streams the stored PDF bytes with `Content-Type: application/pdf` and `Content-Disposition: attachment; filename="<original filename>"`. Returns `404` if the snapshot does not exist or belongs to a different team.
 - Archived releases must not appear in the default release selector dropdown; they must still be findable by typing in the selector's search input.
