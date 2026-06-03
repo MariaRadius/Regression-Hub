@@ -3,7 +3,11 @@ import AddIcon from '@mui/icons-material/Add';
 import { Button, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { useCallback, useState } from 'react';
 import { useQaUserList } from '@/hooks/useSharedData';
-import { FILTER_TYPES, VIEW_PRESETS } from '@/lib/constants';
+import {
+  FILTER_TYPES,
+  UNASSIGNED_SENTINEL,
+  VIEW_PRESETS,
+} from '@/lib/constants';
 import AddFilterPopover from './AddFilterPopover';
 import FilterChip from './FilterChip';
 
@@ -61,8 +65,19 @@ export default function FilterStrip({
       return (applications ?? []).map((a) => ({ value: a._id, label: a.name }));
     if (def.optionsSource === 'modules')
       return (modules ?? []).map((m) => ({ value: m._id, label: m.name }));
-    if (def.optionsSource === 'qaUsers')
-      return (qaUsers ?? []).map((u) => ({ value: u, label: u }));
+    if (def.optionsSource === 'qaUsers') {
+      const qaUserOptions = (qaUsers ?? []).map((u) => ({
+        value: u,
+        label: u,
+      }));
+      if (def.key === 'assignedTo') {
+        return [
+          { value: UNASSIGNED_SENTINEL, label: 'Unassigned' },
+          ...qaUserOptions,
+        ];
+      }
+      return qaUserOptions;
+    }
     return [];
   }
 
