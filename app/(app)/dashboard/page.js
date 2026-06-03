@@ -166,7 +166,7 @@ export default async function DashboardPage() {
                   emptyLabel='Unassigned'
                   minBarSize={3}
                   navTo={{
-                    filterKey: 'testedBy',
+                    filterKey: 'assignedTo',
                     valueField: 'name',
                     encode: true,
                   }}
