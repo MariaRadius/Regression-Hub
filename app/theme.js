@@ -37,16 +37,16 @@ const theme = createTheme({
       700: '#374151', // --ink-2
     },
     success: {
-      main: '#16a34a', // --pass
-      light: '#f0fdf4', // --pass-bg
+      main: '#03a769', // --pass
+      light: '#e9fbf3', // --pass-bg
     },
     error: {
-      main: '#dc2626', // --fail
-      light: '#fef2f2', // --fail-bg
+      main: '#e14d5a', // --fail
+      light: '#fff1f3', // --fail-bg
     },
     warning: {
-      main: '#d97706', // --pending
-      light: '#fffbeb', // --pending-bg
+      main: '#f08d2f', // --pending
+      light: '#fff3e7', // --pending-bg
     },
     // Custom keys
     nav: {
@@ -55,19 +55,19 @@ const theme = createTheme({
       dark: '#334155', // --nav-3
     },
     pass: {
-      main: '#16a34a', // --pass
-      light: '#f0fdf4', // --pass-bg
-      border: '#bbf7d0', // --pass-border
+      main: '#03a769', // --pass
+      light: '#e9fbf3', // --pass-bg
+      border: '#b7efd6', // --pass-border
     },
     fail: {
-      main: '#dc2626', // --fail
-      light: '#fef2f2', // --fail-bg
-      border: '#fecaca', // --fail-border
+      main: '#e14d5a', // --fail
+      light: '#fff1f3', // --fail-bg
+      border: '#f6c2c9', // --fail-border
     },
     pending: {
-      main: '#d97706', // --pending
-      light: '#fffbeb', // --pending-bg
-      border: '#fde68a', // --pending-border
+      main: '#f08d2f', // --pending
+      light: '#fff3e7', // --pending-bg
+      border: '#f7cc9d', // --pending-border
     },
   },
 

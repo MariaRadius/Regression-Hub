@@ -8,7 +8,7 @@ import Typography from '@mui/material/Typography';
  */
 export default function PageHeader({ eyebrow, title, sub, actions }) {
   const header = (
-    <Stack spacing={0.5} sx={{ mb: actions ? 0 : 3 }}>
+    <Stack spacing={0.5} sx={{ mb: actions ? 0 : 3 }} suppressHydrationWarning>
       {eyebrow && <Typography variant='pageEyebrow'>{eyebrow}</Typography>}
       <Typography variant='pageTitle'>{title}</Typography>
       {sub && (
@@ -25,6 +25,7 @@ export default function PageHeader({ eyebrow, title, sub, actions }) {
     <Stack
       direction='row'
       spacing={1.5}
+      suppressHydrationWarning
       sx={{
         justifyContent: 'space-between',
         alignItems: 'flex-start',
