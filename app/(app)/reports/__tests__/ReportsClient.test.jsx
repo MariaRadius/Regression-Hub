@@ -14,6 +14,7 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ROLES } from '@/lib/constants';
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────────
 
@@ -83,13 +84,22 @@ describe('ReportsClient — no releases', () => {
     withReleases([]);
   });
 
-  it('shows the EmptyState guidance when no releases exist', async () => {
+  it('shows the EmptyState guidance and admin CTA when no releases exist', async () => {
     await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
+      render(<ReportsClient initialSnapshots={[]} userRole={ROLES.ADMIN} />);
     });
 
     expect(screen.getByText(/no releases yet/i)).toBeDefined();
     expect(screen.getByRole('link', { name: /go to releases/i })).toBeDefined();
+  });
+
+  it('hides the releases CTA for qa users when no releases exist', async () => {
+    await act(async () => {
+      render(<ReportsClient initialSnapshots={[]} userRole={ROLES.QA} />);
+    });
+
+    expect(screen.getByText(/no releases yet/i)).toBeDefined();
+    expect(screen.queryByRole('link', { name: /go to releases/i })).toBeNull();
   });
 });
 
@@ -117,7 +127,7 @@ describe('ReportsClient — Create report flow', () => {
     mockSaveSnapshot.mockRejectedValue(new Error('network error'));
 
     await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
+      render(<ReportsClient initialSnapshots={[]} userRole={ROLES.ADMIN} />);
     });
 
     const createBtn = screen.getByRole('button', { name: /create report/i });
@@ -146,7 +156,7 @@ describe('ReportsClient — Create report flow', () => {
     ]);
 
     await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
+      render(<ReportsClient initialSnapshots={[]} userRole={ROLES.ADMIN} />);
     });
 
     const createBtn = screen.getByRole('button', { name: /create report/i });
@@ -166,7 +176,7 @@ describe('ReportsClient — Create report flow', () => {
     mockExportData.mockResolvedValue([]);
 
     await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
+      render(<ReportsClient initialSnapshots={[]} userRole={ROLES.ADMIN} />);
     });
 
     const createBtn = screen.getByRole('button', { name: /create report/i });
@@ -192,7 +202,7 @@ describe('ReportsClient — Excel flow writes no saved copy', () => {
 
   it('does not call saveSnapshot when exporting Excel', async () => {
     await act(async () => {
-      render(<ReportsClient initialSnapshots={[]} />);
+      render(<ReportsClient initialSnapshots={[]} userRole={ROLES.ADMIN} />);
     });
 
     const excelBtn = screen.getByRole('button', { name: /export excel/i });

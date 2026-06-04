@@ -38,7 +38,12 @@ import { ROLES } from '@/lib/constants';
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/test-cases', label: 'Test Cases', Icon: BugReportIcon },
-  { href: '/releases', label: 'Releases', Icon: NewReleasesIcon },
+  {
+    href: '/releases',
+    label: 'Releases',
+    Icon: NewReleasesIcon,
+    adminOnly: true,
+  },
   { href: '/reports', label: 'Reports', Icon: AssessmentIcon },
   {
     href: '/admin',

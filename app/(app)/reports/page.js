@@ -18,5 +18,10 @@ export default async function ReportsPage() {
   const db = await getDb();
   const initialSnapshots = await listSnapshots(db, session.user.teamId);
 
-  return <ReportsClient initialSnapshots={initialSnapshots} />;
+  return (
+    <ReportsClient
+      initialSnapshots={initialSnapshots}
+      userRole={session.user.role}
+    />
+  );
 }

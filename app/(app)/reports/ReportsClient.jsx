@@ -29,7 +29,7 @@ import {
   saveSnapshot,
   snapshotDownloadUrl,
 } from '@/lib/api/snapshots';
-import { STATUS } from '@/lib/constants';
+import { ROLES, STATUS } from '@/lib/constants';
 import { dateStamp, normalizedStatus } from '@/utils/formatters';
 import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
 
@@ -307,8 +307,9 @@ function ReportCard({ row, busy, onCreate, onExcel }) {
  * @see {@link app/(app)/reports/__tests__/ReportsClient.test.jsx}
  * @see {@link app/(app)/reports/__tests__/buildReportRows.test.js}
  */
-export default function ReportsClient({ initialSnapshots }) {
+export default function ReportsClient({ initialSnapshots, userRole }) {
   const { releases } = useReleaseEnv();
+  const canManageReleases = userRole === ROLES.ADMIN;
 
   const [snapshots, setSnapshots] = useState(initialSnapshots ?? []);
   // busy: { [rowKey]: 'create' | 'excel' } — one in-flight action per row.
@@ -527,9 +528,11 @@ export default function ReportsClient({ initialSnapshots }) {
               <Typography variant='pageSub' color='text.disabled'>
                 Create a release to start generating regression reports.
               </Typography>
-              <Button component='a' href='/releases' variant='contained'>
-                Go to releases
-              </Button>
+              {canManageReleases ? (
+                <Button component='a' href='/releases' variant='contained'>
+                  Go to releases
+                </Button>
+              ) : null}
             </EmptyState>
           </Stack>
         </Panel>

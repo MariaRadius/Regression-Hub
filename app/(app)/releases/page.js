@@ -17,7 +17,7 @@ export default async function ReleasesPage() {
 
   const { user } = session;
 
-  if (user.role !== ROLES.ADMIN && user.role !== ROLES.QA) {
+  if (user.role !== ROLES.ADMIN) {
     redirect('/dashboard');
   }
 

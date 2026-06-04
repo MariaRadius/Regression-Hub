@@ -60,14 +60,14 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 
 ## Route inventory
 
-**All-role routes (4)** — both admin and QA walks visit these:
-`/dashboard`, `/test-cases`, `/releases`, `/reports`
+**All-role routes (3)** — both admin and QA walks visit these:
+`/dashboard`, `/test-cases`, `/reports`
 
 **Admin-only routes (3)** — admin walk only:
 `/admin`, `/users`, `/import-cases`
 
-**QA redirect assertions (3)** — QA walk must confirm these redirect:
-`/admin` → `/dashboard`, `/users` → `/dashboard`, `/import-cases` → `/dashboard`
+**QA redirect assertions (4)** — QA walk must confirm these redirect:
+`/releases` → `/dashboard`, `/admin` → `/dashboard`, `/users` → `/dashboard`, `/import-cases` → `/dashboard`
 
 ---
 
@@ -75,7 +75,7 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 
 | Route          | Admin | QA              |
 | -------------- | ----- | --------------- |
-| `/releases`    | PASS  | PASS (read-only mutations blocked) |
+| `/releases`    | PASS  | REDIRECT → `/dashboard` |
 | `/test-cases`  | PASS  | PASS            |
 | `/reports`     | PASS  | PASS            |
 | `/import-cases`| PASS  | REDIRECT → `/dashboard` |
@@ -83,6 +83,8 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 | `/users`       | PASS  | REDIRECT → `/dashboard` |
 
 Mutation routes (POST/PATCH/DELETE on `/api/releases/**`, `/api/test-cases/**`) require admin except result recording (`/api/releases/[id]/results`) and snapshot generation (`POST /api/releases/[id]/snapshot`) which are open to QA. `POST /api/assignments` is open to any team member (`withTeam`) — the admin gate is on the Bulk Assign button in the test-cases FilterStrip (UI only). The `/assignments` page route no longer exists.
+
+QA users must not see a desktop/mobile nav item for `/releases`, and any empty-state CTA that links to `/releases` must be hidden for QA.
 
 Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`; this request must return 200 for both admin and QA users with no console or network errors. The full `GET /api/users` roster remains admin-only.
 

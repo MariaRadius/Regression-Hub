@@ -84,7 +84,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 ### Releases
 
-Admin-managed list of named testing cycles. Actions per release:
+Admin-only list of named testing cycles. QA users are redirected away from `/releases` and should never see navigation or empty-state CTAs that point there. Actions per release:
 
 - **Create** — empty, clone from an existing release, or start from Excel import
 - **Clone** — copies test cases with new `_id`s; fresh Pending results for each new `_id`; assignees opt-in only
@@ -162,7 +162,7 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 
 | Method | Route | Role | Description |
 | ------ | ----- | ---- | ----------- |
-| GET | `/api/releases` | admin+qa | List releases |
+| GET | `/api/releases` | admin+qa | List releases for selectors, dashboards, reports, and other non-management flows |
 | POST | `/api/releases` | admin | Create / clone |
 | GET | `/api/releases/[id]` | admin+qa | Get release |
 | PATCH | `/api/releases/[id]` | admin | Rename or archive/unarchive |
