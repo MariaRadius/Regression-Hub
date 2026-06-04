@@ -22,6 +22,7 @@ import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 import { ChartHoverProvider } from './charts/ChartHoverContext';
 import DonutChart from './charts/DonutChart';
 import StackedBarChart from './charts/StackedBarChart';
+import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
 
 // Re-execute on every router.refresh() so the RSC re-runs the query with the
@@ -78,7 +79,15 @@ export default async function DashboardPage() {
 
   const data = await getCachedDashboardData(teamId, releaseId, environment);
 
-  const { summary, moduleGroups, testerGroups, modulesByApp } = data;
+  const {
+    summary,
+    criticalSummary,
+    topFailingModules,
+    criticalFailures,
+    moduleGroups,
+    testerGroups,
+    modulesByApp,
+  } = data;
 
   const donutData = buildDonutData(summary);
   const moduleBarData = buildModuleBarData(moduleGroups);
@@ -175,6 +184,12 @@ export default async function DashboardPage() {
             </Panel>
           </Grid>
         </Grid>
+
+        <DashboardInsightsPanels
+          topFailingModules={topFailingModules}
+          criticalSummary={criticalSummary}
+          criticalFailures={criticalFailures}
+        />
 
         <Panel title='Results by Module'>
           <Box sx={{ p: 2.5, height: 380 }}>

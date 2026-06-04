@@ -80,6 +80,8 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 - Live metrics: total / passed / failed / pending
 - Donut chart by status
 - Bar chart by module
+- Top failing modules panel
+- Critical failures panel: failed High priority `testKey`s only, each linking to `/test-cases` with the existing Fail filter plus an exact `testKey` filter applied; module and application context shown under each id
 - Drag-and-drop `.xlsx` upload tile
 
 ### Releases
@@ -169,7 +171,7 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | DELETE | `/api/releases/[id]` | admin | Delete with cascade |
 | POST | `/api/releases/[id]/environments` | admin | Add environment |
 | DELETE | `/api/releases/[id]/environments` | admin | Remove environment |
-| GET | `/api/releases/[id]/test-cases` | admin+qa | List test cases (`environment` required; supports `q`, `sortBy`, `sortDir`, filters, paging) |
+| GET | `/api/releases/[id]/test-cases` | admin+qa | List test cases (`environment` required; supports exact `testKey`, broad `q`, `sortBy`, `sortDir`, filters, paging) |
 | POST | `/api/releases/[id]/test-cases` | admin | Create test case |
 | GET | `/api/releases/[id]/test-cases/[caseId]` | admin+qa | Get test case |
 | PATCH | `/api/releases/[id]/test-cases/[caseId]` | admin | Update test case |

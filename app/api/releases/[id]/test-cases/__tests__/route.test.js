@@ -87,6 +87,28 @@ describe('GET /api/releases/[id]/test-cases', () => {
     );
   });
 
+  it('forwards an exact testKey filter for deep links', async () => {
+    listTestCases.mockResolvedValue({ rows: [], total: 0 });
+    const res = await GET(
+      new Request(
+        `http://x/api/releases/${RELEASE_ID}/test-cases?environment=QA&status=Fail&testKey=SAP-0454`,
+      ),
+      PARAMS,
+    );
+
+    expect(res.status).toBe(200);
+    expect(listTestCases).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.objectContaining({
+        releaseId: RELEASE_ID,
+        environment: 'QA',
+        status: 'Fail',
+        testKey: 'SAP-0454',
+      }),
+    );
+  });
+
   it('returns 400 when environment param is missing', async () => {
     const res = await GET(
       new Request(`http://x/api/releases/${RELEASE_ID}/test-cases`),
