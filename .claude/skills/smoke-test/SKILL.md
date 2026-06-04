@@ -84,6 +84,8 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 
 Mutation routes (POST/PATCH/DELETE on `/api/releases/**`, `/api/test-cases/**`) require admin except result recording (`/api/releases/[id]/results`) and snapshot generation (`POST /api/releases/[id]/snapshot`) which are open to QA. `POST /api/assignments` is open to any team member (`withTeam`) — the admin gate is on the Bulk Assign button in the test-cases FilterStrip (UI only). The `/assignments` page route no longer exists.
 
+Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`; this request must return 200 for both admin and QA users with no console or network errors. The full `GET /api/users` roster remains admin-only.
+
 ---
 
 ## Download surfaces — **all opt-in, skip by default**

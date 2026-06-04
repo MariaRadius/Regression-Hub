@@ -53,7 +53,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 | Role      | Can do                                                                              |
 | --------- | ----------------------------------------------------------------------------------- |
-| **QA**    | Sign in, record results, reassign cases (from `/test-cases`), view dashboards and reports |
+| **QA**    | Sign in, record results, reassign cases (from `/test-cases`), view dashboards and reports, load the active QA roster for assignment/tester pickers |
 | **Admin** | All QA permissions + manage users, manage releases, import cases, bulk-assign cases       |
 
 ## Domain Model
@@ -179,6 +179,8 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
 | POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
 | POST | `/api/releases/[id]/snapshot` | admin+qa | Generate + store PDF snapshot (replaces prior snapshot for same release+environment; writes EXPORT/PDF audit event) |
+| GET | `/api/users?role=qa` | admin+qa | List active QA users for team-scoped assignment/tester pickers |
+| GET | `/api/users` | admin | List all team users for user management |
 | GET | `/api/snapshots` | admin+qa | List stored PDF snapshots for team (Version History) |
 | GET | `/api/snapshots/[id]/download` | admin+qa | Download stored PDF bytes (no regeneration) |
 
