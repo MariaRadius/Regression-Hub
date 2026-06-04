@@ -1,3 +1,5 @@
+'use client';
+
 import ErrorOutlinedIcon from '@mui/icons-material/ErrorOutlined';
 import FolderIcon from '@mui/icons-material/Folder';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -6,6 +8,7 @@ import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import Link from 'next/link';
 import Panel from '@/components/Panel';
 import { PRIORITIES } from '@/lib/constants';
 
@@ -35,6 +38,24 @@ function EmptyCopy({ icon, title, sub }) {
         {sub}
       </Typography>
     </Stack>
+  );
+}
+
+function DashboardCaseLink({ href, children }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        color: 'inherit',
+        fontSize: '1rem',
+        fontWeight: 700,
+        lineHeight: 1.5,
+        textDecoration: 'underline',
+        textUnderlineOffset: '0.18em',
+      }}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -115,16 +136,11 @@ export default function DashboardInsightsPanels({
                       justifyContent: 'space-between',
                     }}
                   >
-                    <Typography
-                      component='a'
+                    <DashboardCaseLink
                       href={`/test-cases?testKey=${encodeURIComponent(item.testKey)}&status=Fail`}
-                      color='text.primary'
-                      sx={{ fontWeight: 700, textDecoration: 'underline' }}
                     >
-                      <Typography variant='panelTitle' component='span'>
-                        {item.testKey}
-                      </Typography>
-                    </Typography>
+                      {item.testKey}
+                    </DashboardCaseLink>
                     <Chip
                       label={
                         item.priority === PRIORITIES.HIGH

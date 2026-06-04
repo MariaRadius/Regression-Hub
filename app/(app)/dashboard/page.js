@@ -103,7 +103,6 @@ export default async function DashboardPage() {
           title='Dashboard'
           sub='Live metrics for the active release and environment'
         />
-
         <MetricCards
           columns={6}
           cards={[
@@ -142,7 +141,6 @@ export default async function DashboardPage() {
             },
           ]}
         />
-
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
             <Panel title='Pass / Fail / Pending'>
@@ -185,12 +183,6 @@ export default async function DashboardPage() {
           </Grid>
         </Grid>
 
-        <DashboardInsightsPanels
-          topFailingModules={topFailingModules}
-          criticalSummary={criticalSummary}
-          criticalFailures={criticalFailures}
-        />
-
         <Panel title='Results by Module'>
           <Box sx={{ p: 2.5, height: 380 }}>
             <StackedBarChart
@@ -205,6 +197,12 @@ export default async function DashboardPage() {
             />
           </Box>
         </Panel>
+
+        <DashboardInsightsPanels
+          topFailingModules={topFailingModules}
+          criticalSummary={criticalSummary}
+          criticalFailures={criticalFailures}
+        />
 
         <Grid container spacing={2}>
           {Object.entries(modulesByApp)
