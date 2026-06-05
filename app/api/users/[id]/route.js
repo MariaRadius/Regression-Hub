@@ -13,6 +13,7 @@ export const PATCH = withAdmin(
     if (!parsed.success) throw new ApiError(400, 'Invalid update body');
     const result = await updateUser(db, teamId, id, parsed.data, {
       sessionUserId: session.user.id,
+      actor: session.user.name,
     });
     revalidatePath('/users');
     return NextResponse.json(result);

@@ -53,6 +53,7 @@ beforeEach(() => {
     id: 'u1',
     teamId: 't1',
     role: ROLES.ADMIN,
+    name: 'Maria',
     username: 'admin',
     teamName: 'Radius',
   });
@@ -111,6 +112,14 @@ describe('POST /api/users', () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(201);
-    expect(createUser).toHaveBeenCalled();
+    expect(createUser).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.any(Object),
+      expect.objectContaining({
+        createdBy: 'admin',
+        actor: 'Maria',
+      }),
+    );
   });
 });

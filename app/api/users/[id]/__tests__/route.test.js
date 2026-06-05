@@ -9,13 +9,17 @@ const { updateUser } = vi.hoisted(() => ({
 vi.mock('@/lib/server/withTeam', () => ({
   withTeam: (handler) => (req, ctx) =>
     handler(req, ctx, {
-      session: { user: { id: 'u1', teamId: 't1', role: 'admin' } },
+      session: {
+        user: { id: 'u1', teamId: 't1', role: 'admin', name: 'Maria' },
+      },
       teamId: 't1',
       db,
     }),
   withAdmin: (handler) => (req, ctx) =>
     handler(req, ctx, {
-      session: { user: { id: 'u1', teamId: 't1', role: 'admin' } },
+      session: {
+        user: { id: 'u1', teamId: 't1', role: 'admin', name: 'Maria' },
+      },
       teamId: 't1',
       db,
     }),
@@ -48,7 +52,7 @@ describe('PATCH /api/users/[id]', () => {
       't1',
       'abc',
       { name: 'New' },
-      { sessionUserId: 'u1' },
+      { sessionUserId: 'u1', actor: 'Maria' },
     );
   });
 });

@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
 const { db, reset } = createMockDb();
-const { resetTeamData } = vi.hoisted(() => ({
+const { resetTeamData, appendAdminActivity } = vi.hoisted(() => ({
   resetTeamData: vi.fn(),
+  appendAdminActivity: vi.fn(),
 }));
 
 vi.mock('@/lib/server/withTeam', () => {
@@ -11,7 +12,12 @@ vi.mock('@/lib/server/withTeam', () => {
     try {
       return await handler(req, ctx, {
         session: {
-          user: { id: 'u1', teamId: 't1', role: admin ? 'admin' : 'qa' },
+          user: {
+            id: 'u1',
+            teamId: 't1',
+            role: admin ? 'admin' : 'qa',
+            name: 'Maria',
+          },
         },
         teamId: 't1',
         db,
@@ -35,6 +41,7 @@ vi.mock('@/lib/server/withTeam', () => {
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/db/testCasesData', () => ({ resetTeamData }));
+vi.mock('@/lib/db/adminActivityData', () => ({ appendAdminActivity }));
 
 import { POST } from '../route';
 
@@ -67,6 +74,15 @@ describe('POST /api/test-cases/reset-team', () => {
       },
     });
     expect(resetTeamData).toHaveBeenCalledWith(db, 't1');
+    expect(appendAdminActivity).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.objectContaining({
+        category: 'config',
+        action: 'reset-data',
+        by: 'Maria',
+      }),
+    );
   });
 
   it('rejects without RESET confirm', async () => {

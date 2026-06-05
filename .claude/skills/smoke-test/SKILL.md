@@ -66,6 +66,8 @@ Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the serve
 **Admin-only routes (3)** — admin walk only:
 `/admin`, `/users`, `/import-cases`
 
+On `/admin`, the Activity Logs drawer stays closed until the admin clicks `View Activity`. Opening it should trigger one `GET /api/admin/events` request, show readable newest-first entries, and keep a `Download Logs` button available inside the drawer.
+
 **QA redirect assertions (4)** — QA walk must confirm these redirect:
 `/releases` → `/dashboard`, `/admin` → `/dashboard`, `/users` → `/dashboard`, `/import-cases` → `/dashboard`
 
@@ -198,6 +200,15 @@ Record result:
 - `httpCode`: status code of the document request
 
 **Do not stop on FAIL** — continue walking all routes and collect results.
+
+#### Extra `/admin` checks (admin walk only)
+
+After the route walk lands on `/admin`, verify the admin activity drawer behavior:
+
+1. Confirm the page renders a `View Activity` button/card with no `/api/admin/events` request fired on initial page load.
+2. Click `View Activity` and confirm one request to `/api/admin/events` succeeds with no console errors.
+3. Confirm the drawer shows readable activity rows and a `Download Logs` button.
+4. Close the drawer and confirm the admin page remains interactive.
 
 #### Extra `/test-cases` checks (run for both admin and QA walks)
 

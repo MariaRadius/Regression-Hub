@@ -140,6 +140,16 @@ Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional comm
 - View modules grouped by application
 - Deletion blocked while any test case in any release references the application or module
 
+### Admin Panel
+
+Admin-only hub for user management, importing, destructive maintenance, and audit review.
+
+- Quick-access cards open Team Members, Import Test Cases, and Activity Logs
+- **Activity Logs** stay collapsed until the admin explicitly opens them from `/admin`
+- Activity Logs are admin-only, lazy-loaded, newest-first, and readable without leaving the admin page
+- Activity entries cover admin-surface mutations such as user creation/edits, password changes, role changes, activation/deactivation, importer commits, and clear-all-data resets
+- Activity Logs can be downloaded after they are opened
+
 ### Assignments
 
 - Assign test cases to QA users from `/test-cases`: **Reassign** (selected cases,
@@ -153,6 +163,8 @@ Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional comm
 Every result write (Pass / Fail / Pending reset), test-case edit, import, and assign / unassign appends an immutable entry to the `events` collection — `tcId`, `releaseId`, `environment`, actor, and timestamp included.
 
 Per-case history is read from the detail panel only when the user opens History. Entries are shown newest-first and include actor, local timestamp, and meaningful field transitions such as status, tester, notes, assignee, and test-case definition edits.
+
+Admin activity logs are a separate admin-only read surface over non-test-case events. They are opened on demand from `/admin`, never loaded with the initial page, and support download after load.
 
 ### Reports
 
@@ -186,6 +198,7 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | GET | `/api/releases/[id]/results/[tcId]` | admin+qa | Minimal per-environment execution rows for one test case (detail panel) |
 | POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
 | POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
+| GET | `/api/admin/events` | admin | Lazy-load admin activity logs for the current team |
 | POST | `/api/releases/[id]/snapshot` | admin+qa | Generate + store PDF snapshot (replaces prior snapshot for same release+environment; writes EXPORT/PDF audit event) |
 | GET | `/api/users?role=qa` | admin+qa | List active QA users for team-scoped assignment/tester pickers |
 | GET | `/api/users` | admin | List all team users for user management |

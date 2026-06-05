@@ -2,6 +2,8 @@ import { promisify } from 'node:util';
 import { gunzip } from 'node:zlib';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
+import { AUDIT_ACTION, AUDIT_CATEGORY } from '@/lib/constants';
+import { appendAdminActivity } from '@/lib/db/adminActivityData';
 import { analyseImport, commitImport } from '@/lib/db/importExcelData';
 import { ApiError } from '@/lib/errors';
 import { importBodySchema } from '@/lib/schemas/import';
@@ -44,105 +46,120 @@ const MAX_COMPRESSED_BYTES = 50 * 1024 * 1024; // 50 MB
  *   environment         — target environment name (required when confirmed: true)
  *   appInitialOverrides — Record<appName, initial> (optional)
  */
-export const POST = withAdmin(async (request, context, { teamId, db }) => {
-  const { id: releaseId } = await context.params;
+export const POST = withAdmin(
+  async (request, context, { teamId, db, session }) => {
+    const { id: releaseId } = await context.params;
 
-  // --- Gunzip then JSON-parse the body (process-safety floor) ---
-  // Phase 3: client sends application/gzip (CompressionStream). We read the raw
-  // bytes, gunzip, and parse the JSON. Malformed gzip or non-JSON → 400.
-  let body;
-  try {
-    const raw = Buffer.from(await request.arrayBuffer());
-    if (raw.length === 0)
-      throw new ApiError(400, 'Request body must not be empty');
-    if (raw.length > MAX_COMPRESSED_BYTES) {
+    // --- Gunzip then JSON-parse the body (process-safety floor) ---
+    // Phase 3: client sends application/gzip (CompressionStream). We read the raw
+    // bytes, gunzip, and parse the JSON. Malformed gzip or non-JSON → 400.
+    let body;
+    try {
+      const raw = Buffer.from(await request.arrayBuffer());
+      if (raw.length === 0)
+        throw new ApiError(400, 'Request body must not be empty');
+      if (raw.length > MAX_COMPRESSED_BYTES) {
+        throw new ApiError(
+          400,
+          `Compressed body exceeds the ${MAX_COMPRESSED_BYTES}-byte limit`,
+        );
+      }
+      const decompressed = await gunzipAsync(raw);
+      body = JSON.parse(decompressed.toString('utf8'));
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
       throw new ApiError(
         400,
-        `Compressed body exceeds the ${MAX_COMPRESSED_BYTES}-byte limit`,
+        'Request body must be valid gzip-compressed JSON',
       );
     }
-    const decompressed = await gunzipAsync(raw);
-    body = JSON.parse(decompressed.toString('utf8'));
-  } catch (err) {
-    if (err instanceof ApiError) throw err;
-    throw new ApiError(400, 'Request body must be valid gzip-compressed JSON');
-  }
 
-  const parsed = importBodySchema.safeParse(body);
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error.errors[0]?.message ?? 'Invalid request body',
-    );
-  }
+    const parsed = importBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiError(
+        400,
+        parsed.error.errors[0]?.message ?? 'Invalid request body',
+      );
+    }
 
-  const {
-    rows,
-    confirmed = false,
-    environment = '',
-    appInitialOverrides = {},
-  } = parsed.data;
+    const {
+      rows,
+      confirmed = false,
+      environment = '',
+      appInitialOverrides = {},
+    } = parsed.data;
 
-  // --- Server process-safety floor caps ---
-  if (rows.length > MAX_ROWS) {
-    throw new ApiError(
-      400,
-      `Row count ${rows.length} exceeds the ${MAX_ROWS}-row limit`,
-    );
-  }
+    // --- Server process-safety floor caps ---
+    if (rows.length > MAX_ROWS) {
+      throw new ApiError(
+        400,
+        `Row count ${rows.length} exceeds the ${MAX_ROWS}-row limit`,
+      );
+    }
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    for (const [key, val] of Object.entries(row)) {
-      if (typeof val === 'string' && val.length > MAX_FIELD_CHARS) {
-        throw new ApiError(
-          400,
-          `Row ${i + 1}: field "${key}" exceeds the ${MAX_FIELD_CHARS}-character limit`,
-        );
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      for (const [key, val] of Object.entries(row)) {
+        if (typeof val === 'string' && val.length > MAX_FIELD_CHARS) {
+          throw new ApiError(
+            400,
+            `Row ${i + 1}: field "${key}" exceeds the ${MAX_FIELD_CHARS}-character limit`,
+          );
+        }
       }
     }
-  }
 
-  // --- Guard deriveInitial throw: a new-app name with no alphanumeric chars
-  //     must yield a clean 400, never a 500 (floor guarantee). ---
-  const uniqueAppNames = [
-    ...new Set(rows.map((r) => r.applicationName || 'Default Application')),
-  ];
-  for (const appName of uniqueAppNames) {
-    if (!(appName in appInitialOverrides)) {
-      try {
-        deriveInitial(appName);
-      } catch {
-        throw new ApiError(
-          400,
-          `Application "${appName}" has no alphanumeric characters`,
-        );
+    // --- Guard deriveInitial throw: a new-app name with no alphanumeric chars
+    //     must yield a clean 400, never a 500 (floor guarantee). ---
+    const uniqueAppNames = [
+      ...new Set(rows.map((r) => r.applicationName || 'Default Application')),
+    ];
+    for (const appName of uniqueAppNames) {
+      if (!(appName in appInitialOverrides)) {
+        try {
+          deriveInitial(appName);
+        } catch {
+          throw new ApiError(
+            400,
+            `Application "${appName}" has no alphanumeric characters`,
+          );
+        }
       }
     }
-  }
 
-  if (!confirmed) {
-    // --- Phase 1: dry-run analysis ---
-    const preview = await analyseImport(db, teamId, { rows, releaseId });
-    return NextResponse.json(preview);
-  }
+    if (!confirmed) {
+      // --- Phase 1: dry-run analysis ---
+      const preview = await analyseImport(db, teamId, { rows, releaseId });
+      return NextResponse.json(preview);
+    }
 
-  // --- Phase 2: commit ---
-  if (!environment.trim()) {
-    throw new ApiError(400, 'environment is required when confirmed is true');
-  }
+    // --- Phase 2: commit ---
+    if (!environment.trim()) {
+      throw new ApiError(400, 'environment is required when confirmed is true');
+    }
 
-  const result = await commitImport(db, teamId, {
-    rows,
-    releaseId,
-    environment,
-    appInitialOverrides,
-  });
+    const result = await commitImport(db, teamId, {
+      rows,
+      releaseId,
+      environment,
+      appInitialOverrides,
+    });
 
-  revalidatePath('/(app)/releases', 'page');
-  revalidatePath('/(app)/test-cases', 'page');
-  revalidatePath('/(app)/dashboard', 'page');
-  revalidatePath('/(app)/reports', 'page');
+    await appendAdminActivity(db, teamId, {
+      category: AUDIT_CATEGORY.IMPORT,
+      action: AUDIT_ACTION.IMPORT,
+      by: session.user.name,
+      environment,
+      releaseId,
+      importedCount: result.imported,
+      updatedCount: result.updated,
+    });
 
-  return NextResponse.json(result);
-});
+    revalidatePath('/(app)/releases', 'page');
+    revalidatePath('/(app)/test-cases', 'page');
+    revalidatePath('/(app)/dashboard', 'page');
+    revalidatePath('/(app)/reports', 'page');
+
+    return NextResponse.json(result);
+  },
+);

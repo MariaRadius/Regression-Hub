@@ -7,9 +7,10 @@ const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
 const { db, reset } = createMockDb();
-const { analyseImport, commitImport } = vi.hoisted(() => ({
+const { analyseImport, commitImport, appendAdminActivity } = vi.hoisted(() => ({
   analyseImport: vi.fn(),
   commitImport: vi.fn(),
+  appendAdminActivity: vi.fn(),
 }));
 
 vi.mock('@/lib/server/withTeam', () => {
@@ -41,6 +42,7 @@ vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
 }));
 vi.mock('@/lib/db/importExcelData', () => ({ analyseImport, commitImport }));
+vi.mock('@/lib/db/adminActivityData', () => ({ appendAdminActivity }));
 
 import { POST } from '../route';
 
@@ -170,6 +172,18 @@ describe('POST /api/releases/[id]/import — Phase 2 (commit)', () => {
         environment: 'QA',
         rows: expect.any(Array),
         appInitialOverrides: {},
+      }),
+    );
+    expect(appendAdminActivity).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.objectContaining({
+        category: 'import',
+        action: 'import',
+        by: 'Alice',
+        environment: 'QA',
+        importedCount: 4,
+        updatedCount: 1,
       }),
     );
     expect(revalidatePath).toHaveBeenCalledWith('/(app)/releases', 'page');

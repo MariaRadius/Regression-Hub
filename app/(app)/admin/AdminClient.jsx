@@ -1,10 +1,18 @@
 'use client';
 
+import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import PeopleIcon from '@mui/icons-material/People';
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
+  Alert,
   Button,
   Card,
   CardActions,
@@ -14,16 +22,23 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Drawer,
   Grid,
+  IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
 import { useState } from 'react';
+import {
+  buildAdminActivityCsv,
+  formatAdminActivityEntries,
+} from '@/app/(app)/admin/adminActivity';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider, { showToast } from '@/components/Toast';
+import { listAdminActivity } from '@/lib/api/admin';
 import { resetTeamTestCases } from '@/lib/api/testCases';
 import { CONFIRM_TOKENS } from '@/lib/constants';
 
@@ -44,13 +59,116 @@ const QUICK_ACCESS = [
       'Upload an Excel spreadsheet to bulk-import test cases directly into the database.',
     action: 'Open Importer',
   },
+  {
+    key: 'activity',
+    Icon: HistoryOutlinedIcon,
+    label: 'Activity Logs',
+    description:
+      'Open a compact audit trail for admin actions like user updates, imports, and data resets.',
+    action: 'View Activity',
+  },
 ];
+
+function downloadLogsFile(entries) {
+  const csv = buildAdminActivityCsv(entries);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `admin-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function normalizeActivityEntries(events) {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  if (events[0]?.title && events[0]?.timestamp) return events;
+  return formatAdminActivityEntries(events);
+}
+
+function ActivityRow({ entry }) {
+  return (
+    <Card variant='outlined'>
+      <CardContent>
+        <Stack spacing={1.5}>
+          <Stack
+            direction='row'
+            spacing={1.25}
+            sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
+          >
+            <Stack spacing={0.375}>
+              <Typography variant='panelTitle' component='h3'>
+                {entry.title}
+              </Typography>
+              <Typography variant='tableCell' color='text.secondary'>
+                {entry.subject}
+              </Typography>
+            </Stack>
+            <Typography
+              variant='formLabel'
+              sx={{
+                color: 'primary.main',
+                px: 1,
+                py: 0.375,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 999,
+                lineHeight: 1,
+              }}
+            >
+              {entry.actor}
+            </Typography>
+          </Stack>
+
+          <Stack spacing={0.75}>
+            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+              <ManageAccountsOutlinedIcon
+                sx={{ fontSize: 16, color: 'primary.main' }}
+              />
+              <Typography variant='tableCell'>
+                Updated by <strong>{entry.actor}</strong>
+              </Typography>
+            </Stack>
+            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+              <ScheduleOutlinedIcon
+                sx={{ fontSize: 16, color: 'primary.main' }}
+              />
+              <Typography variant='tableCell' color='text.secondary'>
+                {new Date(entry.timestamp).toLocaleString()}
+              </Typography>
+            </Stack>
+          </Stack>
+
+          {entry.details.length > 0 ? (
+            <Stack spacing={0.75}>
+              {entry.details.map((detail) => (
+                <Stack
+                  key={`${entry._id}-${detail}`}
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'flex-start' }}
+                >
+                  <CheckCircleOutlinedIcon
+                    sx={{ fontSize: 16, color: 'primary.main', mt: 0.125 }}
+                  />
+                  <Typography variant='tableCell'>{detail}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          ) : null}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
  * Admin control panel — quick access to admin sub-pages and the destructive
  * "Clear All Data" action that was previously misplaced on the Test Cases page.
  */
-export default function AdminClient() {
+export default function AdminClient({ user }) {
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     message: '',
@@ -61,6 +179,26 @@ export default function AdminClient() {
     value: '',
     onConfirm: null,
   });
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState('');
+  const [activityEntries, setActivityEntries] = useState([]);
+
+  async function openActivity() {
+    setActivityOpen(true);
+    if (activityEntries.length > 0 || activityLoading) return;
+
+    setActivityLoading(true);
+    setActivityError('');
+    try {
+      const events = await listAdminActivity({ limit: 100 });
+      setActivityEntries(normalizeActivityEntries(events));
+    } catch {
+      setActivityError('Could not load admin activity right now.');
+    } finally {
+      setActivityLoading(false);
+    }
+  }
 
   function clearAll() {
     setConfirmDialog({
@@ -96,10 +234,9 @@ export default function AdminClient() {
         sub='Configuration and management tools for team administrators.'
       />
 
-      {/* Quick access */}
       <Grid container spacing={2}>
-        {QUICK_ACCESS.map(({ href, Icon, label, description, action }) => (
-          <Grid key={href} size={{ xs: 12, sm: 6 }}>
+        {QUICK_ACCESS.map(({ href, key, Icon, label, description, action }) => (
+          <Grid key={href || key} size={{ xs: 12, sm: 6, lg: 4 }}>
             <Card
               variant='outlined'
               sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
@@ -120,21 +257,30 @@ export default function AdminClient() {
                 </Typography>
               </CardContent>
               <CardActions sx={{ px: 2, pb: 2 }}>
-                <Button
-                  component={Link}
-                  href={href}
-                  variant='outlined'
-                  size='small'
-                >
-                  {action}
-                </Button>
+                {href ? (
+                  <Button
+                    component={Link}
+                    href={href}
+                    variant='outlined'
+                    size='small'
+                  >
+                    {action}
+                  </Button>
+                ) : (
+                  <Button
+                    variant='outlined'
+                    size='small'
+                    onClick={openActivity}
+                  >
+                    {action}
+                  </Button>
+                )}
               </CardActions>
             </Card>
           </Grid>
         ))}
       </Grid>
 
-      {/* Danger zone */}
       <Stack spacing={2}>
         <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
           <Divider sx={{ flex: 1 }} />
@@ -247,6 +393,106 @@ export default function AdminClient() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Drawer
+        anchor='right'
+        open={activityOpen}
+        onClose={() => setActivityOpen(false)}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', sm: 440, lg: 480 },
+              p: 2,
+            },
+          },
+        }}
+      >
+        <Stack spacing={2} sx={{ height: '100%' }}>
+          <Stack
+            direction='row'
+            spacing={1.5}
+            sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
+          >
+            <Stack spacing={0.5}>
+              <Typography variant='pageEyebrow'>Admin Activity</Typography>
+              <Typography variant='pageTitle'>Activity Logs</Typography>
+              <Typography variant='pageSub' component='div'>
+                Opened on demand so the admin page stays fast. Review who
+                updated what, and download the latest 100 entries when needed.
+              </Typography>
+            </Stack>
+            <IconButton
+              aria-label='Close activity logs'
+              onClick={() => setActivityOpen(false)}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+
+          <Stack
+            direction='row'
+            spacing={1.5}
+            sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+              <InsightsOutlinedIcon sx={{ color: 'primary.main' }} />
+              <Typography variant='tableCell' color='text.secondary'>
+                Signed in as {user?.name || 'Admin'}
+              </Typography>
+            </Stack>
+            <Button
+              variant='outlined'
+              size='small'
+              startIcon={<DownloadOutlinedIcon />}
+              onClick={() => downloadLogsFile(activityEntries)}
+              disabled={activityEntries.length === 0}
+            >
+              Download Logs
+            </Button>
+          </Stack>
+
+          {activityError ? (
+            <Alert severity='error'>{activityError}</Alert>
+          ) : null}
+
+          <Stack spacing={1.5} sx={{ overflowY: 'auto', pr: 0.5 }}>
+            {activityLoading ? (
+              <Typography variant='tableCell' color='text.secondary'>
+                Loading activity…
+              </Typography>
+            ) : null}
+
+            {!activityLoading &&
+            activityEntries.length === 0 &&
+            !activityError ? (
+              <Card variant='outlined'>
+                <CardContent>
+                  <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                    <HistoryOutlinedIcon sx={{ color: 'primary.main' }} />
+                    <Typography variant='panelTitle'>
+                      No activity yet
+                    </Typography>
+                    <Typography variant='tableCell' color='text.secondary'>
+                      Admin actions like imports, user updates, and reset events
+                      will appear here once they happen.
+                    </Typography>
+                    <Button
+                      variant='contained'
+                      onClick={() => setActivityOpen(false)}
+                    >
+                      Back to Admin
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {activityEntries.map((entry) => (
+              <ActivityRow key={entry._id} entry={entry} />
+            ))}
+          </Stack>
+        </Stack>
+      </Drawer>
     </Stack>
   );
 }

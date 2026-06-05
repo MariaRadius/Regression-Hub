@@ -42,6 +42,7 @@ export const POST = withAdmin(
     const result = await createUser(db, teamId, parsed.data, {
       createdBy: session.user.username,
       teamName: session.user.teamName,
+      actor: session.user.name,
     });
     revalidatePath('/users');
     return NextResponse.json(result, { status: 201 });
