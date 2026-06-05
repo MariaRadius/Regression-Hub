@@ -1,12 +1,33 @@
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import AuthHistoryGuard from '@/components/AuthHistoryGuard';
 import LoginForm from './LoginForm';
+
+function getAccessMessage(reason) {
+  if (reason === 'signed-out') {
+    return {
+      severity: 'info',
+      text: 'You signed out successfully. Sign in again to continue.',
+    };
+  }
+
+  if (reason === 'auth-required') {
+    return {
+      severity: 'warning',
+      text: 'Your session is no longer active. Sign in to continue.',
+    };
+  }
+
+  return null;
+}
 
 export default async function LoginPage({ searchParams }) {
   const params = await searchParams;
   const redirectTo = params?.redirectTo;
+  const message = getAccessMessage(params?.reason);
 
   return (
     <Stack
@@ -29,8 +50,9 @@ export default async function LoginPage({ searchParams }) {
           borderRadius: 3,
         }}
       >
+        <AuthHistoryGuard />
         <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Box
+          <Stack
             sx={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -46,7 +68,7 @@ export default async function LoginPage({ searchParams }) {
             }}
           >
             QA
-          </Box>
+          </Stack>
           <Typography variant='pageTitle' component='h1' display='block'>
             Regression Hub
           </Typography>
@@ -54,6 +76,11 @@ export default async function LoginPage({ searchParams }) {
             Sign in to your team account
           </Typography>
         </Box>
+        {message && (
+          <Alert severity={message.severity} sx={{ mb: 3 }}>
+            {message.text}
+          </Alert>
+        )}
         <LoginForm redirectTo={redirectTo} />
         <Typography
           variant='metricSub'

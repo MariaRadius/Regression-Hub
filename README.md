@@ -71,8 +71,11 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 ### Sign-in & Identity
 
 - Username + password login at `/login`
+- Successful sign-in replaces the login history entry; using the browser Back button after login must not leave the user on a stale interactive login form
 - Sidebar shows signed-in name, team badge (Radius / CB), and role badge (Admin / QA)
-- Sign out from the sidebar; collapse/expand sidebar for more screen space
+- Sign out from the sidebar; sign-out replaces the current protected-page history entry and returns to `/login` with a clear signed-out message
+- Auth-sensitive pages force a fresh auth check on refresh and on browser back/forward restoration so expired or signed-out sessions never keep protected content visible from browser cache
+- Collapse/expand sidebar for more screen space
 
 ### Dashboard
 

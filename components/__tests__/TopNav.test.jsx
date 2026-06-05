@@ -62,17 +62,19 @@ describe('TopNav', () => {
     expect(screen.getByLabelText('Releases')).toBeInTheDocument();
   });
 
-  it('signs out back to the current origin login page', async () => {
-    const assignSpy = vi.fn();
+  it('replaces the protected history entry with the signed-out login page', async () => {
+    const replaceSpy = vi.fn();
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: {
         ...window.location,
         origin: 'http://localhost:3000',
-        assign: assignSpy,
+        replace: replaceSpy,
       },
     });
-    signOut.mockResolvedValue({ url: 'http://localhost:3001/login' });
+    signOut.mockResolvedValue({
+      url: 'http://localhost:3000/login?reason=signed-out',
+    });
 
     render(
       <TopNav
@@ -91,8 +93,10 @@ describe('TopNav', () => {
 
     expect(signOut).toHaveBeenCalledWith({
       redirect: false,
-      callbackUrl: `${window.location.origin}/login`,
+      callbackUrl: `${window.location.origin}/login?reason=signed-out`,
     });
-    expect(assignSpy).toHaveBeenCalledWith('http://localhost:3000/login');
+    expect(replaceSpy).toHaveBeenCalledWith(
+      'http://localhost:3000/login?reason=signed-out',
+    );
   });
 });

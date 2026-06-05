@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import {
+  buildLoginRedirectTarget,
+  getSafeRedirectTarget,
+} from '@/lib/authRedirects';
 
 /**
  * Authentication proxy — the single point of truth for route access control.
@@ -28,7 +32,11 @@ export async function proxy(req) {
     if (pathname !== '/login') {
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = '/login';
-      loginUrl.searchParams.set('redirectTo', pathname);
+      loginUrl.searchParams.set(
+        'redirectTo',
+        buildLoginRedirectTarget(pathname, req.nextUrl.search),
+      );
+      loginUrl.searchParams.set('reason', 'auth-required');
       return NextResponse.redirect(loginUrl);
     }
     return NextResponse.next();
@@ -36,7 +44,7 @@ export async function proxy(req) {
 
   // Authenticated and hitting /login → bounce home (or to redirectTo)
   if (pathname === '/login') {
-    const target = searchParams.get('redirectTo') || '/dashboard';
+    const target = getSafeRedirectTarget(searchParams.get('redirectTo'));
     return NextResponse.redirect(new URL(target, req.url));
   }
 

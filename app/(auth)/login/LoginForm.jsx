@@ -4,6 +4,7 @@ import { Alert, Box, Button, Stack, TextField } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
+import { getSafeRedirectTarget } from '@/lib/authRedirects';
 
 export default function LoginForm({ redirectTo }) {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function LoginForm({ redirectTo }) {
     if (result?.error) {
       setError('Invalid username or password.');
     } else {
-      router.push(redirectTo || '/dashboard');
+      router.replace(getSafeRedirectTarget(redirectTo));
     }
   }
 

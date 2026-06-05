@@ -160,6 +160,18 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="admin-smoke"
 
 Confirm URL is `/dashboard`. If still on `/login`, fail with "Admin sign-in failed".
 
+Then verify auth-navigation history:
+
+1. Trigger the browser Back action once.
+2. PASS if the app does not leave you on a usable login form. Accept either an immediate return to `/dashboard` or a brief reload that lands on `/dashboard`.
+3. Trigger the browser Forward action once and confirm you stay authenticated on a protected page with no console errors.
+
+Before ending each authenticated walk, sign out from the profile menu and verify:
+
+1. The app lands on `/login?reason=signed-out`.
+2. A signed-out confirmation message is visible.
+3. One browser Back action does not reveal protected content; accept either staying on `/login` or a brief reload that returns to `/login?reason=auth-required`.
+
 #### Walk all 8 admin routes
 
 For each route in order:

@@ -72,14 +72,14 @@ const TOP_NAV_SX = Object.freeze({
 
 function getLogoutCallbackUrl() {
   if (typeof window === 'undefined') return '/login';
-  return `${window.location.origin}/login`;
+  return `${window.location.origin}/login?reason=signed-out`;
 }
 
 async function handleSignOut() {
   const callbackUrl = getLogoutCallbackUrl();
   await signOut({ redirect: false, callbackUrl });
   if (typeof window !== 'undefined') {
-    window.location.assign(callbackUrl);
+    window.location.replace(callbackUrl);
   }
 }
 
