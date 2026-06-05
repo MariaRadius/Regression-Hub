@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { signOut } from 'next-auth/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ROLES } from '@/lib/constants';
 import TopNav from '../TopNav';
 
@@ -24,6 +26,10 @@ vi.mock('@/components/ReleaseEnvSelector', () => ({
 }));
 
 describe('TopNav', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('hides the releases nav item for qa users', () => {
     render(
       <TopNav
@@ -54,5 +60,39 @@ describe('TopNav', () => {
     );
 
     expect(screen.getByLabelText('Releases')).toBeInTheDocument();
+  });
+
+  it('signs out back to the current origin login page', async () => {
+    const assignSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...window.location,
+        origin: 'http://localhost:3000',
+        assign: assignSpy,
+      },
+    });
+    signOut.mockResolvedValue({ url: 'http://localhost:3001/login' });
+
+    render(
+      <TopNav
+        user={{
+          id: 'u1',
+          name: 'Admin User',
+          role: ROLES.ADMIN,
+          teamId: 'radius',
+          teamName: 'Radius',
+        }}
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText('account menu'));
+    await userEvent.click(screen.getByText('Sign Out'));
+
+    expect(signOut).toHaveBeenCalledWith({
+      redirect: false,
+      callbackUrl: `${window.location.origin}/login`,
+    });
+    expect(assignSpy).toHaveBeenCalledWith('http://localhost:3000/login');
   });
 });

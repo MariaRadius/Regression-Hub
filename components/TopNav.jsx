@@ -70,6 +70,19 @@ const TOP_NAV_SX = Object.freeze({
   boxShadow: '0 10px 24px rgba(15,23,42,0.18)',
 });
 
+function getLogoutCallbackUrl() {
+  if (typeof window === 'undefined') return '/login';
+  return `${window.location.origin}/login`;
+}
+
+async function handleSignOut() {
+  const callbackUrl = getLogoutCallbackUrl();
+  await signOut({ redirect: false, callbackUrl });
+  if (typeof window !== 'undefined') {
+    window.location.assign(callbackUrl);
+  }
+}
+
 /** @see {@link __tests__/TopNav.test.jsx} */
 export default function TopNav({ user }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -355,7 +368,7 @@ export default function TopNav({ user }) {
               </Stack>
             </MenuItem>
             <Divider />
-            <MenuItem onClick={() => signOut({ callbackUrl: '/login' })}>
+            <MenuItem onClick={handleSignOut}>
               <ListItemIcon>
                 <LogoutIcon fontSize='small' />
               </ListItemIcon>
