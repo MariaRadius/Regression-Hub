@@ -38,8 +38,14 @@ export default function SummaryPanel({
         <Stack
           key={label}
           direction='row'
-          spacing={0.5}
-          sx={{ alignItems: 'baseline' }}
+          spacing={0.75}
+          sx={{
+            alignItems: 'center',
+            px: 1.25,
+            py: 0.5,
+            borderRadius: 999,
+            backgroundColor: 'grey.100',
+          }}
         >
           <Typography
             sx={{ color, fontWeight: 700, fontSize: 13, lineHeight: 1 }}
@@ -55,11 +61,32 @@ export default function SummaryPanel({
   ) : undefined;
 
   return (
-    <Panel title={title} headerActions={statsRow}>
+    <Panel
+      title={title}
+      headerActions={statsRow}
+      sx={{
+        overflow: 'hidden',
+        background:
+          'linear-gradient(180deg, rgba(249,250,251,0.92) 0%, rgba(255,255,255,1) 22%)',
+      }}
+    >
       {entries.length ? (
         <List disablePadding>
           {sorted.map(([name, g]) => (
-            <ListItemButton key={name}>
+            <ListItemButton
+              key={name}
+              sx={{
+                mx: 1.5,
+                my: 1,
+                px: 2,
+                py: 1.5,
+                borderRadius: 3,
+                alignItems: 'stretch',
+                '&:hover': {
+                  backgroundColor: 'grey.100',
+                },
+              }}
+            >
               <SummaryRow
                 name={name}
                 passed={g.passed}

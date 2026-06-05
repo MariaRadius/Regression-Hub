@@ -44,6 +44,20 @@ function formatPercent(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
+const DASHBOARD_PANEL_SX = Object.freeze({
+  overflow: 'hidden',
+  background:
+    'linear-gradient(180deg, rgba(249,250,251,0.9) 0%, rgba(255,255,255,1) 26%)',
+  boxShadow: 1,
+});
+
+const DASHBOARD_PANEL_BODY_SX = Object.freeze({
+  p: 2.5,
+  borderRadius: 3,
+  background:
+    'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.88) 100%)',
+});
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const teamId = session?.user?.teamId;
@@ -143,15 +157,15 @@ export default async function DashboardPage() {
         />
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-            <Panel title='Pass / Fail / Pending'>
-              <Box sx={{ p: 2.5, height: 280 }}>
+            <Panel title='Pass / Fail / Pending' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
                 <DonutChart donutData={donutData} />
               </Box>
             </Panel>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-            <Panel title='Application Summary'>
-              <Box sx={{ p: 2.5, height: 280 }}>
+            <Panel title='Application Summary' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
                 <StackedBarChart
                   data={appBarData}
                   orientation='vertical'
@@ -163,8 +177,8 @@ export default async function DashboardPage() {
             </Panel>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-            <Panel title='QA Tester Summary'>
-              <Box sx={{ p: 2.5, height: 280 }}>
+            <Panel title='QA Tester Summary' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
                 <StackedBarChart
                   data={testerBarData}
                   orientation='horizontal'
@@ -183,8 +197,8 @@ export default async function DashboardPage() {
           </Grid>
         </Grid>
 
-        <Panel title='Results by Module'>
-          <Box sx={{ p: 2.5, height: 380 }}>
+        <Panel title='Results by Module' sx={DASHBOARD_PANEL_SX}>
+          <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 380 }}>
             <StackedBarChart
               data={moduleBarData}
               orientation='vertical'

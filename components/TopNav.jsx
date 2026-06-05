@@ -61,6 +61,15 @@ const DRAWER_ITEM_SX = {
   '&:hover': { bgcolor: 'rgba(255,255,255,0.07)' },
 };
 
+const TOP_NAV_SX = Object.freeze({
+  bgcolor: 'nav.main',
+  background:
+    'linear-gradient(90deg, rgba(15,23,42,1) 0%, rgba(24,32,54,0.98) 52%, rgba(15,23,42,1) 100%)',
+  borderBottom: 1,
+  borderColor: 'rgba(255,255,255,0.08)',
+  boxShadow: '0 10px 24px rgba(15,23,42,0.18)',
+});
+
 /** @see {@link __tests__/TopNav.test.jsx} */
 export default function TopNav({ user }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -176,8 +185,14 @@ export default function TopNav({ user }) {
 
   return (
     <>
-      <AppBar position='fixed' sx={{ bgcolor: 'nav.main' }}>
-        <Toolbar>
+      <AppBar position='fixed' sx={TOP_NAV_SX}>
+        <Toolbar
+          sx={{
+            minHeight: 64,
+            px: { xs: 1, sm: 2 },
+            gap: 1,
+          }}
+        >
           {/* Hamburger — mobile only */}
           <IconButton
             color='inherit'
@@ -200,10 +215,11 @@ export default function TopNav({ user }) {
                 width: 32,
                 height: 32,
                 bgcolor: 'primary.main',
-                borderRadius: 1,
+                borderRadius: 1.5,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
+                boxShadow: '0 8px 18px rgba(13,148,136,0.35)',
               }}
             >
               <Typography
@@ -255,9 +271,33 @@ export default function TopNav({ user }) {
                   <IconButton
                     component={Link}
                     href={href}
-                    color={isActive(href) ? 'primary' : 'inherit'}
+                    color='inherit'
                     size='large'
                     aria-label={label}
+                    sx={{
+                      color: isActive(href)
+                        ? 'primary.main'
+                        : 'rgba(255,255,255,0.72)',
+                      bgcolor: isActive(href)
+                        ? 'rgba(13,148,136,0.14)'
+                        : 'transparent',
+                      border: 1,
+                      borderColor: isActive(href)
+                        ? 'rgba(13,148,136,0.28)'
+                        : 'transparent',
+                      borderRadius: 2.5,
+                      transition:
+                        'background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease',
+                      '&:hover': {
+                        bgcolor: isActive(href)
+                          ? 'rgba(13,148,136,0.20)'
+                          : 'rgba(255,255,255,0.06)',
+                        borderColor: isActive(href)
+                          ? 'rgba(13,148,136,0.36)'
+                          : 'rgba(255,255,255,0.08)',
+                        transform: 'translateY(-1px)',
+                      },
+                    }}
                   >
                     <Icon />
                   </IconButton>
@@ -280,6 +320,7 @@ export default function TopNav({ user }) {
                   height: 32,
                   bgcolor: 'primary.main',
                   fontSize: 13,
+                  boxShadow: '0 0 0 2px rgba(255,255,255,0.08)',
                 }}
               >
                 {userInitials}

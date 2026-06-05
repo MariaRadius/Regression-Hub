@@ -17,9 +17,12 @@ describe('SummaryRow', () => {
   it('renders the name and pass/fail/pending counts', () => {
     renderRow({ name: 'Auth', passed: 5, failed: 2, pending: 3, total: 10 });
     expect(screen.getByText('Auth')).toBeInTheDocument();
-    expect(screen.getByText(/5 Pass/)).toBeInTheDocument();
-    expect(screen.getByText(/2 Fail/)).toBeInTheDocument();
-    expect(screen.getByText(/3 Pending/)).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('Pass')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('Fail')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
   });
 
   it('renders "Unassigned" when no name is provided', () => {
@@ -29,6 +32,7 @@ describe('SummaryRow', () => {
 
   it('renders three coloured segments when total > 0', () => {
     renderRow({ name: 'x', passed: 6, failed: 2, pending: 2, total: 10 });
+    expect(screen.getByTestId('progress-track')).toBeInTheDocument();
     expect(screen.getByTestId('progress-segment-pass')).toBeInTheDocument();
     expect(screen.getByTestId('progress-segment-fail')).toBeInTheDocument();
     expect(screen.getByTestId('progress-segment-pending')).toBeInTheDocument();

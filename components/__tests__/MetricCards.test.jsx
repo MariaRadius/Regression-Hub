@@ -1,6 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import MetricCards, { resolveMetricAccent } from '../MetricCards';
+import MetricCards, {
+  resolveMetricAccent,
+  resolveMetricSurface,
+} from '../MetricCards';
 
 const CARDS = [
   { label: 'Total', value: 42 },
@@ -42,5 +45,16 @@ describe('MetricCards', () => {
     expect(resolveMetricAccent({ label: 'Total Test Cases' })).toBe('grey.300');
     expect(resolveMetricAccent({ label: 'Pass Rate' })).toBe('pass.border');
     expect(resolveMetricAccent({ label: 'Fail Rate' })).toBe('fail.border');
+  });
+
+  it('resolves a surface tone for status and rate cards', () => {
+    expect(resolveMetricSurface({ cls: 'pass' })).toBe('pass.light');
+    expect(resolveMetricSurface({ cls: 'fail' })).toBe('fail.light');
+    expect(resolveMetricSurface({ cls: 'pending' })).toBe('pending.light');
+    expect(resolveMetricSurface({ label: 'Pass Rate' })).toBe('pass.light');
+    expect(resolveMetricSurface({ label: 'Fail Rate' })).toBe('fail.light');
+    expect(resolveMetricSurface({ label: 'Total Test Cases' })).toBe(
+      'background.paper',
+    );
   });
 });
