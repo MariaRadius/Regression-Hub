@@ -80,7 +80,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 - Live metrics: total / passed / failed / pending
 - Donut chart by status
 - Bar chart by module
-- Top failing modules panel
+- Top failing modules panel: shows up to 5 modules with at least 5 failed test cases; otherwise shows a no-action-needed empty state
 - Critical failures panel: failed High priority `testKey`s only, each linking to `/test-cases` with the existing Fail filter plus an exact `testKey` filter applied; module and application context shown under each id
 - Drag-and-drop `.xlsx` upload tile
 

@@ -10,7 +10,10 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Link from 'next/link';
 import Panel from '@/components/Panel';
-import { PRIORITIES } from '@/lib/constants';
+import {
+  DASHBOARD_TOP_FAILING_MODULES_FAILURE_THRESHOLD,
+  PRIORITIES,
+} from '@/lib/constants';
 
 function SummaryChip({ icon, label, color, variant = 'filled' }) {
   return (
@@ -106,8 +109,8 @@ export default function DashboardInsightsPanels({
               icon={
                 <FolderIcon sx={{ fontSize: 40, color: 'text.disabled' }} />
               }
-              title='No modules are failing right now.'
-              sub='Failures by module will appear here as soon as the active release and environment record failing results.'
+              title={`No modules have more than ${DASHBOARD_TOP_FAILING_MODULES_FAILURE_THRESHOLD} failed test cases.`}
+              sub='This panel highlights only modules with meaningful failure volume so the team can focus on the biggest hotspots first.'
             />
           )}
         </Panel>

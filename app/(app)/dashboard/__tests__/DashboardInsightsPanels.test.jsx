@@ -68,7 +68,7 @@ describe('DashboardInsightsPanels', () => {
     );
 
     expect(
-      screen.getByText('No modules are failing right now.'),
+      screen.getByText('No modules have more than 5 failed test cases.'),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -95,7 +95,7 @@ describe('DashboardInsightsPanels', () => {
 
     expect(screen.getByText('Critical Failures')).toBeInTheDocument();
     expect(
-      screen.getByText('No modules are failing right now.'),
+      screen.getByText('No modules have more than 5 failed test cases.'),
     ).toBeInTheDocument();
   });
 });
