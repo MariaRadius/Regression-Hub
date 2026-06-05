@@ -70,17 +70,10 @@ const TOP_NAV_SX = Object.freeze({
   boxShadow: '0 10px 24px rgba(15,23,42,0.18)',
 });
 
-function getLogoutCallbackUrl() {
-  if (typeof window === 'undefined') return '/login';
-  return `${window.location.origin}/login?reason=signed-out`;
-}
-
 async function handleSignOut() {
-  const callbackUrl = getLogoutCallbackUrl();
+  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/login`;
   await signOut({ redirect: false, callbackUrl });
-  if (typeof window !== 'undefined') {
-    window.location.replace(callbackUrl);
-  }
+  window.location.replace(callbackUrl);
 }
 
 /** @see {@link __tests__/TopNav.test.jsx} */

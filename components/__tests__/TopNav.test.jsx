@@ -64,17 +64,12 @@ describe('TopNav', () => {
 
   it('replaces the protected history entry with the signed-out login page', async () => {
     const replaceSpy = vi.fn();
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3001');
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: {
-        ...window.location,
-        origin: 'http://localhost:3000',
-        replace: replaceSpy,
-      },
+      value: { ...window.location, replace: replaceSpy },
     });
-    signOut.mockResolvedValue({
-      url: 'http://localhost:3000/login?reason=signed-out',
-    });
+    signOut.mockResolvedValue({});
 
     render(
       <TopNav
@@ -93,10 +88,8 @@ describe('TopNav', () => {
 
     expect(signOut).toHaveBeenCalledWith({
       redirect: false,
-      callbackUrl: `${window.location.origin}/login?reason=signed-out`,
+      callbackUrl: 'http://localhost:3001/login',
     });
-    expect(replaceSpy).toHaveBeenCalledWith(
-      'http://localhost:3000/login?reason=signed-out',
-    );
+    expect(replaceSpy).toHaveBeenCalledWith('http://localhost:3001/login');
   });
 });
