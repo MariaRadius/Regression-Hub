@@ -2,7 +2,8 @@
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import FolderIcon from '@mui/icons-material/Folder';
 import PersonIcon from '@mui/icons-material/Person';
-import { Box, Checkbox, Chip, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Checkbox, Stack, Tooltip, Typography } from '@mui/material';
+import MetaChip from '@/components/MetaChip';
 import { PRIORITIES, STATUS } from '@/lib/constants';
 
 const STATUS_COLOR = {
@@ -19,43 +20,6 @@ const PRIORITY_BAR = {
 function toDisplayCase(value) {
   if (!value) return '';
   return value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function MetaChip({
-  icon,
-  label,
-  color = 'default',
-  variant = 'filled',
-  sx = {},
-}) {
-  return (
-    <Chip
-      size='small'
-      icon={icon}
-      label={label}
-      color={color}
-      variant={variant}
-      sx={{
-        maxWidth: '100%',
-        height: 24,
-        borderRadius: 1.5,
-        textTransform: 'none',
-        fontWeight: 500,
-        '& .MuiChip-label': {
-          display: 'block',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          px: 1,
-          textTransform: 'none',
-        },
-        '& .MuiChip-icon': {
-          color: 'inherit',
-        },
-        ...sx,
-      }}
-    />
-  );
 }
 
 /**

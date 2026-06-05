@@ -9,6 +9,7 @@ import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Link from 'next/link';
+import MetaChip from '@/components/MetaChip';
 import Panel from '@/components/Panel';
 import {
   DASHBOARD_TOP_FAILING_MODULES_FAILURE_THRESHOLD,
@@ -28,10 +29,37 @@ function SummaryChip({ icon, label, color, variant = 'filled' }) {
   );
 }
 
-function EmptyCopy({ icon, title, sub }) {
+function EmptyStateIcon({ accent, icon }) {
   return (
-    <Stack spacing={1.5} sx={{ alignItems: 'center', py: 5 }}>
+    <Stack
+      sx={{
+        width: 64,
+        height: 64,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 3,
+        background: `linear-gradient(180deg, ${accent}1f 0%, ${accent}14 100%)`,
+        border: `1px solid ${accent}33`,
+        boxShadow: '0 10px 24px rgba(15,23,42,0.06)',
+      }}
+    >
       {icon}
+    </Stack>
+  );
+}
+
+function EmptyCopy({ accent, icon, title, sub }) {
+  return (
+    <Stack
+      spacing={1.5}
+      sx={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 250,
+        py: 5,
+      }}
+    >
+      <EmptyStateIcon accent={accent} icon={icon} />
       <Typography variant='emptyStateTitle'>{title}</Typography>
       <Typography
         variant='pageSub'
@@ -49,12 +77,19 @@ function DashboardCaseLink({ href, children }) {
     <Link
       href={href}
       style={{
-        color: 'inherit',
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '0.28rem 0.65rem',
+        borderRadius: '0.85rem',
+        border: '1px solid rgba(225, 77, 90, 0.22)',
+        background:
+          'linear-gradient(180deg, rgba(255,241,243,1) 0%, rgba(255,247,248,1) 100%)',
+        color: '#a23243',
         fontSize: '1rem',
         fontWeight: 700,
         lineHeight: 1.5,
-        textDecoration: 'underline',
-        textUnderlineOffset: '0.18em',
+        letterSpacing: '0.01em',
+        textDecoration: 'none',
       }}
     >
       {children}
@@ -71,7 +106,7 @@ export default function DashboardInsightsPanels({
 
   return (
     <Grid container spacing={2}>
-      <Grid size={{ xs: 12, lg: 5 }}>
+      <Grid size={{ xs: 12, lg: 6 }}>
         <Panel title='Top Failing Modules'>
           {topFailingModules.length > 0 ? (
             <Stack divider={<Divider flexItem />} spacing={0}>
@@ -106,9 +141,8 @@ export default function DashboardInsightsPanels({
             </Stack>
           ) : (
             <EmptyCopy
-              icon={
-                <FolderIcon sx={{ fontSize: 40, color: 'text.disabled' }} />
-              }
+              accent='#f08d2f'
+              icon={<FolderIcon sx={{ fontSize: 34, color: 'warning.main' }} />}
               title={`No modules have more than ${DASHBOARD_TOP_FAILING_MODULES_FAILURE_THRESHOLD} failed test cases.`}
               sub='This panel highlights only modules with meaningful failure volume so the team can focus on the biggest hotspots first.'
             />
@@ -116,7 +150,7 @@ export default function DashboardInsightsPanels({
         </Panel>
       </Grid>
 
-      <Grid size={{ xs: 12, lg: 7 }}>
+      <Grid size={{ xs: 12, lg: 6 }}>
         <Panel
           title='Critical Failures'
           headerActions={
@@ -156,18 +190,23 @@ export default function DashboardInsightsPanels({
                       sx={{ fontWeight: 700 }}
                     />
                   </Stack>
-                  <Typography variant='metricSub' color='text.secondary'>
-                    {item.moduleName} / {item.applicationName}
-                  </Typography>
+                  <MetaChip
+                    icon={<FolderIcon fontSize='small' />}
+                    label={`${item.applicationName} / ${item.moduleName}`}
+                    sx={{
+                      width: 'fit-content',
+                      bgcolor: 'grey.100',
+                      color: 'text.secondary',
+                    }}
+                  />
                 </Stack>
               ))}
             </Stack>
           ) : (
             <EmptyCopy
+              accent='#e14d5a'
               icon={
-                <WarningAmberIcon
-                  sx={{ fontSize: 40, color: 'text.disabled' }}
-                />
+                <WarningAmberIcon sx={{ fontSize: 34, color: 'error.main' }} />
               }
               title='No high-priority cases need attention for this selection.'
               sub='This panel tracks only High priority test cases so the team can spot critical risk quickly.'

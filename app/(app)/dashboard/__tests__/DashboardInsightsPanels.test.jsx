@@ -48,10 +48,10 @@ describe('DashboardInsightsPanels', () => {
     );
     expect(screen.getAllByText('High priority')).toHaveLength(2);
     expect(
-      screen.getByText('Banner Management / Super Admin'),
+      screen.getByText('Super Admin / Banner Management'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Patients Management / Practice Admin'),
+      screen.getByText('Practice Admin / Patients Management'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/passed/i)).toBeNull();
     expect(screen.queryByText(/pending/i)).toBeNull();
