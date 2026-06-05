@@ -119,7 +119,7 @@ Sort is explicit from the list header (not column-click) and supports oldest/new
 - **R21 — Fail requires notes.** Resetting to Pending requires a reason and clears tester/date while keeping the result row.
 - **Expected result required** before a case can be marked Pass or Fail.
 
-**Detail panel:** Shows `testKey`, full editable fields, and a per-environment results grid. Offers opt-in "reset all environments to Pending" on content edit.
+**Detail panel:** Shows `testKey`, full editable fields, a per-environment results grid, and a bottom History toggle that lazy-loads the selected case's activity log without closing the panel. Offers opt-in "reset all environments to Pending" on content edit.
 
 **Pagination:** URL-persisted (`?page=`, `?size=`). Defaults: page 1, 50 rows. Options: 10 / 50 / 100.
 
@@ -150,7 +150,9 @@ Admin-only. Two-phase: analyse (dry-run preview) → confirm (transactional comm
 
 ### Audit Log
 
-Every result write (Pass / Fail / Pending reset) and every assign / unassign appends an immutable entry to the `events` collection — `tcId`, `releaseId`, `environment`, actor, and timestamp included.
+Every result write (Pass / Fail / Pending reset), test-case edit, import, and assign / unassign appends an immutable entry to the `events` collection — `tcId`, `releaseId`, `environment`, actor, and timestamp included.
+
+Per-case history is read from the detail panel only when the user opens History. Entries are shown newest-first and include actor, local timestamp, and meaningful field transitions such as status, tester, notes, assignee, and test-case definition edits.
 
 ### Reports
 
@@ -177,6 +179,7 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | GET | `/api/releases/[id]/test-cases` | admin+qa | List test cases (`environment` required; supports exact `testKey`, broad `q`, `sortBy`, `sortDir`, filters, paging) |
 | POST | `/api/releases/[id]/test-cases` | admin | Create test case |
 | GET | `/api/releases/[id]/test-cases/[caseId]` | admin+qa | Get test case |
+| GET | `/api/releases/[id]/test-cases/[caseId]/events` | admin+qa | Lazy-load per-case history for the active release |
 | PATCH | `/api/releases/[id]/test-cases/[caseId]` | admin | Update test case |
 | DELETE | `/api/releases/[id]/test-cases/[caseId]` | admin | Delete test case |
 | GET | `/api/releases/[id]/results` | admin+qa | List results |

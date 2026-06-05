@@ -2,6 +2,7 @@
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import { useEffect, useState } from 'react';
+import { listTestCaseEventsForRelease } from '@/lib/api/releases';
 import { listCaseResults } from '@/lib/api/results';
 import TestCaseDetail from './TestCaseDetail';
 
@@ -29,6 +30,10 @@ export default function TestCaseDetailPanel({
   const tcId = displayCase?._id ?? null;
   const [envResults, setEnvResults] = useState(null);
   const [envLoading, setEnvLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyEvents, setHistoryEvents] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
 
   useEffect(() => {
     if (!releaseId || !tcId || !environments?.length) {
@@ -58,6 +63,35 @@ export default function TestCaseDetailPanel({
       cancelled = true;
     };
   }, [releaseId, tcId, environments]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset cached history when the selected case scope changes.
+  useEffect(() => {
+    setHistoryOpen(false);
+    setHistoryEvents(null);
+    setHistoryLoading(false);
+    setHistoryError('');
+  }, [releaseId, tcId]);
+
+  async function handleToggleHistory() {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+
+    setHistoryOpen(true);
+    if (!releaseId || !tcId || historyEvents) return;
+
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const events = await listTestCaseEventsForRelease(releaseId, tcId);
+      setHistoryEvents(events);
+    } catch {
+      setHistoryError('Could not load history.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   return (
     <>
@@ -98,6 +132,11 @@ export default function TestCaseDetailPanel({
           environments={environments}
           envResults={envResults}
           envLoading={envLoading}
+          historyOpen={historyOpen}
+          historyEvents={historyEvents}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          onToggleHistory={handleToggleHistory}
           onEdit={onEdit}
           onAction={onAction}
           onClose={onClose}
@@ -127,6 +166,11 @@ export default function TestCaseDetailPanel({
           environments={environments}
           envResults={envResults}
           envLoading={envLoading}
+          historyOpen={historyOpen}
+          historyEvents={historyEvents}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          onToggleHistory={handleToggleHistory}
           onEdit={onEdit}
           onAction={onAction}
           onClose={onClose}

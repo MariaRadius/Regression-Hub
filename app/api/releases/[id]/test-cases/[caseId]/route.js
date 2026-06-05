@@ -43,21 +43,29 @@ export const GET = withTeam(async (request, { params }, { teamId, db }) => {
  *
  * @see {@link app/api/releases/[id]/test-cases/[caseId]/__tests__/route.test.js}
  */
-export const PATCH = withAdmin(async (request, { params }, { teamId, db }) => {
-  const { caseId: tcId } = await params;
-  const body = await request.json();
+export const PATCH = withAdmin(
+  async (request, { params }, { teamId, db, session }) => {
+    const { id: releaseId, caseId: tcId } = await params;
+    const body = await request.json();
 
-  const parsed = updateTestCaseBodySchema.safeParse(body);
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.issues[0]?.message || 'Invalid body');
-  }
+    const parsed = updateTestCaseBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiError(
+        400,
+        parsed.error.issues[0]?.message || 'Invalid body',
+      );
+    }
 
-  const result = await updateTestCase(db, teamId, tcId, parsed.data);
+    const result = await updateTestCase(db, teamId, tcId, parsed.data, {
+      actor: session.user.name,
+      releaseId,
+    });
 
-  revalidatePath('/(app)/test-cases', 'page');
-  revalidatePath('/(app)/dashboard', 'page');
-  return NextResponse.json(result);
-});
+    revalidatePath('/(app)/test-cases', 'page');
+    revalidatePath('/(app)/dashboard', 'page');
+    return NextResponse.json(result);
+  },
+);
 
 /**
  * DELETE /api/releases/[id]/test-cases/[caseId]

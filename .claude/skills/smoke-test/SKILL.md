@@ -205,7 +205,8 @@ After the route walk lands on `/test-cases`, verify the list controls actually w
 
 1. Type `maria` into the list search box and confirm the document request URL for `/api/releases/[id]/test-cases` includes `q=maria`.
 2. Clear the search, click the sort button, choose a non-default option (for example `Title A-Z`), and confirm the next document request includes both `sortBy` and `sortDir`.
-3. After each interaction, confirm there are still no console errors and the page remains interactive.
+3. Open any test case, click the bottom `History` button in the detail panel, and confirm a request to `/api/releases/[id]/test-cases/[caseId]/events` succeeds with no console errors. Then click `Hide History` and confirm the same test case remains open.
+4. After each interaction, confirm there are still no console errors and the page remains interactive.
 
 #### Download A — PDF snapshot (on /reports) — **opt-in only**
 
@@ -414,7 +415,7 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - The download interceptor patches `URL.createObjectURL` for the lifetime of the page tab. If multiple downloads are tested on the same page, reset `window.__smokeBlobs = []` before each click (the injector script above already does this).
 - Port may be 3000–3099 depending on what is already running. Always parse from the server log.
 - `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
-- Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`) and assignment mutations (`POST /api/assignments`) each append entries to the `events` collection (audit log). Entries carry `tcId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result` or `assignment`.
+- Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`), assignment mutations (`POST /api/assignments`), and test-case definition edits (`PATCH /api/releases/[id]/test-cases/[caseId]`) append entries to the `events` collection (audit log). Entries carry `tcId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result`, `assignment`, or `test_case`.
 - Opening a test case's detail panel on `/test-cases` fires a single `GET /api/releases/[id]/results/[tcId]` returning the minimal per-environment execution rows (`environment`, `status`, `testedBy`, `testedOn`, `assignedTo`, `notes`) for that one case. It is a read route (admin+qa); it must not appear more than once per panel open and must not fan out per environment.
 - The release/environment selector is a single combined searchable dropdown inside TopNav (right side, before the profile avatar), visible on every authenticated route including mobile. If it is missing on any route, the context wiring is broken.
 - `POST /api/releases/[id]/snapshot` is a **mutation**: it replaces the stored GridFS PDF for the given (release, environment) and appends an audit event (`category: export`, `action: pdf`). It accepts multipart form data with fields `file` (PDF blob), `environment` (string), and `filename` (string). Returns `200` with the snapshot metadata doc on success; `400` if `environment` or `file` is missing; `404` if the release does not exist.

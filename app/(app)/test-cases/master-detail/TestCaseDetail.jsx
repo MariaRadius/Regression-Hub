@@ -4,8 +4,15 @@ import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
+import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
+import ManageHistoryOutlinedIcon from '@mui/icons-material/ManageHistoryOutlined';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import UpdateOutlinedIcon from '@mui/icons-material/UpdateOutlined';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -28,6 +35,210 @@ const STATUS_COLOR = {
   [STATUS.FAIL]: 'error',
   [STATUS.PENDING]: 'warning',
 };
+
+const FIELD_LABELS = Object.freeze({
+  status: 'Status',
+  testedBy: 'Tester',
+  notes: 'Notes',
+  assignedTo: 'Assignee',
+  reason: 'Reason',
+});
+
+function displayValue(value) {
+  return value ? value : '—';
+}
+
+function actorName(value) {
+  return value || 'System';
+}
+
+function buildHistoryEntries(events) {
+  if (!events?.length) return [];
+
+  const enriched = [];
+  const resultState = new Map();
+  const assignmentState = new Map();
+
+  for (const event of [...events].reverse()) {
+    const environment = event.environment || 'All environments';
+
+    if (event.category === 'result') {
+      const key = event.environment || '__all__';
+      const previous = resultState.get(key) || {
+        status: STATUS.PENDING,
+        testedBy: null,
+        notes: null,
+        reason: null,
+      };
+      const next = {
+        status: event.status || STATUS.PENDING,
+        testedBy: event.by ?? null,
+        notes: event.notes ?? null,
+        reason: event.reason ?? null,
+      };
+      const details = [];
+      for (const field of ['status', 'testedBy', 'notes', 'reason']) {
+        if (previous[field] === next[field]) continue;
+        details.push({
+          label: FIELD_LABELS[field],
+          before: displayValue(previous[field]),
+          after: displayValue(next[field]),
+        });
+      }
+      enriched.push({
+        ...event,
+        title: `${environment} execution updated`,
+        summary: `updated ${environment} execution`,
+        details,
+      });
+      resultState.set(key, next);
+      continue;
+    }
+
+    if (event.category === 'assignment') {
+      const key = event.environment || '__all__';
+      const previous = assignmentState.get(key) || { assignedTo: null };
+      const next = { assignedTo: event.assignedTo ?? null };
+      enriched.push({
+        ...event,
+        title: `${environment} assignment updated`,
+        summary: `updated ${environment} assignment`,
+        details: [
+          {
+            label: FIELD_LABELS.assignedTo,
+            before: displayValue(previous.assignedTo),
+            after: displayValue(next.assignedTo),
+          },
+        ],
+      });
+      assignmentState.set(key, next);
+      continue;
+    }
+
+    if (event.category === 'test_case') {
+      enriched.push({
+        ...event,
+        title:
+          event.action === 'create' ? 'Test case created' : 'Test case updated',
+        summary:
+          event.action === 'create'
+            ? 'created this test case'
+            : 'updated this test case',
+        details:
+          event.changes?.map((change) => ({
+            label: change.label,
+            before: displayValue(change.before),
+            after: displayValue(change.after),
+          })) || [],
+      });
+      continue;
+    }
+
+    if (event.category === 'import') {
+      enriched.push({
+        ...event,
+        title:
+          event.action === 'create'
+            ? `Imported test case into ${environment}`
+            : `Updated test case via import in ${environment}`,
+        summary:
+          event.action === 'create'
+            ? `imported this test case into ${environment}`
+            : `updated this test case by import in ${environment}`,
+        details: [],
+      });
+      continue;
+    }
+
+    enriched.push({
+      ...event,
+      title: 'Activity updated',
+      summary: 'updated this activity',
+      details: [],
+    });
+  }
+
+  return enriched.reverse();
+}
+
+function HistoryDetailRow({ detail }) {
+  const isStatusRow = detail.label === 'Status';
+  const statusBefore = normalizedStatus(detail.before);
+  const statusAfter = normalizedStatus(detail.after);
+
+  function statusIcon(status) {
+    if (status === STATUS.PASS) return <CheckCircleOutlinedIcon />;
+    if (status === STATUS.FAIL) return <HighlightOffOutlinedIcon />;
+    return <HourglassEmptyOutlinedIcon />;
+  }
+
+  return (
+    <Stack
+      spacing={0.5}
+      sx={{
+        py: 0.875,
+        borderTop: 1,
+        borderColor: 'divider',
+      }}
+    >
+      <Typography
+        variant='formLabel'
+        sx={{ color: 'primary.main', letterSpacing: 0.8 }}
+      >
+        {detail.label}
+      </Typography>
+      {isStatusRow ? (
+        <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
+          <Chip
+            size='small'
+            icon={statusIcon(statusBefore)}
+            label={`Before: ${statusBefore}`}
+            color={STATUS_COLOR[statusBefore] || 'default'}
+            variant='outlined'
+            sx={{
+              height: 24,
+              '& .MuiChip-label': {
+                px: 1,
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              },
+              '& .MuiChip-icon': { fontSize: 14 },
+            }}
+          />
+          <Typography variant='tableCell' color='text.secondary'>
+            →
+          </Typography>
+          <Chip
+            size='small'
+            icon={statusIcon(statusAfter)}
+            label={`After: ${statusAfter}`}
+            color={STATUS_COLOR[statusAfter] || 'default'}
+            sx={{
+              height: 24,
+              '& .MuiChip-label': {
+                px: 1,
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              },
+              '& .MuiChip-icon': { fontSize: 14 },
+            }}
+          />
+        </Stack>
+      ) : (
+        <Stack spacing={0.25}>
+          <Typography variant='tableCell' color='text.secondary'>
+            Before: {detail.before}
+          </Typography>
+          <Typography variant='tableCell' sx={{ fontWeight: 600 }}>
+            After: {detail.after}
+          </Typography>
+        </Stack>
+      )}
+    </Stack>
+  );
+}
 
 function SectionLabel({ children }) {
   return (
@@ -279,6 +490,11 @@ export default function TestCaseDetail({
   environments,
   envResults,
   envLoading,
+  historyOpen,
+  historyEvents,
+  historyLoading,
+  historyError,
+  onToggleHistory,
   onEdit,
   onAction,
   onClose,
@@ -286,6 +502,7 @@ export default function TestCaseDetail({
   if (!tc) return null;
 
   const st = normalizedStatus(tc.status);
+  const historyEntries = buildHistoryEntries(historyEvents);
 
   return (
     <Stack
@@ -486,6 +703,144 @@ export default function TestCaseDetail({
               envResults={envResults}
               envLoading={envLoading}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      <Button
+        fullWidth
+        variant={historyOpen ? 'contained' : 'outlined'}
+        startIcon={<HistoryOutlinedIcon />}
+        aria-label={historyOpen ? 'Hide history' : 'Show history'}
+        onClick={onToggleHistory}
+      >
+        {historyOpen ? 'Hide History' : 'History'}
+      </Button>
+
+      {historyOpen && (
+        <Card variant='outlined'>
+          <CardContent>
+            <SectionLabel>History</SectionLabel>
+            {historyLoading ? (
+              <Stack spacing={1}>
+                <Skeleton variant='rounded' height={88} />
+                <Skeleton variant='rounded' height={88} />
+              </Stack>
+            ) : historyError ? (
+              <Alert severity='error'>{historyError}</Alert>
+            ) : historyEntries.length === 0 ? (
+              <Stack spacing={2} sx={{ alignItems: 'center', py: 3 }}>
+                <ManageHistoryOutlinedIcon color='disabled' fontSize='large' />
+                <Typography variant='sectionTitle'>No history yet</Typography>
+                <Typography
+                  variant='tableCell'
+                  color='text.secondary'
+                  sx={{ textAlign: 'center', maxWidth: 360 }}
+                >
+                  Changes and execution activity for this test case will appear
+                  here after the next update.
+                </Typography>
+                <Button variant='contained' onClick={onToggleHistory}>
+                  Hide history
+                </Button>
+              </Stack>
+            ) : (
+              <Stack spacing={1.5}>
+                {historyEntries.map((entry) => (
+                  <Card
+                    key={entry._id}
+                    variant='outlined'
+                    sx={{
+                      borderRadius: 2,
+                      borderColor: 'divider',
+                      bgcolor: 'background.paper',
+                      boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
+                    }}
+                  >
+                    <CardContent>
+                      <Stack spacing={1}>
+                        <Stack
+                          direction='row'
+                          spacing={1}
+                          sx={{
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant='sectionTitle'>
+                              Updated by {actorName(entry.by)}
+                            </Typography>
+                            <Typography
+                              variant='tableCell'
+                              color='text.secondary'
+                            >
+                              {entry.title}
+                            </Typography>
+                          </Stack>
+                          <Chip
+                            size='small'
+                            label={entry.environment || 'All environments'}
+                            variant='outlined'
+                          />
+                        </Stack>
+
+                        <Stack
+                          direction='row'
+                          spacing={0.75}
+                          sx={{ alignItems: 'center' }}
+                        >
+                          <ScheduleOutlinedIcon
+                            fontSize='small'
+                            sx={{ color: 'primary.main' }}
+                          />
+                          <Typography
+                            variant='tableCell'
+                            color='text.secondary'
+                          >
+                            {new Date(entry.at).toLocaleString()}
+                          </Typography>
+                        </Stack>
+
+                        <Stack
+                          direction='row'
+                          spacing={0.75}
+                          sx={{ alignItems: 'center' }}
+                        >
+                          <UpdateOutlinedIcon
+                            fontSize='small'
+                            sx={{ color: 'primary.main' }}
+                          />
+                          <Typography variant='tableCell'>
+                            {entry.summary}
+                          </Typography>
+                        </Stack>
+
+                        {entry.details.length > 0 && (
+                          <Stack spacing={0}>
+                            {entry.details.map((detail) => (
+                              <HistoryDetailRow
+                                key={`${entry._id}-${detail.label}`}
+                                detail={detail}
+                              />
+                            ))}
+                          </Stack>
+                        )}
+
+                        {entry.details.length === 0 && (
+                          <Typography
+                            variant='tableCell'
+                            color='text.secondary'
+                          >
+                            No field-level diff was recorded for this activity.
+                          </Typography>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+            )}
           </CardContent>
         </Card>
       )}

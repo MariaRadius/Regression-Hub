@@ -97,6 +97,10 @@ describe('PATCH /api/releases/[id]/test-cases/[caseId]', () => {
       't1',
       'tc123',
       expect.any(Object),
+      {
+        actor: 'Alice',
+        releaseId: '6642f000000000000000001a',
+      },
     );
   });
 });
