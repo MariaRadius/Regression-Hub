@@ -97,7 +97,7 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 | ID  | Page       | Button text      | What it generates                          | Stored? | Mutates?         |
 | --- | ---------- | ---------------- | ------------------------------------------ | ------- | ---------------- |
 | A   | /reports   | "Create report" (per row) | jsPDF sign-off report + server upload | Yes | Yes — see below  |
-| B   | /reports   | "Export Excel" (per row)  | xlsx workbook (client-side, not stored) | No  | No               |
+| B   | /reports   | "Export Excel" (per row)  | xlsx workbook with summary, all-cases, and per-application sheets (client-side, not stored) | No  | No               |
 | C   | /reports   | "Download copy" (per row) | Streams stored PDF bytes from GridFS  | N/A | No — read-only |
 
 **Download A is a MUTATION.** Clicking a row's "Create report":
@@ -106,7 +106,7 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 3. Replaces any prior saved copy for that (release, environment) — old GridFS bytes are deleted.
 4. Writes an audit event (`category: export`, `action: pdf`).
 
-**Download B (Excel) is NOT a mutation** — it is never stored, never audited, and creates no saved copy.
+**Download B (Excel) is NOT a mutation** — it is never stored, never audited, and creates no saved copy. The workbook must include every expected test case for the selected release + environment, even if that environment's result row is missing, and it must include per-application sheets so the file mirrors the original import organization.
 
 **Download C (Download copy)** hits `GET /api/snapshots/[id]/download` and returns the stored bytes with no regeneration. The "Download copy" button only appears on rows that already have a saved copy.
 

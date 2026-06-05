@@ -60,7 +60,7 @@ vi.mock('xlsx', () => ({
   writeFile: mockXlsxWriteFile,
 }));
 
-import ReportsClient from '../ReportsClient';
+import ReportsClient, { formatSnapshotDate } from '../ReportsClient';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -212,5 +212,13 @@ describe('ReportsClient — Excel flow writes no saved copy', () => {
 
     expect(mockSaveSnapshot).not.toHaveBeenCalled();
     expect(mockXlsxWriteFile).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('formatSnapshotDate', () => {
+  it('formats snapshot timestamps deterministically to avoid hydration mismatches', () => {
+    expect(formatSnapshotDate('2026-06-02T11:04:00.000Z')).toBe(
+      'Jun 2, 2026, 11:04 UTC',
+    );
   });
 });

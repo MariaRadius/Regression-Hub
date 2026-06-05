@@ -155,7 +155,7 @@ One unified, release-grouped surface — every active Release × Environment is 
 
 - **Create report (PDF):** generates a fresh signed-off report, downloads it immediately, and saves it as the latest copy for that release + environment. Exactly one copy is kept per (release, environment) — creating again replaces the prior one and writes an EXPORT/PDF audit event.
 - **Download copy:** re-downloads the exact saved PDF without regeneration. Shown only when a copy exists.
-- **Export Excel:** always reflects the latest saved data; import-compatible (round-trips through the Excel importer). Never stored, never audited.
+- **Export Excel:** includes every test case expected for the selected release + environment, even when that environment's result row is missing; preserves import-facing columns including Platform/Application, Module, Steps, Expected Result, Actual Result, Defects/Improvements, Notes, Status, Tested By, Tested On, and Software Version Tested; writes one workbook sheet per application plus summary/all-cases sheets. Never stored, never audited.
 - Archived/renamed releases with a saved copy still surface as download-only cards so no stored report is hidden.
 
 ## API Routes

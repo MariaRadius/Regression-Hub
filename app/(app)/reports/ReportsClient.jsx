@@ -29,9 +29,10 @@ import {
   saveSnapshot,
   snapshotDownloadUrl,
 } from '@/lib/api/snapshots';
-import { ROLES, STATUS } from '@/lib/constants';
-import { dateStamp, normalizedStatus } from '@/utils/formatters';
+import { ROLES } from '@/lib/constants';
+import { dateStamp } from '@/utils/formatters';
 import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
+import { buildExcelExportData } from './exportWorkbook';
 
 /** Composite key uniquely identifying a (release, environment) row. */
 function rowKey(releaseId, environment) {
@@ -125,22 +126,34 @@ function groupByRelease(rows) {
 }
 
 /**
- * Formats a generatedAt ISO string into a readable local date + time.
+ * Formats a generatedAt ISO string into a deterministic UTC date + time.
  *
  * @param {string} iso
  * @returns {string}
  */
-function formatSnapshotDate(iso) {
+export function formatSnapshotDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const month = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][d.getUTCMonth()];
+  const day = d.getUTCDate();
+  const year = d.getUTCFullYear();
+  const hour = d.getUTCHours();
+  const minute = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${month} ${day}, ${year}, ${hour}:${minute} UTC`;
 }
 
 /**
@@ -220,7 +233,11 @@ function ReportCard({ row, busy, onCreate, onExcel }) {
                   </IconButton>
                 </Tooltip>
               </Stack>
-              <Typography variant='tableCell' sx={{ fontWeight: 500 }}>
+              <Typography
+                variant='tableCell'
+                sx={{ fontWeight: 500 }}
+                suppressHydrationWarning
+              >
                 {formatSnapshotDate(snapshot.generatedAt)}
               </Typography>
               <Typography variant='caption' color='text.disabled'>
@@ -427,57 +444,25 @@ export default function ReportsClient({ initialSnapshots, userRole }) {
       }
 
       const { utils, writeFile } = await import('xlsx');
-      const dataRows = cases.map((tc) => ({
-        'Test Key': tc.testKey,
-        'Platform/Application': tc.applicationName,
-        Module: tc.moduleName,
-        'Test Case': tc.name,
-        Preconditions: tc.preconditions,
-        Steps: tc.steps,
-        'Expected Result': tc.expectedResult,
-        Priority: tc.priority,
-        'Jira Story': tc.jiraStory,
-        Status: normalizedStatus(tc.status),
-        Notes: tc.notes,
-        'Tested By': tc.testedBy,
-        'Tested On': tc.testedOn,
-        Environment: tc.environment,
-      }));
-
-      const summaryRows = [
-        ['Metric', 'Value'],
-        ['Application', 'All'],
-        ['Release', row.releaseName ?? ''],
-        ['Environment', row.environment],
-        ['Total Test Cases', cases.length],
-        [
-          'Passed',
-          cases.filter((t) => normalizedStatus(t.status) === STATUS.PASS)
-            .length,
-        ],
-        [
-          'Failed',
-          cases.filter((t) => normalizedStatus(t.status) === STATUS.FAIL)
-            .length,
-        ],
-        [
-          'Pending',
-          cases.filter((t) => normalizedStatus(t.status) === STATUS.PENDING)
-            .length,
-        ],
-        ['Generated', new Date().toLocaleString()],
-      ];
+      const workbookData = buildExcelExportData(cases, {
+        releaseName: row.releaseName ?? '',
+        environment: row.environment,
+      });
 
       const wb = utils.book_new();
-      const wsSummary = utils.aoa_to_sheet(summaryRows);
-      wsSummary['!cols'] = [{ wch: 24 }, { wch: 30 }];
+      const wsSummary = utils.aoa_to_sheet(workbookData.summaryRows);
+      wsSummary['!cols'] = workbookData.summaryCols;
+      wsSummary['!merges'] = workbookData.summaryMerges;
       utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-      const wsData = utils.json_to_sheet(dataRows);
-      wsData['!cols'] = [
-        14, 22, 18, 24, 18, 18, 24, 10, 14, 10, 30, 12, 14, 14,
-      ].map((wch) => ({ wch }));
+      const wsData = utils.json_to_sheet(workbookData.dataRows);
+      wsData['!cols'] = workbookData.dataCols;
       utils.book_append_sheet(wb, wsData, 'Test Cases');
+      for (const sheet of workbookData.applicationSheets) {
+        const wsApp = utils.json_to_sheet(sheet.rows);
+        wsApp['!cols'] = workbookData.dataCols;
+        utils.book_append_sheet(wb, wsApp, sheet.name);
+      }
 
       const safeName = (row.releaseName ?? 'export').replace(/\s+/g, '-');
       writeFile(
