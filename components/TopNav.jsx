@@ -71,7 +71,7 @@ const TOP_NAV_SX = Object.freeze({
 });
 
 async function handleSignOut() {
-  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/login`;
+  const callbackUrl = `${window.location.origin}/login`;
   await signOut({ redirect: false, callbackUrl });
   window.location.replace(callbackUrl);
 }
