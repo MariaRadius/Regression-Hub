@@ -43,11 +43,10 @@ function buildTitle(event) {
     return 'Test case changed';
   }
 
-  if (
-    event.category === AUDIT_CATEGORY.CONFIG &&
-    event.action === AUDIT_ACTION.RESET_DATA
-  ) {
-    return 'Team data cleared';
+  if (event.category === AUDIT_CATEGORY.CONFIG) {
+    if (event.action === AUDIT_ACTION.RESET_DATA) return 'Team data cleared';
+    if (event.action === AUDIT_ACTION.UPDATE) return 'Settings updated';
+    return 'Config updated';
   }
 
   return `${titleCase(event.category)} updated`;
