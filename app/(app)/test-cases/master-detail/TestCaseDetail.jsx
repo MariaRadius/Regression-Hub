@@ -767,17 +767,12 @@ export default function TestCaseDetail({
                             justifyContent: 'space-between',
                           }}
                         >
-                          <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant='sectionTitle'>
-                              Updated by {actorName(entry.by)}
-                            </Typography>
-                            <Typography
-                              variant='tableCell'
-                              color='text.secondary'
-                            >
-                              {entry.title}
-                            </Typography>
-                          </Stack>
+                          <Typography
+                            variant='sectionTitle'
+                            sx={{ flex: 1, minWidth: 0 }}
+                          >
+                            Updated by {actorName(entry.by)}
+                          </Typography>
                           <Chip
                             size='small'
                             label={entry.environment || 'All environments'}
