@@ -9,6 +9,7 @@ import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import PeopleIcon from '@mui/icons-material/People';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
@@ -39,6 +40,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider, { showToast } from '@/components/Toast';
 import { listAdminActivity } from '@/lib/api/admin';
+import { updateAdminSettings } from '@/lib/api/settings';
 import { resetTeamTestCases } from '@/lib/api/testCases';
 import { CONFIRM_TOKENS } from '@/lib/constants';
 
@@ -168,7 +170,7 @@ function ActivityRow({ entry }) {
  * Admin control panel — quick access to admin sub-pages and the destructive
  * "Clear All Data" action that was previously misplaced on the Test Cases page.
  */
-export default function AdminClient({ user }) {
+export default function AdminClient({ user, settings }) {
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     message: '',
@@ -183,6 +185,11 @@ export default function AdminClient({ user }) {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState('');
   const [activityEntries, setActivityEntries] = useState([]);
+  const [dashboardSettings, setDashboardSettings] = useState({
+    failureThreshold: settings?.failureThreshold ?? 5,
+    topModulesLimit: settings?.topModulesLimit ?? 5,
+  });
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   async function openActivity() {
     setActivityOpen(true);
@@ -197,6 +204,21 @@ export default function AdminClient({ user }) {
       setActivityError('Could not load admin activity right now.');
     } finally {
       setActivityLoading(false);
+    }
+  }
+
+  async function saveSettings() {
+    setSettingsSaving(true);
+    try {
+      await updateAdminSettings({
+        failureThreshold: Number(dashboardSettings.failureThreshold),
+        topModulesLimit: Number(dashboardSettings.topModulesLimit),
+      });
+      showToast('Dashboard settings saved', 'success');
+    } catch {
+      // error toast shown by HTTP client
+    } finally {
+      setSettingsSaving(false);
     }
   }
 
@@ -280,6 +302,81 @@ export default function AdminClient({ user }) {
           </Grid>
         ))}
       </Grid>
+
+      <Stack spacing={2}>
+        <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Divider sx={{ flex: 1 }} />
+          <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
+            <SettingsOutlinedIcon sx={{ fontSize: 16 }} />
+            <Typography variant='pageEyebrow' sx={{ letterSpacing: '0.08em' }}>
+              Dashboard Settings
+            </Typography>
+          </Stack>
+          <Divider sx={{ flex: 1 }} />
+        </Stack>
+
+        <Card variant='outlined'>
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack spacing={0.5}>
+                <Typography variant='panelTitle' component='h2'>
+                  Top Failing Modules
+                </Typography>
+                <Typography variant='tableCell' color='text.secondary'>
+                  Controls which modules appear in the "Top Failing Modules"
+                  panel on the dashboard.
+                </Typography>
+              </Stack>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size='small'
+                    type='number'
+                    label='Failure threshold'
+                    value={dashboardSettings.failureThreshold}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        failureThreshold: e.target.value,
+                      }))
+                    }
+                    slotProps={{ htmlInput: { min: 1, max: 50 } }}
+                    helperText='Min failed cases to appear (1–50)'
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size='small'
+                    type='number'
+                    label='Top modules limit'
+                    value={dashboardSettings.topModulesLimit}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        topModulesLimit: e.target.value,
+                      }))
+                    }
+                    slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                    helperText='Max modules to show (1–10)'
+                  />
+                </Grid>
+              </Grid>
+            </Stack>
+          </CardContent>
+          <CardActions sx={{ px: 2, pb: 2 }}>
+            <Button
+              variant='contained'
+              size='small'
+              onClick={saveSettings}
+              disabled={settingsSaving}
+            >
+              {settingsSaving ? 'Saving…' : 'Save Settings'}
+            </Button>
+          </CardActions>
+        </Card>
+      </Stack>
 
       <Stack spacing={2}>
         <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>

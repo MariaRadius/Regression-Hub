@@ -11,10 +11,7 @@ import Typography from '@mui/material/Typography';
 import Link from 'next/link';
 import MetaChip from '@/components/MetaChip';
 import Panel from '@/components/Panel';
-import {
-  DASHBOARD_TOP_FAILING_MODULES_FAILURE_THRESHOLD,
-  PRIORITIES,
-} from '@/lib/constants';
+import { PRIORITIES } from '@/lib/constants';
 
 function SummaryChip({ icon, label, color, variant = 'filled' }) {
   return (
@@ -101,6 +98,7 @@ export default function DashboardInsightsPanels({
   topFailingModules = [],
   criticalSummary = {},
   criticalFailures = [],
+  failureThreshold = 5,
 }) {
   const failedCriticalCount = criticalSummary.failed ?? 0;
 
@@ -143,7 +141,7 @@ export default function DashboardInsightsPanels({
             <EmptyCopy
               accent='#f08d2f'
               icon={<FolderIcon sx={{ fontSize: 34, color: 'warning.main' }} />}
-              title={`No modules have more than ${DASHBOARD_TOP_FAILING_MODULES_FAILURE_THRESHOLD} failed test cases.`}
+              title={`No modules have more than ${failureThreshold} failed test cases.`}
               sub='This panel highlights only modules with meaningful failure volume so the team can focus on the biggest hotspots first.'
             />
           )}

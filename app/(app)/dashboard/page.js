@@ -17,6 +17,7 @@ import {
   buildTesterBarData,
 } from '@/lib/db/dashboardTransforms';
 import { resolveActiveReleaseEnv } from '@/lib/db/releasesData';
+import { getTeamSettings } from '@/lib/db/settingsData';
 import { getDb } from '@/lib/mongodb';
 import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 import { ChartHoverProvider } from './charts/ChartHoverContext';
@@ -71,11 +72,11 @@ export default async function DashboardPage() {
     (await cookies()).get(RELEASE_CTX_COOKIE)?.value,
   );
   const db = await getDb();
-  const { releaseId, environment } = await resolveActiveReleaseEnv(
-    db,
-    teamId,
-    stored,
-  );
+  const [{ releaseId, environment }, { failureThreshold, topModulesLimit }] =
+    await Promise.all([
+      resolveActiveReleaseEnv(db, teamId, stored),
+      getTeamSettings(db, teamId),
+    ]);
 
   // No releases exist yet — render an empty state rather than crashing.
   if (!releaseId || !environment) {
@@ -91,7 +92,10 @@ export default async function DashboardPage() {
     );
   }
 
-  const data = await getCachedDashboardData(teamId, releaseId, environment);
+  const data = await getCachedDashboardData(teamId, releaseId, environment, {
+    failureThreshold,
+    topModulesLimit,
+  });
 
   const {
     summary,
@@ -216,6 +220,7 @@ export default async function DashboardPage() {
           topFailingModules={topFailingModules}
           criticalSummary={criticalSummary}
           criticalFailures={criticalFailures}
+          failureThreshold={failureThreshold}
         />
 
         <Grid container spacing={2}>
