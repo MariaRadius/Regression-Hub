@@ -45,6 +45,10 @@ function formatPercent(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
+function formatCount(value) {
+  return Number(value || 0).toLocaleString();
+}
+
 const DASHBOARD_PANEL_SX = Object.freeze({
   overflow: 'hidden',
   background:
@@ -126,24 +130,24 @@ export default async function DashboardPage() {
           cards={[
             {
               label: 'Total Test Cases',
-              value: summary.total,
+              value: formatCount(summary.total),
               sub: 'All imported',
             },
             {
               label: 'Passed',
-              value: summary.passed,
+              value: formatCount(summary.passed),
               cls: 'pass',
               sub: 'Validated',
             },
             {
               label: 'Failed',
-              value: summary.failed,
+              value: formatCount(summary.failed),
               cls: 'fail',
               sub: 'Needs attention',
             },
             {
               label: 'Pending',
-              value: summary.pending,
+              value: formatCount(summary.pending),
               cls: 'pending',
               sub: 'Awaiting result',
             },
