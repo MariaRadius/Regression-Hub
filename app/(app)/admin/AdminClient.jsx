@@ -4,6 +4,8 @@ import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
@@ -18,6 +20,7 @@ import {
   Card,
   CardActions,
   CardContent,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -91,16 +94,19 @@ function normalizeActivityEntries(events) {
 }
 
 function ActivityRow({ entry }) {
+  const [expanded, setExpanded] = useState(false);
+  const details = entry.details ?? [];
+
   return (
     <Card variant='outlined'>
-      <CardContent>
-        <Stack spacing={1.5}>
+      <CardContent sx={{ pb: 1 }}>
+        <Stack spacing={1.25}>
           <Stack
             direction='row'
             spacing={1.25}
             sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
           >
-            <Stack spacing={0.375}>
+            <Stack spacing={0.25}>
               <Typography variant='panelTitle' component='h3'>
                 {entry.title}
               </Typography>
@@ -118,24 +124,26 @@ function ActivityRow({ entry }) {
                 borderColor: 'divider',
                 borderRadius: 999,
                 lineHeight: 1,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               {entry.actor}
             </Typography>
           </Stack>
 
-          <Stack spacing={0.75}>
+          <Stack spacing={0.625}>
             <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
               <ManageAccountsOutlinedIcon
-                sx={{ fontSize: 16, color: 'primary.main' }}
+                sx={{ fontSize: 15, color: 'text.secondary' }}
               />
-              <Typography variant='tableCell'>
-                Updated by <strong>{entry.actor}</strong>
+              <Typography variant='tableCell' color='text.secondary'>
+                By <strong>{entry.actor}</strong>
               </Typography>
             </Stack>
             <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
               <ScheduleOutlinedIcon
-                sx={{ fontSize: 16, color: 'primary.main' }}
+                sx={{ fontSize: 15, color: 'text.secondary' }}
               />
               <Typography variant='tableCell' color='text.secondary'>
                 {new Date(entry.timestamp).toLocaleString()}
@@ -143,17 +151,17 @@ function ActivityRow({ entry }) {
             </Stack>
           </Stack>
 
-          {entry.details.length > 0 ? (
-            <Stack spacing={0.75}>
-              {entry.details.map((detail) => (
+          {details.length > 0 ? (
+            <Stack spacing={0.5}>
+              {details.map((detail) => (
                 <Stack
                   key={`${entry._id}-${detail}`}
                   direction='row'
-                  spacing={1}
+                  spacing={0.75}
                   sx={{ alignItems: 'flex-start' }}
                 >
                   <CheckCircleOutlinedIcon
-                    sx={{ fontSize: 16, color: 'primary.main', mt: 0.125 }}
+                    sx={{ fontSize: 14, color: 'primary.main', mt: 0.25 }}
                   />
                   <Typography variant='tableCell'>{detail}</Typography>
                 </Stack>
@@ -162,6 +170,43 @@ function ActivityRow({ entry }) {
           ) : null}
         </Stack>
       </CardContent>
+
+      <CardActions sx={{ px: 2, pt: 0, pb: 1.5 }}>
+        <Button
+          size='small'
+          endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          onClick={() => setExpanded((v) => !v)}
+          sx={{ fontSize: 11 }}
+        >
+          {expanded ? 'Hide details' : 'View details'}
+        </Button>
+      </CardActions>
+
+      <Collapse in={expanded} unmountOnExit>
+        <Divider />
+        <Stack spacing={0.5} sx={{ px: 2, py: 1.5 }}>
+          {Object.entries(entry.raw ?? {})
+            .filter(([k]) => !['_id', 'teamId', 'raw'].includes(k))
+            .map(([k, v]) => (
+              <Stack key={k} direction='row' spacing={1}>
+                <Typography
+                  variant='tableCell'
+                  color='text.secondary'
+                  sx={{ minWidth: 110, flexShrink: 0 }}
+                >
+                  {k}
+                </Typography>
+                <Typography variant='tableCell' sx={{ wordBreak: 'break-all' }}>
+                  {v === null || v === undefined
+                    ? '—'
+                    : typeof v === 'object'
+                      ? JSON.stringify(v)
+                      : String(v)}
+                </Typography>
+              </Stack>
+            ))}
+        </Stack>
+      </Collapse>
     </Card>
   );
 }
