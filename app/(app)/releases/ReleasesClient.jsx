@@ -161,6 +161,11 @@ export default function ReleasesClient({ user, releases: initialReleases }) {
     try {
       await updateRelease(release._id, { archived: !release.archived });
       handleArchiveClose();
+      setReleases((prev) =>
+        prev.map((r) =>
+          r._id === release._id ? { ...r, archived: !r.archived } : r,
+        ),
+      );
       router.refresh();
     } catch (err) {
       setError(err?.message ?? 'Failed to update release.');
