@@ -1,6 +1,5 @@
 'use client';
 
-import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -8,9 +7,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
-import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import PeopleIcon from '@mui/icons-material/People';
-import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -29,6 +26,7 @@ import {
   Drawer,
   Grid,
   IconButton,
+  Pagination,
   Stack,
   TextField,
   Typography,
@@ -96,118 +94,116 @@ function normalizeActivityEntries(events) {
 function ActivityRow({ entry }) {
   const [expanded, setExpanded] = useState(false);
   const details = entry.details ?? [];
+  const subject =
+    entry.subject && entry.subject !== 'Admin activity' ? entry.subject : null;
+  const label = subject ? `${entry.title} — ${subject}` : entry.title;
 
   return (
-    <Card variant='outlined'>
-      <CardContent sx={{ pb: 1 }}>
-        <Stack spacing={1.25}>
+    <Stack>
+      <Stack
+        direction='row'
+        spacing={1.5}
+        sx={{
+          px: 2,
+          py: 1.25,
+          alignItems: 'flex-start',
+          cursor: 'pointer',
+          transition: 'background 0.15s',
+          '&:hover': { bgcolor: 'grey.50' },
+        }}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <Stack sx={{ pt: 0.5, flexShrink: 0 }}>
           <Stack
-            direction='row'
-            spacing={1.25}
-            sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
-          >
-            <Stack spacing={0.25}>
-              <Typography variant='panelTitle' component='h3'>
-                {entry.title}
-              </Typography>
-              <Typography variant='tableCell' color='text.secondary'>
-                {entry.subject}
-              </Typography>
-            </Stack>
-            <Typography
-              variant='formLabel'
-              sx={{
-                color: 'primary.main',
-                px: 1,
-                py: 0.375,
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 999,
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              {entry.actor}
-            </Typography>
-          </Stack>
-
-          <Stack spacing={0.625}>
-            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
-              <ManageAccountsOutlinedIcon
-                sx={{ fontSize: 15, color: 'text.secondary' }}
-              />
-              <Typography variant='tableCell' color='text.secondary'>
-                By <strong>{entry.actor}</strong>
-              </Typography>
-            </Stack>
-            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
-              <ScheduleOutlinedIcon
-                sx={{ fontSize: 15, color: 'text.secondary' }}
-              />
-              <Typography variant='tableCell' color='text.secondary'>
-                {new Date(entry.timestamp).toLocaleString()}
-              </Typography>
-            </Stack>
-          </Stack>
-
-          {details.length > 0 ? (
-            <Stack spacing={0.5}>
-              {details.map((detail) => (
-                <Stack
-                  key={`${entry._id}-${detail}`}
-                  direction='row'
-                  spacing={0.75}
-                  sx={{ alignItems: 'flex-start' }}
-                >
-                  <CheckCircleOutlinedIcon
-                    sx={{ fontSize: 14, color: 'primary.main', mt: 0.25 }}
-                  />
-                  <Typography variant='tableCell'>{detail}</Typography>
-                </Stack>
-              ))}
-            </Stack>
-          ) : null}
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              bgcolor: 'primary.main',
+            }}
+          />
         </Stack>
-      </CardContent>
-
-      <CardActions sx={{ px: 2, pt: 0, pb: 1.5 }}>
-        <Button
-          size='small'
-          endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-          onClick={() => setExpanded((v) => !v)}
-          sx={{ fontSize: 11 }}
-        >
-          {expanded ? 'Hide details' : 'View details'}
-        </Button>
-      </CardActions>
+        <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant='tableCell' sx={{ fontWeight: 600 }} noWrap>
+            {label}
+          </Typography>
+          {details.length > 0 ? (
+            <Typography
+              variant='tableCell'
+              color='text.secondary'
+              sx={{ fontSize: 11 }}
+              noWrap
+            >
+              {details.join(' · ')}
+            </Typography>
+          ) : null}
+          <Typography
+            variant='tableCell'
+            color='text.disabled'
+            sx={{ fontSize: 11 }}
+          >
+            {new Date(entry.timestamp).toLocaleString()} · {entry.actor}
+          </Typography>
+        </Stack>
+        {expanded ? (
+          <ExpandLessIcon
+            sx={{
+              fontSize: 15,
+              color: 'text.disabled',
+              flexShrink: 0,
+              mt: 0.25,
+            }}
+          />
+        ) : (
+          <ExpandMoreIcon
+            sx={{
+              fontSize: 15,
+              color: 'text.disabled',
+              flexShrink: 0,
+              mt: 0.25,
+            }}
+          />
+        )}
+      </Stack>
 
       <Collapse in={expanded} unmountOnExit>
-        <Divider />
-        <Stack spacing={0.5} sx={{ px: 2, py: 1.5 }}>
+        <Stack
+          spacing={0.375}
+          sx={{
+            mx: 2,
+            mb: 1,
+            px: 1.5,
+            py: 1,
+            bgcolor: 'grey.50',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider',
+          }}
+        >
           {Object.entries(entry.raw ?? {})
-            .filter(([k]) => !['_id', 'teamId', 'raw'].includes(k))
+            .filter(([k]) => k !== 'teamId' && entry.raw[k] !== null)
             .map(([k, v]) => (
               <Stack key={k} direction='row' spacing={1}>
                 <Typography
                   variant='tableCell'
-                  color='text.secondary'
-                  sx={{ minWidth: 110, flexShrink: 0 }}
+                  color='text.disabled'
+                  sx={{ minWidth: 110, flexShrink: 0, fontSize: 11 }}
                 >
                   {k}
                 </Typography>
-                <Typography variant='tableCell' sx={{ wordBreak: 'break-all' }}>
-                  {v === null || v === undefined
-                    ? '—'
-                    : typeof v === 'object'
-                      ? JSON.stringify(v)
-                      : String(v)}
+                <Typography
+                  variant='tableCell'
+                  sx={{ wordBreak: 'break-all', fontSize: 11 }}
+                >
+                  {typeof v === 'object' ? JSON.stringify(v) : String(v)}
                 </Typography>
               </Stack>
             ))}
         </Stack>
       </Collapse>
-    </Card>
+
+      <Divider />
+    </Stack>
   );
 }
 
@@ -230,6 +226,14 @@ export default function AdminClient({ user, settings }) {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState('');
   const [activityEntries, setActivityEntries] = useState([]);
+  const [activityPage, setActivityPage] = useState(1);
+
+  const PAGE_SIZE = 10;
+  const totalPages = Math.ceil(activityEntries.length / PAGE_SIZE);
+  const pagedEntries = activityEntries.slice(
+    (activityPage - 1) * PAGE_SIZE,
+    activityPage * PAGE_SIZE,
+  );
   const [dashboardSettings, setDashboardSettings] = useState({
     failureThreshold: settings?.failureThreshold ?? 5,
     topModulesLimit: settings?.topModulesLimit ?? 5,
@@ -238,12 +242,13 @@ export default function AdminClient({ user, settings }) {
 
   async function openActivity() {
     setActivityOpen(true);
-    if (activityEntries.length > 0 || activityLoading) return;
+    setActivityPage(1);
+    if (activityLoading) return;
 
     setActivityLoading(true);
     setActivityError('');
     try {
-      const events = await listAdminActivity({ limit: 100 });
+      const events = await listAdminActivity({ limit: 500 });
       setActivityEntries(normalizeActivityEntries(events));
     } catch {
       setActivityError('Could not load admin activity right now.');
@@ -559,8 +564,7 @@ export default function AdminClient({ user, settings }) {
               <Typography variant='pageEyebrow'>Admin Activity</Typography>
               <Typography variant='pageTitle'>Activity Logs</Typography>
               <Typography variant='pageSub' component='div'>
-                Opened on demand so the admin page stays fast. Review who
-                updated what, and download the latest 100 entries when needed.
+                10 per page · Download for the full log.
               </Typography>
             </Stack>
             <IconButton
@@ -597,42 +601,68 @@ export default function AdminClient({ user, settings }) {
             <Alert severity='error'>{activityError}</Alert>
           ) : null}
 
-          <Stack spacing={1.5} sx={{ overflowY: 'auto', pr: 0.5 }}>
+          <Stack
+            sx={{
+              overflowY: 'auto',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              flex: 1,
+            }}
+          >
             {activityLoading ? (
-              <Typography variant='tableCell' color='text.secondary'>
-                Loading activity…
-              </Typography>
+              <Stack sx={{ px: 2, py: 3, alignItems: 'center' }}>
+                <Typography variant='tableCell' color='text.secondary'>
+                  Loading activity…
+                </Typography>
+              </Stack>
             ) : null}
 
             {!activityLoading &&
             activityEntries.length === 0 &&
             !activityError ? (
-              <Card variant='outlined'>
-                <CardContent>
-                  <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-                    <HistoryOutlinedIcon sx={{ color: 'primary.main' }} />
-                    <Typography variant='panelTitle'>
-                      No activity yet
-                    </Typography>
-                    <Typography variant='tableCell' color='text.secondary'>
-                      Admin actions like imports, user updates, and reset events
-                      will appear here once they happen.
-                    </Typography>
-                    <Button
-                      variant='contained'
-                      onClick={() => setActivityOpen(false)}
-                    >
-                      Back to Admin
-                    </Button>
-                  </Stack>
-                </CardContent>
-              </Card>
+              <Stack
+                spacing={1}
+                sx={{ px: 2, py: 3, alignItems: 'flex-start' }}
+              >
+                <HistoryOutlinedIcon sx={{ color: 'text.disabled' }} />
+                <Typography variant='panelTitle'>No activity yet</Typography>
+                <Typography variant='tableCell' color='text.secondary'>
+                  Admin actions like imports, user updates, and releases will
+                  appear here.
+                </Typography>
+              </Stack>
             ) : null}
 
-            {activityEntries.map((entry) => (
+            {pagedEntries.map((entry) => (
               <ActivityRow key={entry._id} entry={entry} />
             ))}
           </Stack>
+
+          {activityEntries.length > 0 ? (
+            <Stack
+              direction='row'
+              spacing={1}
+              sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <Typography
+                variant='tableCell'
+                color='text.disabled'
+                sx={{ fontSize: 11 }}
+              >
+                {(activityPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(activityPage * PAGE_SIZE, activityEntries.length)} of{' '}
+                {activityEntries.length}
+              </Typography>
+              <Pagination
+                count={Math.max(1, totalPages)}
+                page={activityPage}
+                onChange={(_e, p) => setActivityPage(p)}
+                size='small'
+                siblingCount={0}
+              />
+            </Stack>
+          ) : null}
         </Stack>
       </Drawer>
     </Stack>
