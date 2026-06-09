@@ -26,6 +26,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { showToast } from '@/components/Toast';
 import { deleteRelease, updateRelease } from '@/lib/api/releases';
 import { ROLES } from '@/lib/constants';
 import ReleaseFormDialog from './ReleaseFormDialog';
@@ -166,6 +167,10 @@ export default function ReleasesClient({ user, releases: initialReleases }) {
           r._id === release._id ? { ...r, archived: !r.archived } : r,
         ),
       );
+      showToast(
+        `${release.name} ${release.archived ? 'unarchived' : 'archived'}`,
+        'success',
+      );
       router.refresh();
     } catch (err) {
       setError(err?.message ?? 'Failed to update release.');
@@ -187,8 +192,8 @@ export default function ReleasesClient({ user, releases: initialReleases }) {
     try {
       await deleteRelease(release._id, { confirm: 'DELETE' });
       handleDeleteClose();
-      // Optimistically remove from list; router.refresh keeps SSR in sync
       setReleases((prev) => prev.filter((r) => r._id !== release._id));
+      showToast(`${release.name} deleted`, 'success');
       router.refresh();
     } catch (err) {
       setError(err?.message ?? 'Failed to delete release.');
