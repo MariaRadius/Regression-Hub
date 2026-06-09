@@ -142,7 +142,7 @@ function ActivityRow({ entry }) {
             color='text.disabled'
             sx={{ fontSize: 11 }}
           >
-            {new Date(entry.timestamp).toLocaleString()} · {entry.actor}
+            {new Date(entry.timestamp).toLocaleString('en-GB')} · {entry.actor}
           </Typography>
         </Stack>
         {expanded ? (

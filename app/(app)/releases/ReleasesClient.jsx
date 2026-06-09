@@ -87,7 +87,7 @@ function EnvList({ environments }) {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

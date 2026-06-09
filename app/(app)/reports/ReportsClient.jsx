@@ -10,6 +10,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Divider,
   Grid,
   IconButton,
   Paper,
@@ -32,6 +33,7 @@ import {
 import { ROLES } from '@/lib/constants';
 import { dateStamp } from '@/utils/formatters';
 import { generateSignoffReport } from '@/utils/pdf/generateSignoffReport';
+import EnvHealthReport from './EnvHealthReport';
 import { buildExcelExportData } from './exportWorkbook';
 
 /** Composite key uniquely identifying a (release, environment) row. */
@@ -484,8 +486,10 @@ export default function ReportsClient({ initialSnapshots, userRole }) {
     <Stack spacing={3}>
       <PageHeader
         title='Reports'
-        sub='Signed-off PDF reports for every release and environment, kept here for re-download — plus editable Excel exports.'
+        sub='Generate PDF signoff reports and Excel exports, or run the environment health analysis.'
       />
+      <EnvHealthReport />
+      <Divider />
 
       <Alert severity='info'>
         <AlertTitle>How reports work</AlertTitle>
