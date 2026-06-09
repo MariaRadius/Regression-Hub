@@ -20,6 +20,7 @@
 ## Git and Commit Hygiene
 
 - DO NOT commit without a Jira ID prefix (e.g. "RXR-1234: <message>")
+- when no Jira ticket is provided, use `RXR-11849` as the default prefix
 
 ## API Route Conventions
 
