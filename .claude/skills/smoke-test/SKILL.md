@@ -19,15 +19,7 @@ After `npm test` passes and before opening a PR. Run the full recipe below — d
 ToolSearch: "select:mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests,mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill,mcp__plugin_chrome-devtools-mcp_chrome-devtools__click,mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for,mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script,mcp__plugin_chrome-devtools-mcp_chrome-devtools__select_page"
 ```
 
-### 2 — Verify tests pass
-
-```bash
-npm test
-```
-
-Stop if any test fails. Fix first.
-
-### 3 — Start dev server
+### 2 — Start dev server
 
 ```bash
 npm run dev > /tmp/smoke-dev.log 2>&1 &
@@ -92,9 +84,7 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 
 ---
 
-## Download surfaces — **all opt-in, skip by default**
-
-> **Do not run any download check unless the user explicitly asked** (e.g. "also test downloads", "run download checks", "test the PDF/Excel export").
+## Download surfaces — **skipped unless `$DOWNLOADS` is `yes`**
 
 | ID  | Page       | Button text      | What it generates                          | Stored? | Mutates?         |
 | --- | ---------- | ---------------- | ------------------------------------------ | ------- | ---------------- |
@@ -142,9 +132,56 @@ PASS criterion: `size > 1024` (at least 1 KB — rules out empty blobs).
 
 ---
 
+## Screenshot policy
+
+**Do NOT use `take_screenshot` in the normal test flow.** Use `includeSnapshot: true` on whichever CDP tool call triggered the action instead — it is faster and uses fewer tokens.
+
+Screenshots (`take_screenshot`) are allowed only as a last resort when debugging an unexpected failure that cannot be diagnosed from console messages, network requests, or snapshot output alone. If you take one, note in the report that it was a debug-only screenshot.
+
+---
+
 ## Step-by-step recipe
 
+### PHASE 0 — Confirm scope (do this before any navigation)
+
+Use the `AskUserQuestion` tool with these four questions before proceeding:
+
+```
+Question 1 (header: "Test mode"):
+  "How thorough should the test run be?"
+  Options:
+    - label: "Smoke (Recommended)"  description: "Navigate routes, check HTTP 200 and zero console errors — fast"
+    - label: "Detailed"             description: "Smoke + deep interaction tests: network calls, DOM updates, console verification per action"
+
+Question 2 (header: "Run tests"):
+  "Run npm test before starting the browser walk?"
+  Options:
+    - label: "Yes (Recommended)"  description: "Run the unit/integration test suite first; stop if any test fails"
+    - label: "No"                 description: "Skip npm test — useful when tests were already run or are known passing"
+
+Question 3 (header: "Role scope"):
+  "Which roles should the smoke test cover?"
+  Options:
+    - label: "Both (Recommended)"  description: "Run admin walk + QA walk"
+    - label: "Admin only"          description: "Skip QA walk and redirect checks"
+    - label: "QA only"             description: "Skip admin walk; still assert QA redirects"
+
+Question 4 (header: "Downloads"):
+  "Test download reports? (mutates saved PDF copies)"
+  Options:
+    - label: "No (Recommended)"  description: "Skip download checks — safe, non-destructive"
+    - label: "Yes"               description: "Run Download A (PDF snapshot, MUTATION) and Download B (Excel)"
+```
+
+Record answers as `$MODE` (`smoke` / `detailed`), `$RUN_TESTS` (`yes` / `no`), `$ROLES` (`both` / `admin` / `qa`) and `$DOWNLOADS` (`yes` / `no`). All subsequent phases are gated on these values.
+
+If `$RUN_TESTS` is `yes`, run `npm test` now before opening any browser page. Stop and fix if any test fails.
+
+---
+
 ### PHASE 1 — Admin walk
+
+> **Skip this phase if `$ROLES` is `qa`.**
 
 Open a fresh isolated page (isolates admin cookies from QA context):
 
@@ -219,9 +256,9 @@ After the route walk lands on `/test-cases`, verify the list controls actually w
 3. Open any test case, click the bottom `History` button in the detail panel, and confirm a request to `/api/releases/[id]/test-cases/[caseId]/events` succeeds with no console errors. Then click `Hide History` and confirm the same test case remains open.
 4. After each interaction, confirm there are still no console errors and the page remains interactive.
 
-#### Download A — PDF snapshot (on /reports) — **opt-in only**
+#### Download A — PDF snapshot (on /reports)
 
-> **Skip unless the user explicitly asked to test downloads.**
+> **Skip if `$DOWNLOADS` is `no`.**
 > **This is a mutation** — it writes/replaces a saved copy and appends an audit event.
 
 Navigate to `/reports` (reuse if already there for Download B):
@@ -245,9 +282,9 @@ After the click completes, that row should gain a "Saved" chip and a "Download c
 
 If `/reports` has no data, mark A as `SKIPPED` with reason "no data".
 
-#### Download B — Excel (on /reports) — **opt-in only**
+#### Download B — Excel (on /reports)
 
-> **Skip unless the user explicitly asked to test downloads.**
+> **Skip if `$DOWNLOADS` is `no`.**
 
 Navigate to `/reports` (reuse if already there for Download A):
 
@@ -279,6 +316,8 @@ Record: `{ selfHostedOnly: <bool>, cdnHits: [<urls if any>], status: <"PASS"|"FA
 ---
 
 ### PHASE 2 — QA walk
+
+> **Skip this phase if `$ROLES` is `admin`.**
 
 Open a **new isolated page** (separate cookie jar — do not reuse admin context):
 
@@ -332,6 +371,106 @@ kill $SMOKE_PID 2>/dev/null
 
 ---
 
+### PHASE 5 — Detailed interaction tests
+
+> **Skip this phase entirely if `$MODE` is `smoke`.**
+
+Run in the **admin context** (reuse the `admin-smoke` page if it is still alive, or sign in again as admin using the credentials above).
+
+---
+
+#### Scenario D1 — Dashboard: release/environment selector change
+
+**Important:** Changing the selector does not fire any `/api/…` fetch. It sets a cookie (`rh-release-ctx`) and calls `router.refresh()`, which causes Next.js to re-execute the RSC and issue a standard **document navigation** for `/dashboard`. Verify that document request, not an XHR.
+
+Steps:
+1. Navigate to `/dashboard`.
+2. `wait_for` text matching any of the visible section labels (e.g. `"Pass / Fail / Pending"` or `"Application Summary"`) timeout=10000.
+3. `evaluate_script` → read the current selector value: `document.querySelector('input[placeholder="Select context…"]')?.value` — record as `$PREV_CTX`.
+4. `click` the `input[placeholder="Select context…"]` to open the dropdown.
+5. `wait_for` selector `li[role="option"]` timeout=5000 (wait for options to appear).
+6. Read visible option text via `evaluate_script` → `Array.from(document.querySelectorAll('li[role="option"]')).map(el => el.textContent.trim())`. Record the list.
+7. If there is at least one option different from `$PREV_CTX`, click it. Otherwise mark D1 as `SKIPPED` with reason "only one context available".
+8. `wait_for` text matching any dashboard section label timeout=10000 (page re-rendered via RSC refresh).
+9. `list_network_requests resourceTypes=["document"]` — confirm a request to `/dashboard` with HTTP 200 appears after the selection.
+10. `list_console_messages types=["error"]` — assert zero errors.
+11. `evaluate_script` → read new value: `document.querySelector('input[placeholder="Select context…"]')?.value` — assert it differs from `$PREV_CTX`.
+12. Visually confirm at least one dashboard section is still rendered (e.g. `wait_for` text `"Pass / Fail / Pending"` timeout=5000).
+
+Record: `{ scenario: "D1", status: "PASS"|"FAIL"|"SKIPPED", prevCtx, newCtx, dashboardDocumentStatus, consoleErrors }`.
+
+---
+
+#### Scenario D2 — Test Cases: checkbox selection + bulk status + bulk reassign
+
+Steps:
+1. Navigate to `/test-cases`.
+2. `wait_for` selector `[data-case-id]` timeout=10000 (at least one test case row rendered). If none appear, mark D2 as `SKIPPED` with reason "no test cases".
+3. `evaluate_script` → get the first row's ID and current status:
+   ```js
+   const row = document.querySelector('[data-case-id]');
+   ({ caseId: row?.dataset?.caseId, statusText: row?.querySelector('[data-testid="status-chip"], [class*="status"]')?.textContent?.trim() })
+   ```
+   Record `$TC_ID` and `$INITIAL_STATUS`.
+4. Click the checkbox for that row: `click` selector `[data-case-id="${$TC_ID}"] input[type="checkbox"]`.
+5. `wait_for` text matching `/\d+ selected/` timeout=3000 — confirms bulk toolbar appeared.
+6. `evaluate_script` → confirm the detail panel is NOT open: `!document.querySelector('[role="dialog"], [aria-label="Close detail panel"]')` must be `true`. If panel is open, record a FAIL note "checkbox opened detail panel unexpectedly".
+7. `evaluate_script` → read current assignee if visible: `document.querySelector('[data-case-id="${$TC_ID}"] [data-testid="assignee"]')?.textContent?.trim() ?? 'unknown'` — record `$INITIAL_ASSIGNEE`.
+
+**Bulk status change (choose a status different from `$INITIAL_STATUS`; if unknown default to "Pending"):**
+8. Click the appropriate bulk toolbar button (one of: `button` with text "Pass", "Fail", or "Pending" — pick one that differs from `$INITIAL_STATUS`). Note which status was selected as `$TARGET_STATUS`.
+9. A modal opens. Look for a confirm/submit button. Click it (look for button text "Confirm", "Save", or "Record" — use `wait_for` to find it first).
+10. `wait_for` absence of modal timeout=10000 (modal closes after API call).
+11. `list_network_requests resourceTypes=["fetch","xhr"]` — find the `PATCH /api/releases/.*/results` call and confirm it returned 200.
+12. `list_console_messages types=["error"]` — assert zero errors.
+13. `evaluate_script` → verify the status chip on the row updated (it may now show `$TARGET_STATUS`; exact text depends on casing in the app — just confirm it changed from `$INITIAL_STATUS` if that was readable).
+
+**Bulk reassign:**
+14. Ensure the same row is still selected (if deselected, click the checkbox again).
+15. Click the "Reassign" button in the toolbar.
+16. `wait_for` selector for the modal or text "Reassign" in a dialog context timeout=5000.
+17. Look for an assignee dropdown/select and pick any available option (use `evaluate_script` to find the first option: `document.querySelector('[role="dialog"] [role="option"], [role="dialog"] li')?.textContent?.trim()`).
+18. Click confirm/save.
+19. `list_network_requests resourceTypes=["fetch","xhr"]` — find `POST /api/assignments` and confirm 200.
+20. `list_console_messages types=["error"]` — assert zero errors.
+
+Record: `{ scenario: "D2", status: "PASS"|"FAIL"|"SKIPPED", tcId, initialStatus, targetStatus, bulkStatusApiStatus, bulkAssignApiStatus, panelOpenedOnCheckbox: false, consoleErrors }`.
+
+---
+
+#### Scenario D3 — Test Cases: detail panel open + status change + Results by Environment + History
+
+Steps:
+1. Navigate to `/test-cases` (or reuse if already there).
+2. `wait_for` selector `[data-case-id]` timeout=10000. If none, mark D3 as `SKIPPED`.
+3. `evaluate_script` → get the first row ID: `document.querySelector('[data-case-id]')?.dataset?.caseId`. Record `$TC_ID2` (may be same as `$TC_ID` from D2 — that is fine).
+4. Click the row (not the checkbox): `click` selector `[data-case-id="${$TC_ID2}"]`. Use `evaluate_script` first to make sure the checkbox is NOT being targeted: `document.querySelector('[data-case-id="${$TC_ID2}"]')?.getAttribute('role')` should equal `"button"`.
+5. `wait_for` selector `#execution-action-buttons` timeout=8000 — confirms detail panel opened.
+6. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `GET /api/releases/.*/results/$TC_ID2` returned 200.
+7. `list_console_messages types=["error"]` — assert zero errors.
+8. `wait_for` text `"Results by Environment"` timeout=5000 — section is rendered.
+
+**Status change from detail panel:**
+9. Click one of the status buttons inside `#execution-action-buttons` (Pass, Fail, or Pending — pick any one).
+10. `wait_for` modal confirm button (text "Confirm", "Save", or "Record") timeout=5000. Click it.
+11. `wait_for` absence of modal timeout=10000.
+12. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `POST /api/releases/.*/results` returned 200.
+13. `list_console_messages types=["error"]` — assert zero errors.
+14. `evaluate_script` → confirm "Results by Environment" section still present and that the row for the current environment reflects the new status (look for the status text that was selected in the env grid).
+
+**History / events log:**
+15. `click` `aria-label="Show history"` button.
+16. `wait_for` text `"History"` in a card context timeout=8000.
+17. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `GET /api/releases/.*/test-cases/$TC_ID2/events` returned 200.
+18. `list_console_messages types=["error"]` — assert zero errors.
+19. `evaluate_script` → count visible history entries: `document.querySelectorAll('[aria-label="Hide history"] ~ * [class*="event"], [data-testid*="event"]').length` — expect at least 1. If the count is 0, fall back to checking that the History card is non-empty (no "no history" empty state text visible).
+20. `click` `aria-label="Hide history"` — confirm panel collapses without error.
+21. `list_console_messages types=["error"]` — assert zero errors.
+
+Record: `{ scenario: "D3", status: "PASS"|"FAIL"|"SKIPPED", tcId, panelOpened: true, resultsApiStatus, statusChangeApiStatus, historyApiStatus, historyEntries, consoleErrors }`.
+
+---
+
 ## PHASE 4 — Generate JSON report
 
 Assemble and print the following JSON (fill in real values):
@@ -361,14 +500,15 @@ Assemble and print the following JSON (fill in real values):
     { "route": "/users",        "expectedRedirect": "/dashboard", "actualUrl": "<url>", "status": "PASS" },
     { "route": "/import-cases", "expectedRedirect": "/dashboard", "actualUrl": "<url>", "status": "PASS" }
   ],
-  "downloadChecks": "<omit this key entirely when downloads were not requested; include array below only when explicitly run>",
+  "detailedTests": "<omit this key entirely when $MODE is smoke; include array below only when $MODE is detailed>",
+  "downloadChecks": "<omit this key entirely when $DOWNLOADS is no; include array below only when $DOWNLOADS is yes>",
   "fontCheck": {
     "selfHostedOnly": true,
     "cdnHits": [],
     "status": "PASS"
   },
   "summary": {
-    "total":  <count of all checks>,
+    "total":  <count of all checks, including detailed test scenarios when $MODE is detailed>,
     "passed": <count where status=PASS>,
     "failed": <count where status=FAIL>,
     "skipped": <count where status=SKIPPED>,
@@ -377,7 +517,17 @@ Assemble and print the following JSON (fill in real values):
 }
 ```
 
-When download checks **were** explicitly run, include `downloadChecks` as an array:
+When `$MODE` is `detailed`, include `detailedTests` as an array:
+
+```json
+"detailedTests": [
+  { "scenario": "D1", "prevCtx": "<value>", "newCtx": "<value>", "dashboardDocumentStatus": 200, "consoleErrors": 0, "status": "PASS" },
+  { "scenario": "D2", "tcId": "<id>", "initialStatus": "<status>", "targetStatus": "<status>", "bulkStatusApiStatus": 200, "bulkAssignApiStatus": 200, "panelOpenedOnCheckbox": false, "consoleErrors": 0, "status": "PASS" },
+  { "scenario": "D3", "tcId": "<id>", "panelOpened": true, "resultsApiStatus": 200, "statusChangeApiStatus": 200, "historyApiStatus": 200, "historyEntries": 3, "consoleErrors": 0, "status": "PASS" }
+]
+```
+
+When `$DOWNLOADS` is `yes`, include `downloadChecks` as an array:
 
 ```json
 "downloadChecks": [

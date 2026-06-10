@@ -5,7 +5,6 @@ import ErrorOutlinedIcon from '@mui/icons-material/ErrorOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   Alert,
-  Box,
   Button,
   Chip,
   CircularProgress,

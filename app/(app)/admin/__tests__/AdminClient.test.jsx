@@ -45,7 +45,7 @@ describe('AdminClient activity logs', () => {
     );
 
     await waitFor(() => {
-      expect(mockListAdminActivity).toHaveBeenCalledWith({ limit: 100 });
+      expect(mockListAdminActivity).toHaveBeenCalledWith({ limit: 500 });
     });
 
     expect(await screen.findByText(/import completed/i)).toBeInTheDocument();

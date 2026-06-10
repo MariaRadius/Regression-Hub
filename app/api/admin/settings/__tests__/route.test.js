@@ -5,9 +5,13 @@ import { ApiError } from '@/lib/errors';
 
 const { db, reset } = createMockDb();
 
-const { updateTeamSettings } = vi.hoisted(() => ({
-  updateTeamSettings: vi.fn(),
-}));
+const { updateTeamSettings, getTeamSettings, appendAdminActivity } = vi.hoisted(
+  () => ({
+    updateTeamSettings: vi.fn(),
+    getTeamSettings: vi.fn(),
+    appendAdminActivity: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/server/withTeam', () => ({
   withAdmin: (handler) => async (req, ctx) => {
@@ -34,13 +38,20 @@ vi.mock('@/lib/server/withTeam', () => ({
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
-vi.mock('@/lib/db/settingsData', () => ({ updateTeamSettings }));
+vi.mock('@/lib/db/settingsData', () => ({
+  updateTeamSettings,
+  getTeamSettings,
+}));
+
+vi.mock('@/lib/db/adminActivityData', () => ({ appendAdminActivity }));
 
 import { PATCH } from '../route';
 
 beforeEach(() => {
   reset();
   vi.clearAllMocks();
+  getTeamSettings.mockResolvedValue({});
+  appendAdminActivity.mockResolvedValue(undefined);
 });
 
 function makeRequest(body) {
