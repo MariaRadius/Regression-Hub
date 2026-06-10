@@ -36,9 +36,8 @@ import ReleaseEnvSelector from '@/components/ReleaseEnvSelector';
 import { ROLES } from '@/lib/constants';
 
 async function handleSignOut() {
-  const callbackUrl = `${window.location.origin}/login`;
-  await signOut({ redirect: false, callbackUrl });
-  window.location.replace(callbackUrl);
+  await signOut({ redirect: false });
+  window.location.replace('/login');
 }
 
 const NAV = [

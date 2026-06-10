@@ -19,7 +19,18 @@ After `npm test` passes and before opening a PR. Run the full recipe below — d
 ToolSearch: "select:mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests,mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill,mcp__plugin_chrome-devtools-mcp_chrome-devtools__click,mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for,mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script,mcp__plugin_chrome-devtools-mcp_chrome-devtools__select_page"
 ```
 
-### 2 — Start dev server
+### 2 — Start dev server (or reuse existing)
+
+First check whether a server is already running on port 3000:
+
+```bash
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 http://localhost:3000)
+```
+
+Interpret the result:
+
+- **Any HTTP response code** (2xx, 3xx, 4xx, 5xx — i.e. `curl` exits 0 and `$HTTP_STATUS` is not `000`) means a server is already running. Set `SMOKE_PORT=3000` and `SMOKE_PID=` (empty — the skill did not start this server). Do NOT start another server.
+- **`curl` exits non-zero or `$HTTP_STATUS` is `000`** (connection refused, timeout) means no server is listening. Proceed to start one:
 
 ```bash
 npm run dev > /tmp/smoke-dev.log 2>&1 &
@@ -37,7 +48,9 @@ SMOKE_PORT=$(grep -a "Local:" /tmp/smoke-dev.log | grep -o "localhost:[0-9]*" | 
 echo "Server on port $SMOKE_PORT  PID $SMOKE_PID"
 ```
 
-Use `$SMOKE_PORT` for all URLs below. If the port is blank after 20 s, the server failed — check `/tmp/smoke-dev.log` and stop.
+If the port is blank after 20 s, the server failed — check `/tmp/smoke-dev.log` and stop.
+
+Use `$SMOKE_PORT` for all URLs below.
 
 ---
 
@@ -369,8 +382,10 @@ Record:
 
 ### PHASE 3 — Teardown
 
+Only stop the server if the skill started it (i.e. `$SMOKE_PID` is non-empty). Do **not** kill a pre-existing server.
+
 ```bash
-kill $SMOKE_PID 2>/dev/null
+[ -n "$SMOKE_PID" ] && kill $SMOKE_PID 2>/dev/null
 ```
 
 ---
@@ -578,7 +593,7 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - No DB seed step; assumes local Mongo is populated.
 - `utils/__tests__/smoke.test.js` is a `1+1` sanity test — ignore it.
 - The download interceptor patches `URL.createObjectURL` for the lifetime of the page tab. If multiple downloads are tested on the same page, reset `window.__smokeBlobs = []` before each click (the injector script above already does this).
-- Port may be 3000–3099 depending on what is already running. Always parse from the server log.
+- When the skill starts its own server, port may be 3000–3099 depending on what else is running; always parse from the server log. When a pre-existing server is reused, `$SMOKE_PORT` is always `3000`.
 - `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
 - Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`), assignment mutations (`POST /api/assignments`), and test-case definition edits (`PATCH /api/releases/[id]/test-cases/[caseId]`) append entries to the `events` collection (audit log). Entries carry `tcId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result`, `assignment`, or `test_case`.
 - Opening a test case's detail panel on `/test-cases` fires a single `GET /api/releases/[id]/results/[tcId]` returning the minimal per-environment execution rows (`environment`, `status`, `testedBy`, `testedOn`, `assignedTo`, `notes`) for that one case. It is a read route (admin+qa); it must not appear more than once per panel open and must not fan out per environment.
