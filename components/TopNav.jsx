@@ -35,6 +35,12 @@ import { locationToChipColor, roleToChipColor } from '@/app/theme';
 import ReleaseEnvSelector from '@/components/ReleaseEnvSelector';
 import { ROLES } from '@/lib/constants';
 
+async function handleSignOut() {
+  const callbackUrl = `${window.location.origin}/login`;
+  await signOut({ redirect: false, callbackUrl });
+  window.location.replace(callbackUrl);
+}
+
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/test-cases', label: 'Test Cases', Icon: BugReportIcon },
@@ -355,7 +361,7 @@ export default function TopNav({ user }) {
               </Stack>
             </MenuItem>
             <Divider />
-            <MenuItem onClick={signOut}>
+            <MenuItem onClick={handleSignOut}>
               <ListItemIcon>
                 <LogoutIcon fontSize='small' />
               </ListItemIcon>
