@@ -65,6 +65,10 @@ On `/admin`, the Activity Logs drawer stays closed until the admin clicks `View 
 
 ---
 
+## Auth-adjacent internal routes
+
+`POST /api/auth/validate-ctx` — called by `LoginForm` immediately after successful sign-in to validate and evict a stale `rh_release_ctx` cookie. Not user-facing. Auth: self-guarded via `getToken` (lives under `api/auth/` which is excluded from `proxy.js`).
+
 ## Role-gating rules (server-side, enforced in `page.js`)
 
 | Route          | Admin | QA              |

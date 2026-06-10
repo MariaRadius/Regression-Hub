@@ -26,6 +26,7 @@ export default function LoginForm({ redirectTo }) {
     if (result?.error) {
       setError('Invalid username or password.');
     } else {
+      await fetch('/api/auth/validate-ctx', { method: 'POST' }).catch(() => {});
       router.replace(getSafeRedirectTarget(redirectTo));
     }
   }
