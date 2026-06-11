@@ -19,38 +19,65 @@ After `npm test` passes and before opening a PR. Run the full recipe below — d
 ToolSearch: "select:mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages,mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests,mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill,mcp__plugin_chrome-devtools-mcp_chrome-devtools__click,mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for,mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page,mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script,mcp__plugin_chrome-devtools-mcp_chrome-devtools__select_page"
 ```
 
-### 2 — Start dev server (or reuse existing)
-
-First check whether a server is already running on port 3000:
+### 2 — Verify tests pass
 
 ```bash
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 http://localhost:3000)
+npm test
 ```
 
-Interpret the result:
+Stop if any test fails. Fix first.
 
-- **Any HTTP response code** (2xx, 3xx, 4xx, 5xx — i.e. `curl` exits 0 and `$HTTP_STATUS` is not `000`) means a server is already running. Set `SMOKE_PORT=3000` and `SMOKE_PID=` (empty — the skill did not start this server). Do NOT start another server.
-- **`curl` exits non-zero or `$HTTP_STATUS` is `000`** (connection refused, timeout) means no server is listening. Proceed to start one:
+### 3 — Start dev server
+
+Launch the dev server in the background and capture its log:
 
 ```bash
+rm -f /tmp/smoke-dev.log
 npm run dev > /tmp/smoke-dev.log 2>&1 &
 SMOKE_PID=$!
 ```
 
-Then poll for the ready line (up to 20 s):
+Poll for the "Ready in" line (up to 30 s — Turbopack cold-start can take ~20 s):
 
 ```bash
-for i in $(seq 1 20); do
-  grep -aq "Local:" /tmp/smoke-dev.log && break
+for i in $(seq 1 30); do
+  grep -aq "Ready in" /tmp/smoke-dev.log && break
   sleep 1
 done
-SMOKE_PORT=$(grep -a "Local:" /tmp/smoke-dev.log | grep -o "localhost:[0-9]*" | cut -d: -f2)
-echo "Server on port $SMOKE_PORT  PID $SMOKE_PID"
+if ! grep -aq "Ready in" /tmp/smoke-dev.log; then
+  echo "ERROR: dev server did not reach Ready in 30 s — check /tmp/smoke-dev.log"; exit 1
+fi
 ```
 
-If the port is blank after 20 s, the server failed — check `/tmp/smoke-dev.log` and stop.
+Wait 2 s for any collision message to be written, then determine port and ownership (in the collision case Next 16 writes "Another next dev server is already running" and the existing server's `Local:` line right after "Ready in" — the sleep ensures the log is complete before parsing):
 
-Use `$SMOKE_PORT` for all URLs below.
+```bash
+sleep 2
+if grep -aq "Another next dev server is already running" /tmp/smoke-dev.log; then
+  # Collision: the process we spawned has already self-terminated.
+  # Next 16 printed the existing dev server's port as the LAST "Local:" line.
+  SMOKE_PID=""
+  SMOKE_PORT=$(grep -a "Local:.*localhost:" /tmp/smoke-dev.log | tail -1 | grep -o "localhost:[0-9]*" | cut -d: -f2)
+  echo "Reusing existing dev server on port $SMOKE_PORT (skill does NOT own it)"
+else
+  SMOKE_PORT=$(grep -a "Local:.*localhost:" /tmp/smoke-dev.log | tail -1 | grep -o "localhost:[0-9]*" | cut -d: -f2)
+  echo "Started fresh dev server on port $SMOKE_PORT  PID $SMOKE_PID"
+fi
+if [ -z "$SMOKE_PORT" ]; then
+  echo "ERROR: could not parse port from /tmp/smoke-dev.log — check log format"; exit 1
+fi
+```
+
+Confirm the port is reachable (guards against a stale-lock edge case where the existing server exited just before Next read the lock):
+
+```bash
+if ! curl -s -o /dev/null -w "%{http_code}" "http://localhost:$SMOKE_PORT/" --max-time 5 | grep -q "^[23]"; then
+  echo "ERROR: port $SMOKE_PORT is not responding — check /tmp/smoke-dev.log"; exit 1
+fi
+echo "Dev server confirmed live on port $SMOKE_PORT"
+```
+
+Use `$SMOKE_PORT` for all URLs in the phases below. Do not hard-code port numbers anywhere, and never probe ports with curl scans, netstat, or wmic to find the server.
 
 ---
 
@@ -101,7 +128,9 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 
 ---
 
-## Download surfaces — **skipped unless `$DOWNLOADS` is `yes`**
+## Download surfaces — **all opt-in, skip by default**
+
+> **Do not run any download check unless the user explicitly asked** (e.g. "also test downloads", "run download checks", "test the PDF/Excel export").
 
 | ID  | Page       | Button text      | What it generates                          | Stored? | Mutates?         |
 | --- | ---------- | ---------------- | ------------------------------------------ | ------- | ---------------- |
@@ -118,6 +147,14 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 **Download B (Excel) is NOT a mutation** — it is never stored, never audited, and creates no saved copy. The workbook must include every expected test case for the selected release + environment, even if that environment's result row is missing, and it must include per-application sheets so the file mirrors the original import organization.
 
 **Download C (Download copy)** hits `GET /api/snapshots/[id]/download` and returns the stored bytes with no regeneration. The "Download copy" button only appears on rows that already have a saved copy.
+
+---
+
+## Screenshot policy
+
+**Do NOT use `take_screenshot` in the normal test flow.** Use `includeSnapshot: true` on whichever CDP tool call triggered the action instead — it is faster and uses fewer tokens.
+
+Screenshots (`take_screenshot`) are allowed only as a last resort when debugging an unexpected failure that cannot be diagnosed from console messages, network requests, or snapshot output alone. If you take one, note in the report that it was a debug-only screenshot.
 
 ---
 
@@ -146,14 +183,6 @@ window.__smokeBlobs[0]; // { size: <number>, type: '<mime>' }
 ```
 
 PASS criterion: `size > 1024` (at least 1 KB — rules out empty blobs).
-
----
-
-## Screenshot policy
-
-**Do NOT use `take_screenshot` in the normal test flow.** Use `includeSnapshot: true` on whichever CDP tool call triggered the action instead — it is faster and uses fewer tokens.
-
-Screenshots (`take_screenshot`) are allowed only as a last resort when debugging an unexpected failure that cannot be diagnosed from console messages, network requests, or snapshot output alone. If you take one, note in the report that it was a debug-only screenshot.
 
 ---
 
@@ -273,9 +302,9 @@ After the route walk lands on `/test-cases`, verify the list controls actually w
 3. Open any test case, click the bottom `History` button in the detail panel, and confirm a request to `/api/releases/[id]/test-cases/[caseId]/events` succeeds with no console errors. Then click `Hide History` and confirm the same test case remains open.
 4. After each interaction, confirm there are still no console errors and the page remains interactive.
 
-#### Download A — PDF snapshot (on /reports)
+#### Download A — PDF snapshot (on /reports) — **opt-in only**
 
-> **Skip if `$DOWNLOADS` is `no`.**
+> **Skip unless the user explicitly asked to test downloads.**
 > **This is a mutation** — it writes/replaces a saved copy and appends an audit event.
 
 Navigate to `/reports` (reuse if already there for Download B):
@@ -299,9 +328,9 @@ After the click completes, that row should gain a "Saved" chip and a "Download c
 
 If `/reports` has no data, mark A as `SKIPPED` with reason "no data".
 
-#### Download B — Excel (on /reports)
+#### Download B — Excel (on /reports) — **opt-in only**
 
-> **Skip if `$DOWNLOADS` is `no`.**
+> **Skip unless the user explicitly asked to test downloads.**
 
 Navigate to `/reports` (reuse if already there for Download A):
 
@@ -382,10 +411,15 @@ Record:
 
 ### PHASE 3 — Teardown
 
-Only stop the server if the skill started it (i.e. `$SMOKE_PID` is non-empty). Do **not** kill a pre-existing server.
+Only stop the server if the skill started it. `$SMOKE_PID` is non-empty only in the fresh-start branch; it is empty when the skill reused a pre-existing dev server. Do **not** kill a server the skill did not start.
 
 ```bash
-[ -n "$SMOKE_PID" ] && kill $SMOKE_PID 2>/dev/null
+if [ -n "$SMOKE_PID" ]; then
+  kill "$SMOKE_PID" 2>/dev/null
+  echo "Stopped dev server PID $SMOKE_PID"
+else
+  echo "No teardown — dev server was pre-existing (not owned by this skill run)"
+fi
 ```
 
 ---
@@ -428,17 +462,32 @@ Steps:
 3. `evaluate_script` → get the first row's ID and current status:
    ```js
    const row = document.querySelector('[data-case-id]');
-   ({ caseId: row?.dataset?.caseId, statusText: row?.querySelector('[data-testid="status-chip"], [class*="status"]')?.textContent?.trim() })
+   ({
+     caseId: row?.dataset?.caseId,
+     statusText: row?.querySelector('[aria-label^="Status:"]')?.getAttribute('aria-label')?.replace('Status: ', '') ?? 'unknown'
+   })
    ```
    Record `$TC_ID` and `$INITIAL_STATUS`.
 4. Click the checkbox for that row: `click` selector `[data-case-id="${$TC_ID}"] input[type="checkbox"]`.
 5. `wait_for` text matching `/\d+ selected/` timeout=3000 — confirms bulk toolbar appeared.
-6. `evaluate_script` → confirm the detail panel is NOT open: `!document.querySelector('[role="dialog"], [aria-label="Close detail panel"]')` must be `true`. If panel is open, record a FAIL note "checkbox opened detail panel unexpectedly".
-7. `evaluate_script` → read current assignee if visible: `document.querySelector('[data-case-id="${$TC_ID}"] [data-testid="assignee"]')?.textContent?.trim() ?? 'unknown'` — record `$INITIAL_ASSIGNEE`.
+6. `evaluate_script` → confirm the detail panel is NOT open: `!document.querySelector('button[aria-label="Close detail panel"]')` must be `true`. If panel is open, record a FAIL note "checkbox opened detail panel unexpectedly".
+7. `evaluate_script` → read current assignee if visible:
+   ```js
+   (function(){
+     const chips = document.querySelectorAll(`[data-case-id="${$TC_ID}"] [class*="MuiChip-label"]`);
+     for (const c of chips) {
+       const t = c.textContent.trim();
+       if (t.startsWith('Assigned:')) return t.replace('Assigned: ', '');
+       if (t === 'Unassigned') return null;
+     }
+     return null;
+   })()
+   ```
+   Record `$INITIAL_ASSIGNEE`.
 
 **Bulk status change (choose a status different from `$INITIAL_STATUS`; if unknown default to "Pending"):**
 8. Click the appropriate bulk toolbar button (one of: `button` with text "Pass", "Fail", or "Pending" — pick one that differs from `$INITIAL_STATUS`). Note which status was selected as `$TARGET_STATUS`.
-9. A modal opens. Look for a confirm/submit button. Click it (look for button text "Confirm", "Save", or "Record" — use `wait_for` to find it first).
+9. A modal opens. The confirm button text is `Mark ${selection.length} as ${$TARGET_STATUS}` — e.g. `"Mark 1 as Pass"`. Use `wait_for` for that text then click the button.
 10. `wait_for` absence of modal timeout=10000 (modal closes after API call).
 11. `list_network_requests resourceTypes=["fetch","xhr"]` — find the `PATCH /api/releases/.*/results` call and confirm it returned 200.
 12. `list_console_messages types=["error"]` — assert zero errors.
@@ -471,11 +520,11 @@ Steps:
 
 **Status change from detail panel:**
 9. Click one of the status buttons inside `#execution-action-buttons` (Pass, Fail, or Pending — pick any one).
-10. `wait_for` modal confirm button (text "Confirm", "Save", or "Record") timeout=5000. Click it.
+10. `wait_for` text `["Mark 1 as Pass", "Mark 1 as Fail", "Mark 1 as Pending"]` timeout=5000 — confirmation modal opened. `click` the button whose text is `"Mark 1 as ${chosen_status}"`.
 11. `wait_for` absence of modal timeout=10000.
-12. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `POST /api/releases/.*/results` returned 200.
+12. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `PATCH /api/releases/.*/results` returned 200.
 13. `list_console_messages types=["error"]` — assert zero errors.
-14. `evaluate_script` → confirm "Results by Environment" section still present and that the row for the current environment reflects the new status (look for the status text that was selected in the env grid).
+14. `wait_for` text `"Results by Environment"` timeout=5000 — section is still rendered. Note: env results are cached in local state and only re-fetched when the panel is closed and reopened; the updated status is verified in D5 via a close/reopen cycle.
 
 **History / events log:**
 15. `click` `aria-label="Show history"` button.
@@ -487,6 +536,185 @@ Steps:
 21. `list_console_messages types=["error"]` — assert zero errors.
 
 Record: `{ scenario: "D3", status: "PASS"|"FAIL"|"SKIPPED", tcId, panelOpened: true, resultsApiStatus, statusChangeApiStatus, historyApiStatus, historyEntries, consoleErrors }`.
+
+---
+
+#### Scenario D4 — Test Cases: checkbox + bulk status change + bulk reassign (verified selectors)
+
+> Run in the **admin context** on `/test-cases`. Uses selectors verified against source; more explicit than D2 about confirmation flows.
+
+Steps:
+1. Navigate to `/test-cases` (reuse if already there from D3).
+2. `wait_for` selector `[data-case-id]` timeout=10000. If none appear, mark D4 as `SKIPPED` with reason "no test cases".
+3. `evaluate_script` → read the first visible row's ID and initial status:
+   ```js
+   const row = document.querySelector('[data-case-id]');
+   const statusLabel = row?.querySelector('[aria-label^="Status:"]')?.getAttribute('aria-label') ?? '';
+   ({ caseId: row?.dataset?.caseId, initialStatus: statusLabel.replace('Status: ', '') || 'unknown' })
+   ```
+   Record `$TC_ID` and `$INITIAL_STATUS`.
+4. `evaluate_script` → read the row's initial assignee from its MetaChip label:
+   ```js
+   (function () {
+     const chips = document.querySelectorAll(`[data-case-id="${$TC_ID}"] [class*="MuiChip-label"]`);
+     for (const c of chips) {
+       const t = c.textContent.trim();
+       if (t.startsWith('Assigned:')) return t.replace('Assigned: ', '');
+       if (t === 'Unassigned') return null;
+     }
+     return null;
+   })()
+   ```
+   Record as `$INITIAL_ASSIGNEE`.
+5. `click` selector `[data-case-id="${$TC_ID}"] input[type="checkbox"]` `includeSnapshot: true`.
+6. `wait_for` text matching `/\d+ selected/` timeout=5000 — bulk toolbar appeared.
+7. `evaluate_script` → assert detail panel NOT open:
+   ```js
+   !document.querySelector('button[aria-label="Close detail panel"]')
+   ```
+   Must return `true`. If `false`, record FAIL note "checkbox click opened detail panel unexpectedly".
+
+**Bulk status change:**
+8. Determine `$TARGET_STATUS`: pick a status different from `$INITIAL_STATUS`:
+   - `"Pending"` or `"unknown"` → pick `"Pass"`
+   - `"Pass"` → pick `"Fail"`
+   - `"Fail"` → pick `"Pending"`
+9. `click` the toolbar button whose text equals `$TARGET_STATUS` (one of `button "Pass"`, `button "Fail"`, `button "Pending"`) `includeSnapshot: true`.
+10. `wait_for` text `["Mark 1 as Pass", "Mark 1 as Fail", "Mark 1 as Pending"]` timeout=5000 — confirmation modal opened.
+11. `click` the button whose visible text is `Mark 1 as ${$TARGET_STATUS}`.
+12. `wait_for` selector `[data-case-id]` timeout=10000 — rows re-rendered after modal close.
+13. `list_network_requests resourceTypes=["fetch","xhr"]` — find `PATCH /api/releases/.*/results`, confirm HTTP 200. Record as `$BULK_STATUS_HTTP`.
+14. `list_console_messages types=["error"]` — assert zero errors.
+15. `evaluate_script` → re-read status tooltip to confirm the update:
+    ```js
+    document.querySelector(`[data-case-id="${$TC_ID}"] [aria-label^="Status:"]`)?.getAttribute('aria-label')?.replace('Status: ', '')
+    ```
+    PASS if the value equals `$TARGET_STATUS`. FAIL with `{ actual, expected }` if it differs.
+
+**Bulk reassign:**
+16. `click` selector `[data-case-id="${$TC_ID}"] input[type="checkbox"]` (re-select the row; if already selected from prior step this is a no-op toggle — verify with snapshot).
+17. `wait_for` text matching `/\d+ selected/` timeout=5000.
+18. `click` button `"Reassign"` `includeSnapshot: true`.
+19. `wait_for` selector `[role="dialog"]` timeout=5000 — Reassign modal opened.
+20. `click` selector `[role="dialog"] .MuiSelect-select` — opens the assignee dropdown.
+21. `wait_for` selector `ul[role="listbox"] li[role="option"]` timeout=5000 — options rendered (in a Portal, not inside the dialog).
+22. `evaluate_script` → list available assignees:
+    ```js
+    Array.from(document.querySelectorAll('ul[role="listbox"] li[role="option"]'))
+      .map(el => el.textContent.trim())
+      .filter(t => t && t !== '— Select user —')
+    ```
+    Record as `$ASSIGNEE_OPTIONS`. If empty, mark reassign sub-step `SKIPPED` with reason "no QA users".
+23. Determine `$TARGET_ASSIGNEE`: pick the first option from `$ASSIGNEE_OPTIONS` that differs from `$INITIAL_ASSIGNEE`. If all match, pick the first option.
+24. `click` the `li[role="option"]` whose text equals `$TARGET_ASSIGNEE`.
+25. `wait_for` text `["Reassign 1 Cases"]` timeout=3000 — submit button enabled.
+26. `click` button `"Reassign 1 Cases"`.
+27. `wait_for` selector `[data-case-id]` timeout=10000 — rows re-rendered after modal close.
+28. `list_network_requests resourceTypes=["fetch","xhr"]` — find `POST /api/assignments`, confirm HTTP 200. Record as `$BULK_ASSIGN_HTTP`.
+29. `list_console_messages types=["error"]` — assert zero errors.
+30. `evaluate_script` → re-read assignee MetaChip to confirm it updated:
+    ```js
+    (function () {
+      const chips = document.querySelectorAll(`[data-case-id="${$TC_ID}"] [class*="MuiChip-label"]`);
+      for (const c of chips) {
+        const t = c.textContent.trim();
+        if (t.startsWith('Assigned:')) return t.replace('Assigned: ', '');
+        if (t === 'Unassigned') return null;
+      }
+      return null;
+    })()
+    ```
+    PASS if value matches `$TARGET_ASSIGNEE` (case-insensitive compare). FAIL with `{ actual, expected }` if it differs.
+
+Record: `{ scenario: "D4", tcId: $TC_ID, initialStatus: $INITIAL_STATUS, targetStatus: $TARGET_STATUS, bulkStatusApiStatus: $BULK_STATUS_HTTP, initialAssignee: $INITIAL_ASSIGNEE, targetAssignee: $TARGET_ASSIGNEE, bulkAssignApiStatus: $BULK_ASSIGN_HTTP, panelOpenedOnCheckbox: false, consoleErrors: 0, status: "PASS"|"FAIL"|"SKIPPED" }`.
+
+---
+
+#### Scenario D5 — Test Cases: close/reopen detail panel — verify Results by Environment and History reflect the status change
+
+> Run in the **admin context** after D3/D4. Verifies that after a status change, the Results by Environment grid and the history events log show the update — both require closing and reopening the panel to refresh their cached state.
+
+Steps:
+1. Navigate to `/test-cases` (reuse if already there).
+2. `wait_for` selector `[data-case-id]` timeout=10000. If none appear, mark D5 as `SKIPPED` with reason "no test cases".
+3. `evaluate_script` → read the first row's ID and current status:
+   ```js
+   const row = document.querySelector('[data-case-id]');
+   const lbl = row?.querySelector('[aria-label^="Status:"]')?.getAttribute('aria-label') ?? '';
+   ({ caseId: row?.dataset?.caseId, initialStatus: lbl.replace('Status: ', '') || 'unknown' })
+   ```
+   Record `$D5_TC_ID` and `$D5_INITIAL_STATUS`.
+4. `click` selector `[data-case-id="${$D5_TC_ID}"]` (the row, not its checkbox) — opens the detail panel.
+5. `wait_for` selector `#execution-action-buttons` timeout=8000 — panel open.
+6. `list_console_messages types=["error"]` — assert zero errors.
+
+**Status change:**
+7. Determine `$D5_TARGET_STATUS`: choose a status different from `$D5_INITIAL_STATUS`:
+   - `"Pending"` or `"unknown"` → `"Pass"`
+   - `"Pass"` → `"Fail"`
+   - `"Fail"` → `"Pass"`
+8. `click` the button inside `#execution-action-buttons` whose text equals `$D5_TARGET_STATUS`.
+9. `wait_for` text `["Mark 1 as Pass", "Mark 1 as Fail", "Mark 1 as Pending"]` timeout=5000 — confirmation modal opened.
+10. `click` button `"Mark 1 as ${$D5_TARGET_STATUS}"`.
+11. `wait_for` selector `#execution-action-buttons` timeout=10000 — panel re-rendered after modal close.
+12. `list_network_requests resourceTypes=["fetch","xhr"]` — find `PATCH /api/releases/.*/results`, confirm HTTP 200. Record as `$D5_PATCH_STATUS`.
+13. `list_console_messages types=["error"]` — assert zero errors.
+
+**Close and reopen to refresh cached state:**
+14. `click` button `aria-label="Close detail panel"` — panel closes.
+15. `wait_for` absence of selector `#execution-action-buttons` timeout=5000 — confirm panel gone.
+16. `click` selector `[data-case-id="${$D5_TC_ID}"]` — reopen the same case.
+17. `wait_for` selector `#execution-action-buttons` timeout=8000 — panel open again.
+18. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm a fresh `GET /api/releases/.*/results/${$D5_TC_ID}` returned 200. Record as `$D5_RESULTS_HTTP`.
+
+**Verify Results by Environment:**
+19. `wait_for` text `"Results by Environment"` timeout=5000 — section rendered.
+20. `wait_for` text `["Pass", "Fail", "Pending"]` timeout=3000 — at least one status chip visible in the panel.
+21. `evaluate_script` → check the Results by Environment section reflects the new status:
+    ```js
+    // EnvResultsGrid renders <Stack direction="row"> per env with a <Chip label={status}>.
+    // Collect all chip text from below the "Results by Environment" heading.
+    (function () {
+      const headings = Array.from(document.querySelectorAll('*'))
+        .filter(el => el.textContent?.trim() === 'Results by Environment' && el.children.length === 0);
+      if (!headings.length) return null;
+      const section = headings[0].closest('[class*="Card"], [class*="card"], section, div');
+      if (!section) return null;
+      return Array.from(section.querySelectorAll('[class*="MuiChip-label"]'))
+        .map(el => el.textContent.trim());
+    })()
+    ```
+    PASS if the returned array contains `$D5_TARGET_STATUS` (case-insensitive). If the evaluate returns null or empty, fall back: `wait_for` text `$D5_TARGET_STATUS` timeout=3000 — the status text must appear somewhere in the panel.
+22. `list_console_messages types=["error"]` — assert zero errors.
+
+**Open History and verify newest entry:**
+23. `click` button `aria-label="Show history"`.
+24. `wait_for` text `"Hide history"` timeout=8000 — history section expanded.
+25. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `GET /api/releases/.*/test-cases/${$D5_TC_ID}/events` returned 200. Record as `$D5_EVENTS_HTTP`.
+26. `evaluate_script` → confirm at least one history entry is visible and the newest entry mentions `$D5_TARGET_STATUS`:
+    ```js
+    // History entries render as cards. Each has "Updated by <name>" as a heading and
+    // before/after status chips. Check that $D5_TARGET_STATUS appears in the history section.
+    (function (target) {
+      const hideBtn = document.querySelector('button[aria-label="Hide history"]');
+      if (!hideBtn) return { found: false, reason: 'Hide history button not found' };
+      // Walk upward to find the history container
+      let container = hideBtn.parentElement;
+      for (let i = 0; i < 5 && container; i++) {
+        if (container.textContent.includes(target)) {
+          return { found: true, entryCount: container.querySelectorAll('[class*="MuiCard-root"], [class*="card"]').length };
+        }
+        container = container.parentElement;
+      }
+      return { found: false, reason: 'target status not found in history section' };
+    })($D5_TARGET_STATUS)
+    ```
+    PASS if `found` is `true`. If `found` is `false`, record the `reason` as a FAIL detail.
+27. `click` button `aria-label="Hide history"` `includeSnapshot: true` — history collapses.
+28. `wait_for` selector `#execution-action-buttons` timeout=5000 — panel still open.
+29. `list_console_messages types=["error"]` — assert zero errors.
+
+Record: `{ scenario: "D5", tcId: $D5_TC_ID, initialStatus: $D5_INITIAL_STATUS, targetStatus: $D5_TARGET_STATUS, patchApiStatus: $D5_PATCH_STATUS, resultsApiStatus: $D5_RESULTS_HTTP, eventsApiStatus: $D5_EVENTS_HTTP, historyEntryFound: <bool>, consoleErrors: 0, status: "PASS"|"FAIL"|"SKIPPED" }`.
 
 ---
 
@@ -542,7 +770,9 @@ When `$MODE` is `detailed`, include `detailedTests` as an array:
 "detailedTests": [
   { "scenario": "D1", "prevCtx": "<value>", "newCtx": "<value>", "dashboardDocumentStatus": 200, "consoleErrors": 0, "status": "PASS" },
   { "scenario": "D2", "tcId": "<id>", "initialStatus": "<status>", "targetStatus": "<status>", "bulkStatusApiStatus": 200, "bulkAssignApiStatus": 200, "panelOpenedOnCheckbox": false, "consoleErrors": 0, "status": "PASS" },
-  { "scenario": "D3", "tcId": "<id>", "panelOpened": true, "resultsApiStatus": 200, "statusChangeApiStatus": 200, "historyApiStatus": 200, "historyEntries": 3, "consoleErrors": 0, "status": "PASS" }
+  { "scenario": "D3", "tcId": "<id>", "panelOpened": true, "resultsApiStatus": 200, "statusChangeApiStatus": 200, "historyApiStatus": 200, "historyEntries": 3, "consoleErrors": 0, "status": "PASS" },
+  { "scenario": "D4", "tcId": "<id>", "initialStatus": "<status>", "targetStatus": "<status>", "bulkStatusApiStatus": 200, "initialAssignee": "<name|null>", "targetAssignee": "<name>", "bulkAssignApiStatus": 200, "panelOpenedOnCheckbox": false, "consoleErrors": 0, "status": "PASS" },
+  { "scenario": "D5", "tcId": "<id>", "initialStatus": "<status>", "targetStatus": "<status>", "patchApiStatus": 200, "resultsApiStatus": 200, "eventsApiStatus": 200, "historyEntryFound": true, "consoleErrors": 0, "status": "PASS" }
 ]
 ```
 
@@ -593,7 +823,7 @@ Warnings (`[warn]`) do **not** cause FAIL — include them in the report for vis
 - No DB seed step; assumes local Mongo is populated.
 - `utils/__tests__/smoke.test.js` is a `1+1` sanity test — ignore it.
 - The download interceptor patches `URL.createObjectURL` for the lifetime of the page tab. If multiple downloads are tested on the same page, reset `window.__smokeBlobs = []` before each click (the injector script above already does this).
-- When the skill starts its own server, port may be 3000–3099 depending on what else is running; always parse from the server log. When a pre-existing server is reused, `$SMOKE_PORT` is always `3000`.
+- Port is determined exclusively by parsing `/tmp/smoke-dev.log` — never probe ports with curl scans or netstat. Fresh start: the last matching `Local:` line is the server's port. Collision (Next 16 allows one dev server per project dir): the spawned process self-terminates and the log has two `Local:` lines — `tail -1` is the existing server's port. The `sleep 2` after "Ready in" guarantees both lines are present before parsing.
 - `softwareVersionTested` **no longer exists** — it has been removed from test cases entirely. Do not look for it on any form, API, or export.
 - Result mutations (`POST /api/releases/[id]/results`, `PATCH /api/releases/[id]/results`), assignment mutations (`POST /api/assignments`), and test-case definition edits (`PATCH /api/releases/[id]/test-cases/[caseId]`) append entries to the `events` collection (audit log). Entries carry `tcId`, `releaseId`, `environment`, actor, and timestamp. A smoke test that fires these mutations and then queries `events` directly should find matching entries — category `result`, `assignment`, or `test_case`.
 - Opening a test case's detail panel on `/test-cases` fires a single `GET /api/releases/[id]/results/[tcId]` returning the minimal per-environment execution rows (`environment`, `status`, `testedBy`, `testedOn`, `assignedTo`, `notes`) for that one case. It is a read route (admin+qa); it must not appear more than once per panel open and must not fan out per environment.
