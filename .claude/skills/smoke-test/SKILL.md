@@ -126,6 +126,8 @@ QA users must not see a desktop/mobile nav item for `/releases`, and any empty-s
 
 Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`; this request must return 200 for both admin and QA users with no console or network errors. The full `GET /api/users` roster remains admin-only.
 
+**Jira integration (issue-on-Fail):** `GET /api/settings` includes `jiraIssueMode` (`off`/`ask`/`auto`) and `jiraConfigured` (true only when `JIRA_BASE_URL`+`JIRA_EMAIL`+`JIRA_API_TOKEN` env vars are set). The Fail dialog shows a "Create Jira issue" checkbox only when `jiraConfigured && jiraIssueMode === 'ask'`; ticking it opens a review dialog after the Fail is recorded (drafts from `POST /api/releases/[id]/jira-drafts`, creation via `POST /api/releases/[id]/jira-issues` — both admin+qa). Automatic mode creates server-side during result recording. Smoke runs use a dev env without Jira vars, so the checkbox and review dialog must be absent and no request may leave for `atlassian.net`. The admin settings form (`/admin`) gains a "Jira issue creation" select; changing it goes through `PATCH /api/admin/settings` (admin-only).
+
 ---
 
 ## Download surfaces — **all opt-in, skip by default**

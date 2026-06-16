@@ -26,6 +26,7 @@ import {
   Drawer,
   Grid,
   IconButton,
+  MenuItem,
   Pagination,
   Stack,
   TextField,
@@ -43,7 +44,17 @@ import ToastProvider, { showToast } from '@/components/Toast';
 import { listAdminActivity } from '@/lib/api/admin';
 import { updateAdminSettings } from '@/lib/api/settings';
 import { resetTeamTestCases } from '@/lib/api/testCases';
-import { CONFIRM_TOKENS } from '@/lib/constants';
+import {
+  CONFIRM_TOKENS,
+  JIRA_ISSUE_MODE_DEFAULT,
+  JIRA_ISSUE_MODES,
+} from '@/lib/constants';
+
+const JIRA_MODE_OPTIONS = [
+  { value: JIRA_ISSUE_MODES.OFF, label: 'Off' },
+  { value: JIRA_ISSUE_MODES.ASK, label: 'Ask each time' },
+  { value: JIRA_ISSUE_MODES.AUTO, label: 'Automatic' },
+];
 
 const QUICK_ACCESS = [
   {
@@ -237,6 +248,7 @@ export default function AdminClient({ user, settings }) {
   const [dashboardSettings, setDashboardSettings] = useState({
     failureThreshold: settings?.failureThreshold ?? 5,
     topModulesLimit: settings?.topModulesLimit ?? 5,
+    jiraIssueMode: settings?.jiraIssueMode ?? JIRA_ISSUE_MODE_DEFAULT,
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
 
@@ -263,6 +275,7 @@ export default function AdminClient({ user, settings }) {
       await updateAdminSettings({
         failureThreshold: Number(dashboardSettings.failureThreshold),
         topModulesLimit: Number(dashboardSettings.topModulesLimit),
+        jiraIssueMode: dashboardSettings.jiraIssueMode,
       });
       showToast('Dashboard settings saved', 'success');
     } catch {
@@ -411,6 +424,40 @@ export default function AdminClient({ user, settings }) {
                     slotProps={{ htmlInput: { min: 1, max: 10 } }}
                     helperText='Max modules to show (1–10)'
                   />
+                </Grid>
+              </Grid>
+              <Divider />
+              <Stack spacing={0.5}>
+                <Typography variant='panelTitle' component='h2'>
+                  Jira Integration
+                </Typography>
+                <Typography variant='tableCell' color='text.secondary'>
+                  Creates a Jira issue (linked to the case's Jira Story) when a
+                  test is marked Fail. Requires JIRA_* env vars on the server.
+                </Typography>
+              </Stack>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    select
+                    size='small'
+                    label='Jira issue creation'
+                    value={dashboardSettings.jiraIssueMode}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        jiraIssueMode: e.target.value,
+                      }))
+                    }
+                    helperText='Ask shows a checkbox in the Fail dialog; Automatic creates without asking'
+                  >
+                    {JIRA_MODE_OPTIONS.map((opt) => (
+                      <MenuItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Grid>
               </Grid>
             </Stack>

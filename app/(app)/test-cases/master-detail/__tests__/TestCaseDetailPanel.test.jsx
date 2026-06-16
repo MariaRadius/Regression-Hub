@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,9 @@ const { listCaseResults } = vi.hoisted(() => ({
 }));
 const { listTestCaseEventsForRelease } = vi.hoisted(() => ({
   listTestCaseEventsForRelease: vi.fn(),
+}));
+const { getSettings } = vi.hoisted(() => ({
+  getSettings: vi.fn(() => Promise.resolve({ qaUsers: [] })),
 }));
 
 vi.mock('@/lib/api/results', () => ({
@@ -17,7 +21,18 @@ vi.mock('@/lib/api/releases', () => ({
   listTestCaseEventsForRelease,
 }));
 
+vi.mock('@/lib/api/settings', () => ({
+  getSettings,
+}));
+
 import TestCaseDetailPanel from '../TestCaseDetailPanel';
+
+// TestCaseDetail reads team settings via react-query (Jira issue link), so
+// the panel needs a QueryClientProvider in tests.
+function render(ui) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
 
 const baseCase = {
   _id: 'tc-1',

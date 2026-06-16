@@ -46,7 +46,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 1. Push the repo to GitHub.
 2. Import the repo in Vercel.
-3. Set `MONGODB_URI`, `MONGODB_DB`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
+3. Set `MONGODB_URI`, `MONGODB_DB`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` (+ optional `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` for Jira issue creation).
 4. Deploy.
 
 ## Roles
@@ -166,6 +166,17 @@ Per-case history is read from the detail panel only when the user opens History.
 
 Admin activity logs are a separate admin-only read surface over non-test-case events. They are opened on demand from `/admin`, never loaded with the initial page, and support download after load.
 
+### Jira Integration
+
+Creates a Jira Cloud issue when a test case is marked **Fail**, pre-filled with the failure details, and links it to the case's Jira Story.
+
+- Server-only env vars: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (Atlassian API token, Basic auth). Any missing var disables the integration; the token is never stored in the DB or sent to the client. Optional `JIRA_FIX_VERSION` (e.g. `testRelease`) sets the Jira Release on every created issue — the version must already exist in the target project.
+- Admin → Settings: **Jira issue creation** mode — `Off` / `Ask each time` (default) / `Automatic`.
+- **Ask mode = review before create.** After the Fail is recorded, the client fetches editable drafts (`POST /api/releases/[id]/jira-drafts`) and a stepper dialog walks through each case — QA can edit the summary/description, then Create or Skip per ticket (`POST /api/releases/[id]/jira-issues`). **Automatic mode** creates server-side during result recording with no review.
+- Draft description is a structured template built from the test case: Steps to Reproduce (HTML steps flattened to plain text), Expected Result, Actual Result (the QA's failure notes), module/priority, release/environment, recorded by.
+- Target project is derived from the case's Jira Story key (`RXR-123` → `RXR`); issue type is `Bug` for `Production` (case-insensitive), `Test Issue` otherwise; both are re-derived server-side on create — the client can edit only summary/description. The issue is labelled `regression-hub`, linked "Relates" to the story, and its key is appended to the result row's `jiraIssueKeys` (repeat failures keep every ticket).
+- Cases without a Jira Story are skipped. Jira failures never block result recording — the result saves first; creation errors surface as warnings.
+
 ### Reports
 
 One unified, release-grouped surface — every active Release × Environment is a card (no top-of-page selection):
@@ -197,6 +208,8 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | GET | `/api/releases/[id]/results` | admin+qa | List results |
 | GET | `/api/releases/[id]/results/[tcId]` | admin+qa | Minimal per-environment execution rows for one test case (detail panel) |
 | POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
+| POST | `/api/releases/[id]/jira-drafts` | admin+qa | Build editable Jira issue drafts for failed cases |
+| POST | `/api/releases/[id]/jira-issues` | admin+qa | Create reviewed Jira issues (link story, store key) |
 | POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
 | GET | `/api/admin/events` | admin | Lazy-load admin activity logs for the current team |
 | POST | `/api/releases/[id]/snapshot` | admin+qa | Generate + store PDF snapshot (replaces prior snapshot for same release+environment; writes EXPORT/PDF audit event) |

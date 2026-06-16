@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import JiraDraftReviewDialog from '@/components/JiraDraftReviewDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
@@ -19,11 +20,13 @@ import {
   useTestCasePagination,
 } from '@/hooks/useTestCasePagination';
 import { useTestCaseSelection } from '@/hooks/useTestCaseSelection';
+import { createJiraIssues } from '@/lib/api/jira';
 import {
   getTestCaseForRelease,
   listTestCasesForRelease,
 } from '@/lib/api/releases';
 import { ROLES } from '@/lib/constants';
+import { toastJiraOutcome } from '@/utils/toastJiraOutcome';
 import BulkAssignModal from './master-detail/bulk/BulkAssignModal';
 import BulkModalRenderer from './master-detail/bulk/BulkModalRenderer';
 import FilterStrip from './master-detail/FilterStrip';
@@ -80,6 +83,8 @@ function TestCasesPage({ user }) {
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ sortBy: 'createdAt', sortDir: 'asc' });
+  // Jira drafts awaiting QA review after a Fail (ask mode); null = dialog closed.
+  const [jiraDrafts, setJiraDrafts] = useState(null);
   const [openModal, setOpenModal] = useState(null); // 'pass'|'fail'|'pending'|'reassign'|'edit'|null
   const [singleActionId, setSingleActionId] = useState(null);
   useTestCaseKeyNav({
@@ -341,10 +346,11 @@ function TestCasesPage({ user }) {
           setOpenModal(null);
           setSingleActionId(null);
         }}
-        onSuccess={() => {
+        onSuccess={(_fields, extra) => {
           setOpenModal(null);
           setSingleActionId(null);
           selection.clear();
+          if (extra?.jiraDrafts?.length) setJiraDrafts(extra.jiraDrafts);
           if (activeId && releaseId) {
             getTestCaseForRelease(
               releaseId,
@@ -363,6 +369,26 @@ function TestCasesPage({ user }) {
           });
         }}
       />
+
+      {jiraDrafts && (
+        <JiraDraftReviewDialog
+          open
+          drafts={jiraDrafts}
+          onCreate={async (issue) => {
+            const outcome = await createJiraIssues(releaseId, {
+              environment,
+              issues: [issue],
+            });
+            // The route returns 200 with per-case outcomes; surface a failure
+            // for THIS issue as a thrown error so the dialog stays put.
+            if (outcome.errors.length) {
+              throw new Error(outcome.errors[0].error);
+            }
+            toastJiraOutcome(outcome);
+          }}
+          onClose={() => setJiraDrafts(null)}
+        />
+      )}
 
       {!isArchived && (
         <TestCaseDialog

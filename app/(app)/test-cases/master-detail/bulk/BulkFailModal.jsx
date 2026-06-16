@@ -1,11 +1,13 @@
 'use client';
-import { Grid, TextField } from '@mui/material';
+import { Checkbox, FormControlLabel, Grid, TextField } from '@mui/material';
 import { useState } from 'react';
-import { useQaUserList } from '@/hooks/useSharedData';
+import { useQaUserList, useTeamSettings } from '@/hooks/useSharedData';
+import { buildJiraDrafts } from '@/lib/api/jira';
 import { bulkRecordResults } from '@/lib/api/results';
-import { ROLES, STATUS } from '@/lib/constants';
+import { JIRA_ISSUE_MODES, ROLES, STATUS } from '@/lib/constants';
 import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
 import { showToast } from '@/utils/showToast';
+import { toastJiraOutcome } from '@/utils/toastJiraOutcome';
 import BulkModalShell from './BulkModalShell';
 import BulkStatusFields from './BulkStatusFields';
 
@@ -14,6 +16,11 @@ import BulkStatusFields from './BulkStatusFields';
  * testedBy, testedOn.
  * Sends { releaseId, environment, tcIds } for the new results model.
  * BR-15: QA testedBy is locked to self; admin may pick any active QA user.
+ *
+ * Jira (ask mode): after the Fail is recorded, fetches editable issue drafts
+ * and hands them up via `onSuccess(fields, { jiraDrafts })` so the page can
+ * open the review dialog. Auto mode: the server creates during recording and
+ * the outcome is toasted here.
  */
 export default function BulkFailModal({
   open,
@@ -25,6 +32,13 @@ export default function BulkFailModal({
   onSuccess,
 }) {
   const { data: qaUsers = [] } = useQaUserList();
+  const { data: teamSettings } = useTeamSettings();
+  // Checkbox appears only in ask mode with the server-side env vars present;
+  // in auto mode the server creates without asking.
+  const showJiraOption =
+    !!teamSettings?.jiraConfigured &&
+    teamSettings?.jiraIssueMode === JIRA_ISSUE_MODES.ASK;
+  const [createJira, setCreateJira] = useState(true);
   const lockTester = user?.role === ROLES.QA;
   const [notes, setNotes] = useState('');
   const [jiraStory, setJiraStory] = useState('');
@@ -53,17 +67,39 @@ export default function BulkFailModal({
         testedBy,
         testedOn,
       };
-      await bulkRecordResults(releaseId, {
+      const tcIds = selection.map((s) => s.tcId);
+      const res = await bulkRecordResults(releaseId, {
         releaseId,
         environment,
         status: STATUS.FAIL,
-        tcIds: selection.map((s) => s.tcId),
+        tcIds,
         testedBy,
         testedOn,
         notes,
       });
       showToast(`Marked ${selection.length} as Fail`, 'success');
-      onSuccess(fields);
+      // Auto mode: server already created — just report.
+      toastJiraOutcome(res?.jira);
+
+      // Ask mode: fetch editable drafts and hand them to the review dialog.
+      let jiraDrafts = null;
+      if (showJiraOption && createJira) {
+        try {
+          const draftsRes = await buildJiraDrafts(releaseId, {
+            environment,
+            tcIds,
+            notes,
+          });
+          toastJiraOutcome({ created: [], errors: [], ...draftsRes });
+          if (draftsRes.drafts.length) jiraDrafts = draftsRes.drafts;
+        } catch (e) {
+          showToast(
+            `Results saved, but Jira drafts could not be built: ${e.message}`,
+            'warning',
+          );
+        }
+      }
+      onSuccess(fields, jiraDrafts ? { jiraDrafts } : undefined);
     } catch (e) {
       showToast(e.message || 'Bulk update failed', 'error');
     } finally {
@@ -128,6 +164,19 @@ export default function BulkFailModal({
             helperText={notesError ? 'Notes is required' : ''}
           />
         </Grid>
+        {showJiraOption && (
+          <Grid size={{ xs: 12 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={createJira}
+                  onChange={(e) => setCreateJira(e.target.checked)}
+                />
+              }
+              label='Create Jira issue (you review each draft before it is sent)'
+            />
+          </Grid>
+        )}
       </Grid>
     </BulkModalShell>
   );

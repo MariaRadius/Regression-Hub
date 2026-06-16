@@ -72,6 +72,8 @@ describe('TopNav', () => {
         replace: replaceSpy,
       },
     });
+    // TopNav builds the callback from window.location.origin, not env config.
+    const loginUrl = `${window.location.origin}/login`;
     signOut.mockResolvedValue({});
 
     render(
@@ -91,8 +93,8 @@ describe('TopNav', () => {
 
     expect(signOut).toHaveBeenCalledWith({
       redirect: false,
-      callbackUrl: 'http://localhost:3001/login',
+      callbackUrl: loginUrl,
     });
-    expect(replaceSpy).toHaveBeenCalledWith('http://localhost:3001/login');
+    expect(replaceSpy).toHaveBeenCalledWith(loginUrl);
   });
 });

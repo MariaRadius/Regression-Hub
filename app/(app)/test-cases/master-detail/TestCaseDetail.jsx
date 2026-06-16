@@ -27,6 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import RichTextDisplay from '@/components/RichTextDisplay';
+import { useTeamSettings } from '@/hooks/useSharedData';
 import { STATUS } from '@/lib/constants';
 import { normalizedStatus } from '@/utils/formatters';
 
@@ -407,6 +408,7 @@ function latestExecution(envResults) {
  * @param {{ envResults: Array<{env:string,result:object|null}>|null, envLoading: boolean }} props
  */
 function ExecutionDetails({ envResults, envLoading }) {
+  const { data: teamSettings } = useTeamSettings();
   const latest = envLoading ? null : latestExecution(envResults);
 
   // Loaded, but nothing has been executed across any environment yet.
@@ -470,6 +472,35 @@ function ExecutionDetails({ envResults, envLoading }) {
           loading={envLoading}
         />
       </Grid>
+      {result?.jiraIssueKeys?.length > 0 && (
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <Stack spacing={0.25}>
+            <Typography variant='formLabel' color='text.disabled'>
+              {result.jiraIssueKeys.length === 1 ? 'Jira Issue' : 'Jira Issues'}
+            </Typography>
+            <Stack direction='row' spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+              {result.jiraIssueKeys.map((key) => (
+                <Chip
+                  key={key}
+                  size='small'
+                  clickable
+                  color='primary'
+                  variant='outlined'
+                  label={key}
+                  component='a'
+                  href={
+                    teamSettings?.jiraBaseUrl
+                      ? `${teamSettings.jiraBaseUrl}/browse/${key}`
+                      : undefined
+                  }
+                  target='_blank'
+                  rel='noopener noreferrer'
+                />
+              ))}
+            </Stack>
+          </Stack>
+        </Grid>
+      )}
       <Grid size={12}>
         <ReadField label='Notes' value={result?.notes} loading={envLoading} />
       </Grid>
