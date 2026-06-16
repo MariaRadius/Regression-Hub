@@ -34,7 +34,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/settings', () => {
-  it('returns qaUsers from db layer', async () => {
+  it('returns qaUsers from db layer plus the env-derived Jira flag', async () => {
     getTeamSettings.mockResolvedValue({
       qaUsers: ['Alice', 'Bob'],
     });
@@ -42,7 +42,19 @@ describe('GET /api/settings', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       qaUsers: ['Alice', 'Bob'],
+      jiraConfigured: false,
+      jiraBaseUrl: null,
     });
     expect(getTeamSettings).toHaveBeenCalledWith(db, 't1');
+  });
+
+  it('reports jiraConfigured true when all Jira env vars are set', async () => {
+    vi.stubEnv('JIRA_BASE_URL', 'https://example.atlassian.net');
+    vi.stubEnv('JIRA_EMAIL', 'qa@example.com');
+    vi.stubEnv('JIRA_API_TOKEN', 'secret');
+    getTeamSettings.mockResolvedValue({ qaUsers: [] });
+    const res = await GET();
+    expect((await res.json()).jiraConfigured).toBe(true);
+    vi.unstubAllEnvs();
   });
 });

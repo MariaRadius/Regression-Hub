@@ -5,11 +5,11 @@ import { ApiError } from '@/lib/errors';
 
 const { db, reset } = createMockDb();
 
-const { updateTeamSettings, getTeamSettings, appendAdminActivity } = vi.hoisted(
+const { appendAdminActivity, getTeamSettings, updateTeamSettings } = vi.hoisted(
   () => ({
-    updateTeamSettings: vi.fn(),
-    getTeamSettings: vi.fn(),
     appendAdminActivity: vi.fn(),
+    getTeamSettings: vi.fn(),
+    updateTeamSettings: vi.fn(),
   }),
 );
 
@@ -39,8 +39,8 @@ vi.mock('@/lib/server/withTeam', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 vi.mock('@/lib/db/settingsData', () => ({
-  updateTeamSettings,
   getTeamSettings,
+  updateTeamSettings,
 }));
 
 vi.mock('@/lib/db/adminActivityData', () => ({ appendAdminActivity }));
@@ -50,7 +50,11 @@ import { PATCH } from '../route';
 beforeEach(() => {
   reset();
   vi.clearAllMocks();
-  getTeamSettings.mockResolvedValue({});
+  getTeamSettings.mockResolvedValue({
+    failureThreshold: 5,
+    topModulesLimit: 5,
+    jiraIssueMode: 'ask',
+  });
   appendAdminActivity.mockResolvedValue(undefined);
 });
 
@@ -84,6 +88,20 @@ describe('PATCH /api/admin/settings', () => {
 
   it('rejects empty body', async () => {
     const res = await PATCH(makeRequest({}));
+    expect(res.status).toBe(400);
+  });
+
+  it('saves a valid jiraIssueMode', async () => {
+    updateTeamSettings.mockResolvedValue(undefined);
+    const res = await PATCH(makeRequest({ jiraIssueMode: 'auto' }));
+    expect(res.status).toBe(200);
+    expect(updateTeamSettings).toHaveBeenCalledWith(db, 't1', {
+      jiraIssueMode: 'auto',
+    });
+  });
+
+  it('rejects an unknown jiraIssueMode', async () => {
+    const res = await PATCH(makeRequest({ jiraIssueMode: 'always' }));
     expect(res.status).toBe(400);
   });
 });

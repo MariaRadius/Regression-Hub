@@ -1,7 +1,11 @@
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { AUDIT_ACTION, AUDIT_CATEGORY } from '@/lib/constants';
+import {
+  AUDIT_ACTION,
+  AUDIT_CATEGORY,
+  JIRA_ISSUE_MODES,
+} from '@/lib/constants';
 import { appendAdminActivity } from '@/lib/db/adminActivityData';
 import { getTeamSettings, updateTeamSettings } from '@/lib/db/settingsData';
 import { ApiError } from '@/lib/errors';
@@ -10,11 +14,13 @@ import { withAdmin } from '@/lib/server/withTeam';
 const patchBodySchema = z.object({
   failureThreshold: z.number().int().min(1).max(50).optional(),
   topModulesLimit: z.number().int().min(1).max(10).optional(),
+  jiraIssueMode: z.enum(Object.values(JIRA_ISSUE_MODES)).optional(),
 });
 
 const SETTING_LABELS = {
   failureThreshold: 'Failure threshold',
   topModulesLimit: 'Top modules limit',
+  jiraIssueMode: 'Jira issue creation',
 };
 
 export const PATCH = withAdmin(
