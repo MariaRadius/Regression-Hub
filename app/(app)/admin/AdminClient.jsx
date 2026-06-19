@@ -54,7 +54,6 @@ import {
 const JIRA_MODE_OPTIONS = [
   { value: JIRA_ISSUE_MODES.OFF, label: 'Off' },
   { value: JIRA_ISSUE_MODES.ASK, label: 'Ask each time' },
-  { value: JIRA_ISSUE_MODES.AUTO, label: 'Automatic' },
 ];
 
 const QUICK_ACCESS = [
@@ -459,7 +458,7 @@ export default function AdminClient({ user, settings }) {
                         jiraIssueMode: e.target.value,
                       }))
                     }
-                    helperText='Ask shows a checkbox in the Fail dialog; Automatic creates without asking'
+                    helperText='Ask shows a checkbox in the Fail dialog before creating a Jira issue'
                   >
                     {JIRA_MODE_OPTIONS.map((opt) => (
                       <MenuItem key={opt.value} value={opt.value}>
