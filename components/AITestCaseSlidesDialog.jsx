@@ -414,19 +414,21 @@ export default function AITestCaseSlidesDialog({
         }))
         .filter((s) => s._decision === 'approved');
 
-      for (const draft of approved) {
-        await createTestCaseForRelease(releaseId, {
-          applicationId,
-          moduleId,
-          testCase: draft.testCase,
-          preconditions: draft.preconditions,
-          steps: draft.steps,
-          expectedResult: draft.expectedResult,
-          priority: draft.priority,
-          type: draft.type,
-          jiraStory: jiraStory.trim(),
-        });
-      }
+      await Promise.all(
+        approved.map((draft) =>
+          createTestCaseForRelease(releaseId, {
+            applicationId,
+            moduleId,
+            testCase: draft.testCase,
+            preconditions: draft.preconditions,
+            steps: draft.steps,
+            expectedResult: draft.expectedResult,
+            priority: draft.priority,
+            type: draft.type,
+            jiraStory: jiraStory.trim(),
+          }),
+        ),
+      );
       onSuccess(approved.length);
     } catch (err) {
       setCreateError(err.message);
