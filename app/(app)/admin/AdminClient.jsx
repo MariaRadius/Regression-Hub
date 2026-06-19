@@ -45,6 +45,7 @@ import { listAdminActivity } from '@/lib/api/admin';
 import { updateAdminSettings } from '@/lib/api/settings';
 import { resetTeamTestCases } from '@/lib/api/testCases';
 import {
+  AI_PROVIDERS,
   CONFIRM_TOKENS,
   JIRA_ISSUE_MODE_DEFAULT,
   JIRA_ISSUE_MODES,
@@ -249,6 +250,10 @@ export default function AdminClient({ user, settings }) {
     failureThreshold: settings?.failureThreshold ?? 5,
     topModulesLimit: settings?.topModulesLimit ?? 5,
     jiraIssueMode: settings?.jiraIssueMode ?? JIRA_ISSUE_MODE_DEFAULT,
+    jiraBaseUrl: settings?.jiraBaseUrl ?? '',
+    jiraProjectKey: settings?.jiraProjectKey ?? '',
+    aiProvider: settings?.aiProvider ?? null,
+    aiApiKey: settings?.aiApiKey ?? '',
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
 
@@ -276,6 +281,10 @@ export default function AdminClient({ user, settings }) {
         failureThreshold: Number(dashboardSettings.failureThreshold),
         topModulesLimit: Number(dashboardSettings.topModulesLimit),
         jiraIssueMode: dashboardSettings.jiraIssueMode,
+        jiraBaseUrl: dashboardSettings.jiraBaseUrl || undefined,
+        jiraProjectKey: dashboardSettings.jiraProjectKey || undefined,
+        aiProvider: dashboardSettings.aiProvider,
+        aiApiKey: dashboardSettings.aiApiKey || undefined,
       });
       showToast('Dashboard settings saved', 'success');
     } catch {
@@ -459,6 +468,109 @@ export default function AdminClient({ user, settings }) {
                     ))}
                   </TextField>
                 </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size='small'
+                    label='Jira domain'
+                    placeholder='https://yourcompany.atlassian.net'
+                    value={dashboardSettings.jiraBaseUrl}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        jiraBaseUrl: e.target.value,
+                      }))
+                    }
+                    helperText='Optional team-level Jira domain to override server env var'
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size='small'
+                    label='Jira project key'
+                    placeholder='RXR'
+                    value={dashboardSettings.jiraProjectKey}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        jiraProjectKey: e.target.value,
+                      }))
+                    }
+                    helperText='Optional default project key to use when creating issues'
+                  />
+                </Grid>
+              </Grid>
+              <Divider />
+              <Stack spacing={0.5}>
+                <Typography variant='panelTitle' component='h2'>
+                  AI Test Case Generation
+                </Typography>
+                <Typography variant='tableCell' color='text.secondary'>
+                  Generates test cases from Jira user stories using AI. Requires
+                  an API key from your chosen provider.
+                </Typography>
+              </Stack>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    select
+                    size='small'
+                    label='AI Provider'
+                    value={dashboardSettings.aiProvider ?? ''}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        aiProvider: e.target.value || null,
+                        aiApiKey: '',
+                      }))
+                    }
+                    disabled={settingsSaving}
+                    slotProps={{
+                      select: { displayEmpty: true },
+                      inputLabel: { shrink: true },
+                    }}
+                    helperText='Select a provider to enable AI-powered test case generation.'
+                  >
+                    <MenuItem value=''>Disabled</MenuItem>
+                    <MenuItem value={AI_PROVIDERS.CLAUDE}>
+                      Claude (Anthropic)
+                    </MenuItem>
+                    <MenuItem value={AI_PROVIDERS.OPENAI}>
+                      OpenAI (GPT-4o)
+                    </MenuItem>
+                    <MenuItem value={AI_PROVIDERS.GEMINI}>
+                      Google Gemini
+                    </MenuItem>
+                  </TextField>
+                </Grid>
+                {dashboardSettings.aiProvider && (
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      size='small'
+                      label='API Key'
+                      type='password'
+                      value={dashboardSettings.aiApiKey ?? ''}
+                      onChange={(e) =>
+                        setDashboardSettings((prev) => ({
+                          ...prev,
+                          aiApiKey: e.target.value,
+                        }))
+                      }
+                      disabled={settingsSaving}
+                      placeholder='Paste your API key here'
+                      helperText={
+                        dashboardSettings.aiProvider === AI_PROVIDERS.CLAUDE
+                          ? 'Get your key at console.anthropic.com → API Keys'
+                          : dashboardSettings.aiProvider === AI_PROVIDERS.OPENAI
+                            ? 'Get your key at platform.openai.com → API Keys'
+                            : 'Get your key at aistudio.google.com → Get API key'
+                      }
+                    />
+                  </Grid>
+                )}
               </Grid>
             </Stack>
           </CardContent>

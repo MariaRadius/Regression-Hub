@@ -34,14 +34,18 @@ beforeEach(() => {
 });
 
 describe('GET /api/settings', () => {
-  it('returns qaUsers from db layer plus the env-derived Jira flag', async () => {
+  it('returns qaUsers from db layer plus the env-derived Jira and AI flags', async () => {
     getTeamSettings.mockResolvedValue({
       qaUsers: ['Alice', 'Bob'],
+      aiProvider: null,
+      aiApiKey: null,
     });
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       qaUsers: ['Alice', 'Bob'],
+      aiProvider: null,
+      aiConfigured: false,
       jiraConfigured: false,
       jiraBaseUrl: null,
     });

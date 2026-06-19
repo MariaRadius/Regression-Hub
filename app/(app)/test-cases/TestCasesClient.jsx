@@ -9,9 +9,10 @@ import {
   useRef,
   useState,
 } from 'react';
+import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import JiraDraftReviewDialog from '@/components/JiraDraftReviewDialog';
 import PageHeader from '@/components/PageHeader';
-import ToastProvider from '@/components/Toast';
+import ToastProvider, { showToast } from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { useTestCaseFilters } from '@/hooks/useTestCaseFilters';
 import { useTestCaseKeyNav } from '@/hooks/useTestCaseKeyNav';
@@ -34,7 +35,7 @@ import TestCaseDetailPanel from './master-detail/TestCaseDetailPanel';
 import TestCaseDialog from './master-detail/TestCaseDialog';
 import TestCaseList from './master-detail/TestCaseList';
 
-function TestCasesPage({ user }) {
+function TestCasesPage({ user, aiConfigured }) {
   const { releaseId, environment, environments, activeRelease } =
     useReleaseEnv();
   const isArchived = !!activeRelease?.archived;
@@ -54,6 +55,7 @@ function TestCasesPage({ user }) {
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAiDialog, setShowAiDialog] = useState(false);
 
   // Edit modal
   const [editTc, setEditTc] = useState(null);
@@ -247,13 +249,24 @@ function TestCasesPage({ user }) {
         }
         actions={
           !isArchived && (
-            <Button
-              variant='contained'
-              size='small'
-              onClick={() => setShowAddModal(true)}
-            >
-              + Add Test Case
-            </Button>
+            <Stack direction='row' spacing={1}>
+              {isAdmin && aiConfigured && (
+                <Button
+                  variant='outlined'
+                  size='small'
+                  onClick={() => setShowAiDialog(true)}
+                >
+                  Generate from Story
+                </Button>
+              )}
+              <Button
+                variant='contained'
+                size='small'
+                onClick={() => setShowAddModal(true)}
+              >
+                + Add Test Case
+              </Button>
+            </Stack>
           )
         }
       />
@@ -431,14 +444,36 @@ function TestCasesPage({ user }) {
           }}
         />
       )}
+
+      <AITestCaseSlidesDialog
+        open={showAiDialog}
+        releaseId={releaseId}
+        applications={applications}
+        modules={modules}
+        onClose={() => setShowAiDialog(false)}
+        onSuccess={(count) => {
+          setShowAiDialog(false);
+          showToast(
+            `${count} test case${count !== 1 ? 's' : ''} created`,
+            'success',
+          );
+          fetchPage({
+            active: filters.active,
+            page: pagination.page,
+            size: pagination.size,
+            rid: releaseId,
+            env: environment,
+          });
+        }}
+      />
     </Stack>
   );
 }
 
-export default function TestCasesClient({ user }) {
+export default function TestCasesClient({ user, aiConfigured }) {
   return (
     <Suspense>
-      <TestCasesPage user={user} />
+      <TestCasesPage user={user} aiConfigured={aiConfigured} />
     </Suspense>
   );
 }

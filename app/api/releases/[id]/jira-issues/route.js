@@ -49,6 +49,7 @@ export const POST = withTeam(
       releaseId,
       environment,
       issues,
+      sprintId: release.jiraSprintId,
     });
 
     return NextResponse.json(result);

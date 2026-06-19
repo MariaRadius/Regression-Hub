@@ -171,6 +171,7 @@ export default function ReleaseFormDialog({
   // ── form state ────────────────────────────────────────────────────────────
 
   const [name, setName] = useState('');
+  const [jiraSprintId, setJiraSprintId] = useState('');
   const [startType, setStartType] = useState('empty');
   const [environments, setEnvironments] = useState([...DEFAULT_ENVIRONMENTS]);
 
@@ -190,8 +191,10 @@ export default function ReleaseFormDialog({
 
     if (isEdit) {
       setName(editTarget.name ?? '');
+      setJiraSprintId(editTarget.jiraSprintId ?? '');
     } else {
       setName('');
+      setJiraSprintId('');
       setStartType('empty');
       setEnvironments([...DEFAULT_ENVIRONMENTS]);
       setSourceReleaseId('');
@@ -236,19 +239,29 @@ export default function ReleaseFormDialog({
       setSubmitting(true);
       setError(null);
 
+      const sprintId = jiraSprintId.trim() || null;
+
       try {
         if (isEdit) {
-          await updateRelease(editTarget._id, { name: cleanName });
+          await updateRelease(editTarget._id, {
+            name: cleanName,
+            jiraSprintId: sprintId,
+          });
         } else if (startType === 'clone') {
           await cloneRelease({
             name: cleanName,
             environments,
             cloneFromId: sourceReleaseId,
             carryAssignments,
+            jiraSprintId: sprintId,
           });
         } else {
           // empty or import — both create an empty release; import adds cases later
-          await createRelease({ name: cleanName, environments });
+          await createRelease({
+            name: cleanName,
+            environments,
+            jiraSprintId: sprintId,
+          });
         }
 
         onSuccess();
@@ -264,6 +277,7 @@ export default function ReleaseFormDialog({
     },
     [
       name,
+      jiraSprintId,
       isEdit,
       environments,
       startType,
@@ -313,6 +327,18 @@ export default function ReleaseFormDialog({
               autoFocus
               disabled={submitting}
               placeholder='e.g. v2.9, Sprint 42, 2026-Q2'
+            />
+
+            {/* Jira Sprint ID */}
+            <TextField
+              label='Jira Sprint ID'
+              value={jiraSprintId}
+              onChange={(e) => setJiraSprintId(e.target.value)}
+              fullWidth
+              size='small'
+              disabled={submitting}
+              placeholder='e.g. 42'
+              helperText='Find this in your Jira board URL or sprint settings. Leave blank to skip sprint assignment.'
             />
 
             {/* Create-mode: start type selector */}

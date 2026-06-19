@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
+  AI_PROVIDERS,
   AUDIT_ACTION,
   AUDIT_CATEGORY,
   JIRA_ISSUE_MODES,
@@ -15,12 +16,21 @@ const patchBodySchema = z.object({
   failureThreshold: z.number().int().min(1).max(50).optional(),
   topModulesLimit: z.number().int().min(1).max(10).optional(),
   jiraIssueMode: z.enum(Object.values(JIRA_ISSUE_MODES)).optional(),
+  // Optional team-level Jira overrides. Base URL is not a secret.
+  jiraBaseUrl: z.string().trim().url().nullable().optional(),
+  jiraProjectKey: z.string().trim().nullable().optional(),
+  aiProvider: z.enum(Object.values(AI_PROVIDERS)).nullable().optional(),
+  aiApiKey: z.string().trim().optional(),
 });
 
 const SETTING_LABELS = {
   failureThreshold: 'Failure threshold',
   topModulesLimit: 'Top modules limit',
   jiraIssueMode: 'Jira issue creation',
+  jiraBaseUrl: 'Jira domain',
+  jiraProjectKey: 'Jira project key',
+  aiProvider: 'AI provider',
+  aiApiKey: 'AI API key',
 };
 
 export const PATCH = withAdmin(
