@@ -542,6 +542,7 @@ export default function AdminClient({ user, settings }) {
                     <MenuItem value={AI_PROVIDERS.GEMINI}>
                       Google Gemini
                     </MenuItem>
+                    <MenuItem value={AI_PROVIDERS.GEMMA}>Google Gemma</MenuItem>
                   </TextField>
                 </Grid>
                 {dashboardSettings.aiProvider && (
