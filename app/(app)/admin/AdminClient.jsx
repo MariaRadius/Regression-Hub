@@ -7,6 +7,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import PeopleIcon from '@mui/icons-material/People';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -17,6 +18,8 @@ import {
   Card,
   CardActions,
   CardContent,
+  Chip,
+  CircularProgress,
   Collapse,
   Dialog,
   DialogActions,
@@ -42,6 +45,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider, { showToast } from '@/components/Toast';
 import { listAdminActivity } from '@/lib/api/admin';
+import { updateApplication } from '@/lib/api/applications';
 import { updateAdminSettings } from '@/lib/api/settings';
 import { resetTeamTestCases } from '@/lib/api/testCases';
 import {
@@ -222,7 +226,13 @@ function ActivityRow({ entry }) {
  * Admin control panel — quick access to admin sub-pages and the destructive
  * "Clear All Data" action that was previously misplaced on the Test Cases page.
  */
-export default function AdminClient({ user, settings }) {
+const PREFIX_RE = /^[A-Z0-9]{2,5}$/;
+
+export default function AdminClient({
+  user,
+  settings,
+  applications: initialApplications = [],
+}) {
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     message: '',
@@ -255,6 +265,55 @@ export default function AdminClient({ user, settings }) {
     aiApiKey: settings?.aiApiKey ?? '',
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
+
+  const [applications, setApplications] = useState(initialApplications);
+  const [prefixDrafts, setPrefixDrafts] = useState(() =>
+    Object.fromEntries(
+      initialApplications.map((a) => [a._id, a.initial ?? '']),
+    ),
+  );
+  const [prefixSaving, setPrefixSaving] = useState({});
+  const [prefixConfirm, setPrefixConfirm] = useState(null); // { app, newInitial }
+
+  function requestPrefixSave(app) {
+    setPrefixConfirm({ app, newInitial: prefixDrafts[app._id] });
+  }
+
+  async function confirmPrefixSave() {
+    const { app, newInitial } = prefixConfirm;
+    setPrefixConfirm(null);
+    setPrefixSaving((prev) => ({ ...prev, [app._id]: true }));
+    try {
+      const { renamedCount } = await updateApplication(app._id, {
+        initial: newInitial,
+      });
+      setApplications((prev) =>
+        prev.map((a) =>
+          a._id === app._id ? { ...a, initial: newInitial } : a,
+        ),
+      );
+      const renamed =
+        renamedCount > 0
+          ? ` ${renamedCount} existing ID${renamedCount !== 1 ? 's' : ''} renamed.`
+          : '';
+      showToast(
+        `Prefix for "${app.name}" updated to ${newInitial}.${renamed}`,
+        'success',
+      );
+    } catch (err) {
+      const msg = err?.message ?? '';
+      if (msg.toLowerCase().includes('already in use')) {
+        showToast(
+          `Prefix "${newInitial}" is already in use by another application`,
+          'error',
+        );
+      } else {
+        showToast('Failed to update prefix', 'error');
+      }
+    } finally {
+      setPrefixSaving((prev) => ({ ...prev, [app._id]: false }));
+    }
+  }
 
   async function openActivity() {
     setActivityOpen(true);
@@ -591,6 +650,140 @@ export default function AdminClient({ user, settings }) {
         <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
           <Divider sx={{ flex: 1 }} />
           <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
+            <LabelOutlinedIcon sx={{ fontSize: 16 }} />
+            <Typography variant='pageEyebrow' sx={{ letterSpacing: '0.08em' }}>
+              Test Case IDs
+            </Typography>
+          </Stack>
+          <Divider sx={{ flex: 1 }} />
+        </Stack>
+
+        <Card variant='outlined'>
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack spacing={0.5}>
+                <Typography variant='panelTitle' component='h2'>
+                  Test Case ID Prefixes
+                </Typography>
+                <Typography variant='tableCell' color='text.secondary'>
+                  The prefix combines with a sequence number to form each test
+                  case ID (e.g. SAP-0001). 2–5 uppercase letters or digits.
+                </Typography>
+              </Stack>
+
+              <Alert severity='warning'>
+                Changing a prefix will retroactively rename{' '}
+                <strong>all existing test case IDs</strong> for that application
+                (e.g. SAP-0001 → SP-0001). You will be asked to confirm before
+                any change is applied.
+              </Alert>
+
+              {applications.length === 0 ? (
+                <Stack spacing={1} sx={{ alignItems: 'center', py: 3 }}>
+                  <LabelOutlinedIcon
+                    sx={{ color: 'text.disabled', fontSize: 40 }}
+                  />
+                  <Typography variant='panelTitle'>
+                    No applications yet
+                  </Typography>
+                  <Typography variant='tableCell' color='text.secondary'>
+                    Create an application to manage its test case ID prefix.
+                  </Typography>
+                </Stack>
+              ) : (
+                <Stack spacing={1.5} divider={<Divider />}>
+                  {applications.map((app) => {
+                    const draft = prefixDrafts[app._id] ?? '';
+                    const isValid = PREFIX_RE.test(draft);
+                    const isChanged = draft !== app.initial;
+                    const saving = !!prefixSaving[app._id];
+                    const canSave = isChanged && isValid && !saving;
+                    return (
+                      <Grid
+                        container
+                        spacing={2}
+                        key={app._id}
+                        sx={{ alignItems: 'center' }}
+                      >
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Stack spacing={0.5}>
+                            <Typography
+                              variant='tableCell'
+                              sx={{ fontWeight: 600 }}
+                            >
+                              {app.name}
+                            </Typography>
+                            <Chip
+                              label={`Current: ${app.initial ?? '—'}`}
+                              size='small'
+                              sx={{ width: 'fit-content', fontSize: 11 }}
+                            />
+                          </Stack>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 3 }}>
+                          <TextField
+                            fullWidth
+                            size='small'
+                            label='New prefix'
+                            value={draft}
+                            onChange={(e) =>
+                              setPrefixDrafts((prev) => ({
+                                ...prev,
+                                [app._id]: e.target.value
+                                  .toUpperCase()
+                                  .replace(/[^A-Z0-9]/g, ''),
+                              }))
+                            }
+                            disabled={saving}
+                            slotProps={{ htmlInput: { maxLength: 5 } }}
+                            error={draft.length > 0 && !isValid}
+                            helperText={
+                              draft.length > 0 && !isValid
+                                ? '2–5 letters/digits'
+                                : ' '
+                            }
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 3 }}>
+                          <Typography
+                            variant='tableCell'
+                            color='text.secondary'
+                          >
+                            Preview:{' '}
+                            <strong>
+                              {(isValid ? draft : app.initial) ?? '???'}-0001
+                            </strong>
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 2 }}>
+                          <Button
+                            variant='contained'
+                            size='small'
+                            onClick={() => requestPrefixSave(app)}
+                            disabled={!canSave}
+                            startIcon={
+                              saving ? (
+                                <CircularProgress size={14} color='inherit' />
+                              ) : undefined
+                            }
+                          >
+                            {saving ? 'Saving…' : 'Save'}
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Stack>
+
+      <Stack spacing={2}>
+        <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Divider sx={{ flex: 1 }} />
+          <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
             <WarningAmberIcon sx={{ fontSize: 16, color: 'error.main' }} />
             <Typography
               variant='pageEyebrow'
@@ -824,6 +1017,39 @@ export default function AdminClient({ user, settings }) {
           ) : null}
         </Stack>
       </Drawer>
+
+      {/* Prefix change confirmation dialog */}
+      <Dialog
+        open={!!prefixConfirm}
+        onClose={() => setPrefixConfirm(null)}
+        maxWidth='xs'
+        fullWidth
+      >
+        <DialogTitle>Rename all test case IDs?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5}>
+            <Typography variant='body2'>
+              Changing the prefix for{' '}
+              <strong>{prefixConfirm?.app?.name}</strong> from{' '}
+              <strong>{prefixConfirm?.app?.initial}</strong> to{' '}
+              <strong>{prefixConfirm?.newInitial}</strong> will retroactively
+              rename every existing test case ID for this application (e.g.{' '}
+              <strong>
+                {prefixConfirm?.app?.initial}-0001 → {prefixConfirm?.newInitial}
+                -0001
+              </strong>
+              ).
+            </Typography>
+            <Alert severity='warning'>This cannot be undone.</Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPrefixConfirm(null)}>Cancel</Button>
+          <Button variant='contained' color='error' onClick={confirmPrefixSave}>
+            Rename all IDs
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
