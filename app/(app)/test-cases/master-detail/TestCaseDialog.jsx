@@ -18,6 +18,7 @@ import {
 import { useRef, useState } from 'react';
 import RichTextEditor from '@/components/RichTextEditor';
 import { showToast } from '@/components/Toast';
+import { createApplication as apiCreateApplication } from '@/lib/api/applications';
 import { createModule as apiCreateModule } from '@/lib/api/modules';
 import {
   createTestCaseForRelease,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/api/releases';
 import { PRIORITIES } from '@/lib/constants';
 import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
+import { deriveInitial } from '@/utils/appInitial';
 
 export const EMPTY_FORM = {
   applicationId: '',
@@ -73,6 +75,7 @@ export default function TestCaseDialog({
   releaseId,
   applications,
   modules,
+  onApplicationCreated,
   onModuleCreated,
   onClose,
   onSuccess,
@@ -81,6 +84,11 @@ export default function TestCaseDialog({
   const [form, setForm] = useState(() => (tc ? seedForm(tc) : EMPTY_FORM));
   const [resetAllToPending, setResetAllToPending] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [newAppName, setNewAppName] = useState(null);
+  const [newAppInitial, setNewAppInitial] = useState('');
+  const [creatingApp, setCreatingApp] = useState(false);
+  const newAppInputRef = useRef(null);
+
   const [newModuleName, setNewModuleName] = useState(null);
   const [creatingModule, setCreatingModule] = useState(false);
   const newModuleInputRef = useRef(null);
@@ -97,8 +105,29 @@ export default function TestCaseDialog({
   }
 
   function handleClose() {
+    setNewAppName(null);
     setNewModuleName(null);
     onClose();
+  }
+
+  async function handleCreateApp() {
+    if (!newAppName?.trim()) return;
+    setCreatingApp(true);
+    try {
+      const app = await apiCreateApplication({
+        name: newAppName.trim(),
+        initial: newAppInitial.trim() || undefined,
+      });
+      onApplicationCreated(app);
+      setForm((prev) => ({ ...prev, applicationId: app._id, moduleId: '' }));
+      setNewAppName(null);
+      setNewAppInitial('');
+      showToast(`Application "${app.name}" created`, 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to create application', 'error');
+    } finally {
+      setCreatingApp(false);
+    }
   }
 
   async function handleSave(e) {
@@ -203,25 +232,100 @@ export default function TestCaseDialog({
                 required
                 name='applicationId'
                 value={form.applicationId}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    applicationId: e.target.value,
-                    moduleId: '',
-                  }))
-                }
+                onChange={(e) => {
+                  if (e.target.value === '__new__') {
+                    setForm((prev) => ({
+                      ...prev,
+                      applicationId: '',
+                      moduleId: '',
+                    }));
+                    setNewModuleName(null);
+                    setNewAppName('');
+                    setNewAppInitial('');
+                    setTimeout(() => newAppInputRef.current?.focus(), 50);
+                  } else {
+                    setForm((prev) => ({
+                      ...prev,
+                      applicationId: e.target.value,
+                      moduleId: '',
+                    }));
+                    setNewAppName(null);
+                  }
+                }}
                 slotProps={{
                   select: { displayEmpty: true },
                   inputLabel: { shrink: true },
                 }}
               >
                 <MenuItem value=''>Select application</MenuItem>
+                <MenuItem value='__new__'>+ Add new application…</MenuItem>
                 {applications.map((a) => (
                   <MenuItem key={a._id} value={a._id}>
                     {a.name}
                   </MenuItem>
                 ))}
               </TextField>
+              {newAppName !== null && (
+                <Stack direction='row' spacing={0.75} sx={{ mt: 0.75 }}>
+                  <TextField
+                    slotProps={{ htmlInput: { ref: newAppInputRef } }}
+                    size='small'
+                    value={newAppName}
+                    onChange={(e) => {
+                      setNewAppName(e.target.value);
+                      try {
+                        setNewAppInitial(deriveInitial(e.target.value));
+                      } catch {
+                        setNewAppInitial('');
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateApp();
+                      }
+                    }}
+                    placeholder='Application name'
+                    sx={{ flex: 2 }}
+                  />
+                  <TextField
+                    size='small'
+                    label='Initial'
+                    value={newAppInitial}
+                    onChange={(e) =>
+                      setNewAppInitial(e.target.value.toUpperCase().slice(0, 3))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateApp();
+                      }
+                    }}
+                    placeholder='ABC'
+                    sx={{ flex: 1 }}
+                    slotProps={{ htmlInput: { maxLength: 3 } }}
+                  />
+                  <Button
+                    variant='contained'
+                    size='small'
+                    onClick={handleCreateApp}
+                    disabled={creatingApp || !newAppName.trim()}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    {creatingApp ? '…' : 'Create'}
+                  </Button>
+                  <IconButton
+                    size='small'
+                    aria-label='Cancel'
+                    onClick={() => {
+                      setNewAppName(null);
+                      setNewAppInitial('');
+                    }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
+              )}
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <TextField

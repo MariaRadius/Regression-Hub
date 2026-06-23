@@ -410,6 +410,9 @@ function TestCasesPage({ user, aiConfigured }) {
           releaseId={releaseId}
           applications={applications}
           modules={modules}
+          onApplicationCreated={(app) =>
+            setApplications((prev) => [...prev, app])
+          }
           onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
@@ -434,6 +437,9 @@ function TestCasesPage({ user, aiConfigured }) {
           releaseId={releaseId}
           applications={applications}
           modules={modules}
+          onApplicationCreated={(app) =>
+            setApplications((prev) => [...prev, app])
+          }
           onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
           onClose={() => setEditTc(null)}
           onSuccess={(updatedTc) => {
@@ -450,6 +456,10 @@ function TestCasesPage({ user, aiConfigured }) {
         releaseId={releaseId}
         applications={applications}
         modules={modules}
+        onApplicationCreated={(app) =>
+          setApplications((prev) => [...prev, app])
+        }
+        onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
         onClose={() => setShowAiDialog(false)}
         onSuccess={(count) => {
           setShowAiDialog(false);

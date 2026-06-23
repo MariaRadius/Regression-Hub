@@ -22,8 +22,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createApplication } from '@/lib/api/applications';
+import { createModule } from '@/lib/api/modules';
 import { createTestCaseForRelease } from '@/lib/api/releases';
+import { deriveInitial } from '@/utils/appInitial';
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const TYPES = [
@@ -46,7 +49,60 @@ function SetupPhase({
   error,
   onGenerate,
   onClose,
+  onApplicationCreated,
+  onModuleCreated,
 }) {
+  const [newAppName, setNewAppName] = useState(null);
+  const [newAppInitial, setNewAppInitial] = useState('');
+  const [creatingApp, setCreatingApp] = useState(false);
+  const [appError, setAppError] = useState(null);
+  const newAppInputRef = useRef(null);
+
+  const [newModuleName, setNewModuleName] = useState(null);
+  const [creatingModule, setCreatingModule] = useState(false);
+  const [moduleError, setModuleError] = useState(null);
+  const newModuleInputRef = useRef(null);
+
+  async function handleCreateApp() {
+    if (!newAppName?.trim()) return;
+    setCreatingApp(true);
+    setAppError(null);
+    try {
+      const app = await createApplication({
+        name: newAppName.trim(),
+        initial: newAppInitial.trim() || undefined,
+      });
+      onApplicationCreated(app);
+      setApplicationId(app._id);
+      setModuleId('');
+      setNewAppName(null);
+      setNewAppInitial('');
+    } catch (err) {
+      setAppError(err.message || 'Failed to create application');
+    } finally {
+      setCreatingApp(false);
+    }
+  }
+
+  async function handleCreateModule() {
+    if (!newModuleName?.trim() || !applicationId) return;
+    setCreatingModule(true);
+    setModuleError(null);
+    try {
+      const mod = await createModule({
+        name: newModuleName.trim(),
+        applicationId,
+      });
+      onModuleCreated(mod);
+      setModuleId(mod._id);
+      setNewModuleName(null);
+    } catch (err) {
+      setModuleError(err.message || 'Failed to create module');
+    } finally {
+      setCreatingModule(false);
+    }
+  }
+
   return (
     <>
       <DialogContent>
@@ -72,52 +128,194 @@ function SetupPhase({
             disabled={generating}
             autoFocus
           />
-          <TextField
-            select
-            label='Application'
-            value={applicationId}
-            onChange={(e) => setApplicationId(e.target.value)}
-            size='small'
-            fullWidth
-            required
-            disabled={generating}
-            slotProps={{
-              select: { displayEmpty: true },
-              inputLabel: { shrink: true },
-            }}
-          >
-            <MenuItem value=''>Select application</MenuItem>
-            {applications.map((a) => (
-              <MenuItem key={a._id} value={a._id}>
-                {a.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label='Module'
-            value={moduleId}
-            onChange={(e) => setModuleId(e.target.value)}
-            size='small'
-            fullWidth
-            required
-            disabled={generating || !applicationId}
-            slotProps={{
-              select: { displayEmpty: true },
-              inputLabel: { shrink: true },
-            }}
-          >
-            <MenuItem value=''>Select module</MenuItem>
-            {modules
-              .filter(
-                (m) => !applicationId || m.applicationId === applicationId,
-              )
-              .map((m) => (
-                <MenuItem key={m._id} value={m._id}>
-                  {m.name}
+          <Stack spacing={0.75}>
+            <TextField
+              select
+              label='Application'
+              value={applicationId}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  setApplicationId('');
+                  setModuleId('');
+                  setNewModuleName(null);
+                  setNewAppName('');
+                  setNewAppInitial('');
+                  setTimeout(() => newAppInputRef.current?.focus(), 50);
+                } else {
+                  setApplicationId(e.target.value);
+                  setModuleId('');
+                  setNewModuleName(null);
+                  setNewAppName(null);
+                }
+              }}
+              size='small'
+              fullWidth
+              required
+              disabled={generating}
+              slotProps={{
+                select: { displayEmpty: true },
+                inputLabel: { shrink: true },
+              }}
+            >
+              <MenuItem value=''>Select application</MenuItem>
+              <MenuItem value='__new__'>+ Add new application…</MenuItem>
+              {applications.map((a) => (
+                <MenuItem key={a._id} value={a._id}>
+                  {a.name}
                 </MenuItem>
               ))}
-          </TextField>
+            </TextField>
+            {newAppName !== null && (
+              <Stack spacing={0.5}>
+                {appError && (
+                  <Alert severity='error' sx={{ py: 0 }}>
+                    {appError}
+                  </Alert>
+                )}
+                <Stack direction='row' spacing={0.75}>
+                  <TextField
+                    slotProps={{ htmlInput: { ref: newAppInputRef } }}
+                    size='small'
+                    value={newAppName}
+                    onChange={(e) => {
+                      setNewAppName(e.target.value);
+                      try {
+                        setNewAppInitial(deriveInitial(e.target.value));
+                      } catch {
+                        setNewAppInitial('');
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateApp();
+                      }
+                    }}
+                    placeholder='Application name'
+                    sx={{ flex: 2 }}
+                  />
+                  <TextField
+                    size='small'
+                    value={newAppInitial}
+                    onChange={(e) =>
+                      setNewAppInitial(e.target.value.toUpperCase().slice(0, 3))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateApp();
+                      }
+                    }}
+                    placeholder='ABC'
+                    label='Initial'
+                    sx={{ flex: 1 }}
+                    slotProps={{ htmlInput: { maxLength: 3 } }}
+                  />
+                  <Button
+                    variant='contained'
+                    size='small'
+                    onClick={handleCreateApp}
+                    disabled={creatingApp || !newAppName.trim()}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    {creatingApp ? '…' : 'Create'}
+                  </Button>
+                  <IconButton
+                    size='small'
+                    aria-label='Cancel new application'
+                    onClick={() => {
+                      setNewAppName(null);
+                      setNewAppInitial('');
+                      setAppError(null);
+                    }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
+              </Stack>
+            )}
+          </Stack>
+          <Stack spacing={0.75}>
+            <TextField
+              select
+              label='Module'
+              value={moduleId}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  setModuleId('');
+                  setNewModuleName('');
+                  setTimeout(() => newModuleInputRef.current?.focus(), 50);
+                } else {
+                  setModuleId(e.target.value);
+                  setNewModuleName(null);
+                }
+              }}
+              size='small'
+              fullWidth
+              required
+              disabled={generating || !applicationId}
+              slotProps={{
+                select: { displayEmpty: true },
+                inputLabel: { shrink: true },
+              }}
+            >
+              <MenuItem value=''>Select module</MenuItem>
+              <MenuItem value='__new__'>+ Add new module…</MenuItem>
+              {modules
+                .filter(
+                  (m) => !applicationId || m.applicationId === applicationId,
+                )
+                .map((m) => (
+                  <MenuItem key={m._id} value={m._id}>
+                    {m.name}
+                  </MenuItem>
+                ))}
+            </TextField>
+            {newModuleName !== null && (
+              <Stack spacing={0.5}>
+                {moduleError && (
+                  <Alert severity='error' sx={{ py: 0 }}>
+                    {moduleError}
+                  </Alert>
+                )}
+                <Stack direction='row' spacing={0.75}>
+                  <TextField
+                    slotProps={{ htmlInput: { ref: newModuleInputRef } }}
+                    size='small'
+                    value={newModuleName}
+                    onChange={(e) => setNewModuleName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateModule();
+                      }
+                    }}
+                    placeholder='New module name'
+                    sx={{ flex: 1 }}
+                  />
+                  <Button
+                    variant='contained'
+                    size='small'
+                    onClick={handleCreateModule}
+                    disabled={creatingModule || !newModuleName.trim()}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    {creatingModule ? '…' : 'Create'}
+                  </Button>
+                  <IconButton
+                    size='small'
+                    aria-label='Cancel new module'
+                    onClick={() => {
+                      setNewModuleName(null);
+                      setModuleError(null);
+                    }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
+              </Stack>
+            )}
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -352,6 +550,8 @@ export default function AITestCaseSlidesDialog({
   releaseId,
   applications,
   modules,
+  onApplicationCreated,
+  onModuleCreated,
 }) {
   const [phase, setPhase] = useState('setup');
   const [jiraStory, setJiraStory] = useState('');
@@ -481,6 +681,8 @@ export default function AITestCaseSlidesDialog({
           error={error}
           onGenerate={handleGenerate}
           onClose={onClose}
+          onApplicationCreated={onApplicationCreated}
+          onModuleCreated={onModuleCreated}
         />
       )}
 
