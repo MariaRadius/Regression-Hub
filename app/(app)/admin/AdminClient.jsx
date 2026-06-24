@@ -1,5 +1,6 @@
 'use client';
 
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -7,12 +8,17 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import IntegrationInstructionsOutlinedIcon from '@mui/icons-material/IntegrationInstructionsOutlined';
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import PeopleIcon from '@mui/icons-material/People';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Button,
   Card,
@@ -265,6 +271,29 @@ export default function AdminClient({
     aiApiKey: settings?.aiApiKey ?? '',
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [savedSettings, setSavedSettings] = useState(() => ({
+    failureThreshold: settings?.failureThreshold ?? 5,
+    topModulesLimit: settings?.topModulesLimit ?? 5,
+    jiraIssueMode: settings?.jiraIssueMode ?? JIRA_ISSUE_MODE_DEFAULT,
+    jiraBaseUrl: settings?.jiraBaseUrl ?? '',
+    jiraProjectKey: settings?.jiraProjectKey ?? '',
+    aiProvider: settings?.aiProvider ?? null,
+    aiApiKey: settings?.aiApiKey ?? '',
+  }));
+
+  const isSettingsDirty =
+    Number(dashboardSettings.failureThreshold) !==
+      Number(savedSettings.failureThreshold) ||
+    Number(dashboardSettings.topModulesLimit) !==
+      Number(savedSettings.topModulesLimit) ||
+    dashboardSettings.jiraIssueMode !== savedSettings.jiraIssueMode ||
+    (dashboardSettings.jiraBaseUrl || '') !==
+      (savedSettings.jiraBaseUrl || '') ||
+    (dashboardSettings.jiraProjectKey || '') !==
+      (savedSettings.jiraProjectKey || '') ||
+    (dashboardSettings.aiProvider ?? null) !==
+      (savedSettings.aiProvider ?? null) ||
+    (dashboardSettings.aiApiKey || '') !== (savedSettings.aiApiKey || '');
 
   const [applications, setApplications] = useState(initialApplications);
   const [prefixDrafts, setPrefixDrafts] = useState(() =>
@@ -344,7 +373,16 @@ export default function AdminClient({
         aiProvider: dashboardSettings.aiProvider,
         aiApiKey: dashboardSettings.aiApiKey || undefined,
       });
-      showToast('Dashboard settings saved', 'success');
+      setSavedSettings({
+        failureThreshold: dashboardSettings.failureThreshold,
+        topModulesLimit: dashboardSettings.topModulesLimit,
+        jiraIssueMode: dashboardSettings.jiraIssueMode,
+        jiraBaseUrl: dashboardSettings.jiraBaseUrl,
+        jiraProjectKey: dashboardSettings.jiraProjectKey,
+        aiProvider: dashboardSettings.aiProvider,
+        aiApiKey: dashboardSettings.aiApiKey,
+      });
+      showToast('Settings saved', 'success');
     } catch {
       // error toast shown by HTTP client
     } finally {
@@ -391,15 +429,34 @@ export default function AdminClient({
           <Grid key={href || key} size={{ xs: 12, sm: 6, lg: 4 }}>
             <Card
               variant='outlined'
-              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'box-shadow 0.2s, border-color 0.2s',
+                '&:hover': {
+                  boxShadow: 2,
+                  borderColor: 'primary.main',
+                },
+              }}
             >
               <CardContent sx={{ flex: 1 }}>
                 <Stack
                   direction='row'
                   spacing={1.5}
-                  sx={{ alignItems: 'flex-start', mb: 1 }}
+                  sx={{ alignItems: 'center', mb: 1 }}
                 >
-                  <Icon sx={{ color: 'primary.main', mt: 0.25 }} />
+                  <Stack
+                    sx={{
+                      p: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'rgba(13,148,136,0.1)',
+                      color: 'primary.main',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Icon sx={{ fontSize: 20 }} />
+                  </Stack>
                   <Typography variant='panelTitle' component='h2'>
                     {label}
                   </Typography>
@@ -413,14 +470,14 @@ export default function AdminClient({
                   <Button
                     component={Link}
                     href={href}
-                    variant='outlined'
+                    variant='contained'
                     size='small'
                   >
                     {action}
                   </Button>
                 ) : (
                   <Button
-                    variant='outlined'
+                    variant='contained'
                     size='small'
                     onClick={openActivity}
                   >
@@ -437,26 +494,69 @@ export default function AdminClient({
         <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
           <Divider sx={{ flex: 1 }} />
           <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
-            <SettingsOutlinedIcon sx={{ fontSize: 16 }} />
-            <Typography variant='pageEyebrow' sx={{ letterSpacing: '0.08em' }}>
-              Dashboard Settings
+            <SettingsOutlinedIcon
+              sx={{ fontSize: 16, color: 'primary.main' }}
+            />
+            <Typography
+              variant='pageEyebrow'
+              sx={{ letterSpacing: '0.08em', color: 'primary.main' }}
+            >
+              Settings
             </Typography>
           </Stack>
           <Divider sx={{ flex: 1 }} />
         </Stack>
 
-        <Card variant='outlined'>
-          <CardContent>
-            <Stack spacing={2}>
-              <Stack spacing={0.5}>
-                <Typography variant='panelTitle' component='h2'>
-                  Top Failing Modules
-                </Typography>
-                <Typography variant='tableCell' color='text.secondary'>
-                  Controls which modules appear in the "Top Failing Modules"
-                  panel on the dashboard.
-                </Typography>
+        <Card variant='outlined' sx={{ overflow: 'hidden' }}>
+          {/* Dashboard */}
+          <Accordion
+            disableGutters
+            elevation={0}
+            square
+            defaultExpanded
+            sx={{
+              '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' },
+              '&::before': { display: 'none' },
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon sx={{ color: 'primary.main' }} />}
+              sx={{
+                px: 2.5,
+                py: 0.75,
+                '&:hover': { bgcolor: 'grey.100' },
+                '&.Mui-expanded': { bgcolor: 'rgba(13,148,136,0.04)' },
+              }}
+            >
+              <Stack
+                direction='row'
+                spacing={1.5}
+                sx={{ alignItems: 'center' }}
+              >
+                <Stack
+                  sx={{
+                    p: 0.75,
+                    borderRadius: 1.5,
+                    bgcolor: 'rgba(13,148,136,0.1)',
+                    color: 'primary.main',
+                    flexShrink: 0,
+                  }}
+                >
+                  <TuneOutlinedIcon sx={{ fontSize: 18 }} />
+                </Stack>
+                <Stack spacing={0.25}>
+                  <Typography variant='panelTitle'>Dashboard</Typography>
+                  <Typography
+                    variant='tableCell'
+                    color='text.secondary'
+                    sx={{ fontSize: 11 }}
+                  >
+                    Top Failing Modules panel thresholds
+                  </Typography>
+                </Stack>
               </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 0.5 }}>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
@@ -493,23 +593,64 @@ export default function AdminClient({
                   />
                 </Grid>
               </Grid>
-              <Divider />
-              <Stack spacing={0.5}>
-                <Typography variant='panelTitle' component='h2'>
-                  Jira Integration
-                </Typography>
-                <Typography variant='tableCell' color='text.secondary'>
-                  Creates a Jira issue (linked to the case's Jira Story) when a
-                  test is marked Fail. Requires JIRA_* env vars on the server.
-                </Typography>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Jira Integration */}
+          <Accordion
+            disableGutters
+            elevation={0}
+            square
+            sx={{
+              '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' },
+              '&::before': { display: 'none' },
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon sx={{ color: 'primary.main' }} />}
+              sx={{
+                px: 2.5,
+                py: 0.75,
+                '&:hover': { bgcolor: 'grey.100' },
+                '&.Mui-expanded': { bgcolor: 'rgba(13,148,136,0.04)' },
+              }}
+            >
+              <Stack
+                direction='row'
+                spacing={1.5}
+                sx={{ alignItems: 'center' }}
+              >
+                <Stack
+                  sx={{
+                    p: 0.75,
+                    borderRadius: 1.5,
+                    bgcolor: 'rgba(13,148,136,0.1)',
+                    color: 'primary.main',
+                    flexShrink: 0,
+                  }}
+                >
+                  <IntegrationInstructionsOutlinedIcon sx={{ fontSize: 18 }} />
+                </Stack>
+                <Stack spacing={0.25}>
+                  <Typography variant='panelTitle'>Jira Integration</Typography>
+                  <Typography
+                    variant='tableCell'
+                    color='text.secondary'
+                    sx={{ fontSize: 11 }}
+                  >
+                    Auto-create issues when tests are marked as failed
+                  </Typography>
+                </Stack>
               </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 0.5 }}>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     select
                     size='small'
-                    label='Jira issue creation'
+                    label='Issue creation'
                     value={dashboardSettings.jiraIssueMode}
                     onChange={(e) =>
                       setDashboardSettings((prev) => ({
@@ -517,7 +658,7 @@ export default function AdminClient({
                         jiraIssueMode: e.target.value,
                       }))
                     }
-                    helperText='Ask shows a checkbox in the Fail dialog before creating a Jira issue'
+                    helperText='Ask shows a checkbox in the Fail dialog before creating an issue'
                   >
                     {JIRA_MODE_OPTIONS.map((opt) => (
                       <MenuItem key={opt.value} value={opt.value}>
@@ -539,14 +680,14 @@ export default function AdminClient({
                         jiraBaseUrl: e.target.value,
                       }))
                     }
-                    helperText='Optional team-level Jira domain to override server env var'
+                    helperText='Optional — overrides the server JIRA_BASE_URL env var'
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     size='small'
-                    label='Jira project key'
+                    label='Default project key'
                     placeholder='RXR'
                     value={dashboardSettings.jiraProjectKey}
                     onChange={(e) =>
@@ -555,20 +696,58 @@ export default function AdminClient({
                         jiraProjectKey: e.target.value,
                       }))
                     }
-                    helperText='Optional default project key to use when creating issues'
+                    helperText='Optional default project key for new issues'
                   />
                 </Grid>
               </Grid>
-              <Divider />
-              <Stack spacing={0.5}>
-                <Typography variant='panelTitle' component='h2'>
-                  AI Test Case Generation
-                </Typography>
-                <Typography variant='tableCell' color='text.secondary'>
-                  Generates test cases from Jira user stories using AI. Requires
-                  an API key from your chosen provider.
-                </Typography>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* AI Generation */}
+          <Accordion
+            disableGutters
+            elevation={0}
+            square
+            sx={{ '&::before': { display: 'none' } }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon sx={{ color: 'primary.main' }} />}
+              sx={{
+                px: 2.5,
+                py: 0.75,
+                '&:hover': { bgcolor: 'grey.100' },
+                '&.Mui-expanded': { bgcolor: 'rgba(13,148,136,0.04)' },
+              }}
+            >
+              <Stack
+                direction='row'
+                spacing={1.5}
+                sx={{ alignItems: 'center' }}
+              >
+                <Stack
+                  sx={{
+                    p: 0.75,
+                    borderRadius: 1.5,
+                    bgcolor: 'rgba(13,148,136,0.1)',
+                    color: 'primary.main',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AutoAwesomeOutlinedIcon sx={{ fontSize: 18 }} />
+                </Stack>
+                <Stack spacing={0.25}>
+                  <Typography variant='panelTitle'>AI Generation</Typography>
+                  <Typography
+                    variant='tableCell'
+                    color='text.secondary'
+                    sx={{ fontSize: 11 }}
+                  >
+                    Generate test cases from Jira user stories using AI
+                  </Typography>
+                </Stack>
               </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 0.5 }}>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
@@ -589,7 +768,7 @@ export default function AdminClient({
                       select: { displayEmpty: true },
                       inputLabel: { shrink: true },
                     }}
-                    helperText='Select a provider to enable AI-powered test case generation.'
+                    helperText='Select a provider to enable AI-powered test case generation'
                   >
                     <MenuItem value=''>Disabled</MenuItem>
                     <MenuItem value={AI_PROVIDERS.CLAUDE}>
@@ -631,152 +810,213 @@ export default function AdminClient({
                   </Grid>
                 )}
               </Grid>
-            </Stack>
-          </CardContent>
-          <CardActions sx={{ px: 2, pb: 2 }}>
-            <Button
-              variant='contained'
-              size='small'
-              onClick={saveSettings}
-              disabled={settingsSaving}
-            >
-              {settingsSaving ? 'Saving…' : 'Save Settings'}
-            </Button>
-          </CardActions>
+            </AccordionDetails>
+          </Accordion>
         </Card>
+
+        <Stack direction='row' sx={{ justifyContent: 'flex-end' }}>
+          <Button
+            variant='contained'
+            size='small'
+            onClick={saveSettings}
+            disabled={settingsSaving || !isSettingsDirty}
+            startIcon={
+              settingsSaving ? (
+                <CircularProgress size={14} color='inherit' />
+              ) : undefined
+            }
+          >
+            {settingsSaving ? 'Saving…' : 'Save Settings'}
+          </Button>
+        </Stack>
       </Stack>
 
       <Stack spacing={2}>
         <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
           <Divider sx={{ flex: 1 }} />
           <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
-            <LabelOutlinedIcon sx={{ fontSize: 16 }} />
-            <Typography variant='pageEyebrow' sx={{ letterSpacing: '0.08em' }}>
+            <LabelOutlinedIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+            <Typography
+              variant='pageEyebrow'
+              sx={{ letterSpacing: '0.08em', color: 'primary.main' }}
+            >
               Test Case IDs
             </Typography>
           </Stack>
           <Divider sx={{ flex: 1 }} />
         </Stack>
 
-        <Card variant='outlined'>
-          <CardContent>
-            <Stack spacing={2}>
-              <Stack spacing={0.5}>
-                <Typography variant='panelTitle' component='h2'>
-                  Test Case ID Prefixes
-                </Typography>
-                <Typography variant='tableCell' color='text.secondary'>
-                  The prefix combines with a sequence number to form each test
-                  case ID (e.g. SAP-0001). 2–5 uppercase letters or digits.
-                </Typography>
-              </Stack>
-
-              <Alert severity='warning'>
-                Changing a prefix will retroactively rename{' '}
-                <strong>all existing test case IDs</strong> for that application
-                (e.g. SAP-0001 → SP-0001). You will be asked to confirm before
-                any change is applied.
-              </Alert>
-
-              {applications.length === 0 ? (
-                <Stack spacing={1} sx={{ alignItems: 'center', py: 3 }}>
-                  <LabelOutlinedIcon
-                    sx={{ color: 'text.disabled', fontSize: 40 }}
-                  />
-                  <Typography variant='panelTitle'>
-                    No applications yet
-                  </Typography>
-                  <Typography variant='tableCell' color='text.secondary'>
-                    Create an application to manage its test case ID prefix.
+        <Card variant='outlined' sx={{ overflow: 'hidden' }}>
+          <Accordion
+            disableGutters
+            elevation={0}
+            square
+            defaultExpanded
+            sx={{ '&::before': { display: 'none' } }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon sx={{ color: 'primary.main' }} />}
+              sx={{
+                px: 2.5,
+                py: 0.75,
+                '&:hover': { bgcolor: 'grey.100' },
+                '&.Mui-expanded': { bgcolor: 'rgba(13,148,136,0.04)' },
+              }}
+            >
+              <Stack
+                direction='row'
+                spacing={1.5}
+                sx={{ alignItems: 'center', flex: 1, mr: 1 }}
+              >
+                <Stack
+                  sx={{
+                    p: 0.75,
+                    borderRadius: 1.5,
+                    bgcolor: 'rgba(13,148,136,0.1)',
+                    color: 'primary.main',
+                    flexShrink: 0,
+                  }}
+                >
+                  <LabelOutlinedIcon sx={{ fontSize: 18 }} />
+                </Stack>
+                <Stack spacing={0.25} sx={{ flex: 1 }}>
+                  <Stack
+                    direction='row'
+                    spacing={1}
+                    sx={{ alignItems: 'center' }}
+                  >
+                    <Typography variant='panelTitle'>
+                      Test Case ID Prefixes
+                    </Typography>
+                    {applications.length > 0 && (
+                      <Chip
+                        label={applications.length}
+                        size='small'
+                        color='primary'
+                        sx={{ fontSize: 10, height: 18, minWidth: 24 }}
+                      />
+                    )}
+                  </Stack>
+                  <Typography
+                    variant='tableCell'
+                    color='text.secondary'
+                    sx={{ fontSize: 11 }}
+                  >
+                    Per-application prefix that forms the test case ID (e.g.
+                    SAP-0001)
                   </Typography>
                 </Stack>
-              ) : (
-                <Stack spacing={1.5} divider={<Divider />}>
-                  {applications.map((app) => {
-                    const draft = prefixDrafts[app._id] ?? '';
-                    const isValid = PREFIX_RE.test(draft);
-                    const isChanged = draft !== app.initial;
-                    const saving = !!prefixSaving[app._id];
-                    const canSave = isChanged && isValid && !saving;
-                    return (
-                      <Grid
-                        container
-                        spacing={2}
-                        key={app._id}
-                        sx={{ alignItems: 'center' }}
-                      >
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                          <Stack spacing={0.5}>
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 0.5 }}>
+              <Stack spacing={2}>
+                <Alert severity='warning'>
+                  Changing a prefix will retroactively rename{' '}
+                  <strong>all existing test case IDs</strong> for that
+                  application (e.g. SAP-0001 → SP-0001). You will be asked to
+                  confirm before any change is applied.
+                </Alert>
+
+                {applications.length === 0 ? (
+                  <Stack spacing={1} sx={{ alignItems: 'center', py: 3 }}>
+                    <LabelOutlinedIcon
+                      sx={{ color: 'text.disabled', fontSize: 40 }}
+                    />
+                    <Typography variant='panelTitle'>
+                      No applications yet
+                    </Typography>
+                    <Typography variant='tableCell' color='text.secondary'>
+                      Create an application to manage its test case ID prefix.
+                    </Typography>
+                  </Stack>
+                ) : (
+                  <Stack spacing={1.5} divider={<Divider />}>
+                    {applications.map((app) => {
+                      const draft = prefixDrafts[app._id] ?? '';
+                      const isValid = PREFIX_RE.test(draft);
+                      const isChanged = draft !== app.initial;
+                      const saving = !!prefixSaving[app._id];
+                      const canSave = isChanged && isValid && !saving;
+                      return (
+                        <Grid
+                          container
+                          spacing={2}
+                          key={app._id}
+                          sx={{ alignItems: 'center' }}
+                        >
+                          <Grid size={{ xs: 12, sm: 4 }}>
+                            <Stack spacing={0.5}>
+                              <Typography
+                                variant='tableCell'
+                                sx={{ fontWeight: 600 }}
+                              >
+                                {app.name}
+                              </Typography>
+                              <Chip
+                                label={`Current: ${app.initial ?? '—'}`}
+                                size='small'
+                                sx={{ width: 'fit-content', fontSize: 11 }}
+                              />
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 3 }}>
+                            <TextField
+                              fullWidth
+                              size='small'
+                              label='New prefix'
+                              value={draft}
+                              onChange={(e) =>
+                                setPrefixDrafts((prev) => ({
+                                  ...prev,
+                                  [app._id]: e.target.value
+                                    .toUpperCase()
+                                    .replace(/[^A-Z0-9]/g, ''),
+                                }))
+                              }
+                              disabled={saving}
+                              slotProps={{ htmlInput: { maxLength: 5 } }}
+                              error={draft.length > 0 && !isValid}
+                              helperText={
+                                draft.length > 0 && !isValid
+                                  ? '2–5 letters/digits'
+                                  : ' '
+                              }
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 3 }}>
                             <Typography
                               variant='tableCell'
-                              sx={{ fontWeight: 600 }}
+                              color='text.secondary'
                             >
-                              {app.name}
+                              Preview:{' '}
+                              <strong>
+                                {(isValid ? draft : app.initial) ?? '???'}-0001
+                              </strong>
                             </Typography>
-                            <Chip
-                              label={`Current: ${app.initial ?? '—'}`}
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 2 }}>
+                            <Button
+                              variant='contained'
                               size='small'
-                              sx={{ width: 'fit-content', fontSize: 11 }}
-                            />
-                          </Stack>
+                              onClick={() => requestPrefixSave(app)}
+                              disabled={!canSave}
+                              startIcon={
+                                saving ? (
+                                  <CircularProgress size={14} color='inherit' />
+                                ) : undefined
+                              }
+                            >
+                              {saving ? 'Saving…' : 'Save'}
+                            </Button>
+                          </Grid>
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 3 }}>
-                          <TextField
-                            fullWidth
-                            size='small'
-                            label='New prefix'
-                            value={draft}
-                            onChange={(e) =>
-                              setPrefixDrafts((prev) => ({
-                                ...prev,
-                                [app._id]: e.target.value
-                                  .toUpperCase()
-                                  .replace(/[^A-Z0-9]/g, ''),
-                              }))
-                            }
-                            disabled={saving}
-                            slotProps={{ htmlInput: { maxLength: 5 } }}
-                            error={draft.length > 0 && !isValid}
-                            helperText={
-                              draft.length > 0 && !isValid
-                                ? '2–5 letters/digits'
-                                : ' '
-                            }
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 3 }}>
-                          <Typography
-                            variant='tableCell'
-                            color='text.secondary'
-                          >
-                            Preview:{' '}
-                            <strong>
-                              {(isValid ? draft : app.initial) ?? '???'}-0001
-                            </strong>
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 2 }}>
-                          <Button
-                            variant='contained'
-                            size='small'
-                            onClick={() => requestPrefixSave(app)}
-                            disabled={!canSave}
-                            startIcon={
-                              saving ? (
-                                <CircularProgress size={14} color='inherit' />
-                              ) : undefined
-                            }
-                          >
-                            {saving ? 'Saving…' : 'Save'}
-                          </Button>
-                        </Grid>
-                      </Grid>
-                    );
-                  })}
-                </Stack>
-              )}
-            </Stack>
-          </CardContent>
+                      );
+                    })}
+                  </Stack>
+                )}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
         </Card>
       </Stack>
 
