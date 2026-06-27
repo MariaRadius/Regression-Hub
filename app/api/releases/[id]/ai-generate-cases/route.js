@@ -36,7 +36,11 @@ export const POST = withTeam(async (request, { params }, { teamId, db }) => {
 
   let story;
   try {
-    story = await getJiraStory(parsed.data.jiraStory);
+    story = await getJiraStory(parsed.data.jiraStory, {
+      jiraBaseUrl: settings.jiraBaseUrl,
+      jiraEmail: settings.jiraEmail,
+      jiraApiToken: settings.jiraApiToken,
+    });
   } catch (err) {
     throw new ApiError(400, `Jira error: ${err.message}`);
   }

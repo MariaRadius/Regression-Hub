@@ -266,7 +266,8 @@ export default function AdminClient({
     topModulesLimit: settings?.topModulesLimit ?? 5,
     jiraIssueMode: settings?.jiraIssueMode ?? JIRA_ISSUE_MODE_DEFAULT,
     jiraBaseUrl: settings?.jiraBaseUrl ?? '',
-    jiraProjectKey: settings?.jiraProjectKey ?? '',
+    jiraEmail: settings?.jiraEmail ?? '',
+    jiraApiToken: settings?.jiraApiToken ?? '',
     aiProvider: settings?.aiProvider ?? null,
     aiApiKey: settings?.aiApiKey ?? '',
   });
@@ -276,7 +277,8 @@ export default function AdminClient({
     topModulesLimit: settings?.topModulesLimit ?? 5,
     jiraIssueMode: settings?.jiraIssueMode ?? JIRA_ISSUE_MODE_DEFAULT,
     jiraBaseUrl: settings?.jiraBaseUrl ?? '',
-    jiraProjectKey: settings?.jiraProjectKey ?? '',
+    jiraEmail: settings?.jiraEmail ?? '',
+    jiraApiToken: settings?.jiraApiToken ?? '',
     aiProvider: settings?.aiProvider ?? null,
     aiApiKey: settings?.aiApiKey ?? '',
   }));
@@ -289,8 +291,9 @@ export default function AdminClient({
     dashboardSettings.jiraIssueMode !== savedSettings.jiraIssueMode ||
     (dashboardSettings.jiraBaseUrl || '') !==
       (savedSettings.jiraBaseUrl || '') ||
-    (dashboardSettings.jiraProjectKey || '') !==
-      (savedSettings.jiraProjectKey || '') ||
+    (dashboardSettings.jiraEmail || '') !== (savedSettings.jiraEmail || '') ||
+    (dashboardSettings.jiraApiToken || '') !==
+      (savedSettings.jiraApiToken || '') ||
     (dashboardSettings.aiProvider ?? null) !==
       (savedSettings.aiProvider ?? null) ||
     (dashboardSettings.aiApiKey || '') !== (savedSettings.aiApiKey || '');
@@ -369,7 +372,8 @@ export default function AdminClient({
         topModulesLimit: Number(dashboardSettings.topModulesLimit),
         jiraIssueMode: dashboardSettings.jiraIssueMode,
         jiraBaseUrl: dashboardSettings.jiraBaseUrl || undefined,
-        jiraProjectKey: dashboardSettings.jiraProjectKey || undefined,
+        jiraEmail: dashboardSettings.jiraEmail || undefined,
+        jiraApiToken: dashboardSettings.jiraApiToken || undefined,
         aiProvider: dashboardSettings.aiProvider,
         aiApiKey: dashboardSettings.aiApiKey || undefined,
       });
@@ -378,7 +382,8 @@ export default function AdminClient({
         topModulesLimit: dashboardSettings.topModulesLimit,
         jiraIssueMode: dashboardSettings.jiraIssueMode,
         jiraBaseUrl: dashboardSettings.jiraBaseUrl,
-        jiraProjectKey: dashboardSettings.jiraProjectKey,
+        jiraEmail: dashboardSettings.jiraEmail,
+        jiraApiToken: dashboardSettings.jiraApiToken,
         aiProvider: dashboardSettings.aiProvider,
         aiApiKey: dashboardSettings.aiApiKey,
       });
@@ -680,23 +685,40 @@ export default function AdminClient({
                         jiraBaseUrl: e.target.value,
                       }))
                     }
-                    helperText='Optional — overrides the server JIRA_BASE_URL env var'
+                    helperText='Your Atlassian domain URL'
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     size='small'
-                    label='Default project key'
-                    placeholder='RXR'
-                    value={dashboardSettings.jiraProjectKey}
+                    label='Jira email'
+                    placeholder='you@yourcompany.com'
+                    value={dashboardSettings.jiraEmail}
                     onChange={(e) =>
                       setDashboardSettings((prev) => ({
                         ...prev,
-                        jiraProjectKey: e.target.value,
+                        jiraEmail: e.target.value,
                       }))
                     }
-                    helperText='Optional default project key for new issues'
+                    helperText='Atlassian account email used for API access'
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    size='small'
+                    label='API token'
+                    type='password'
+                    placeholder='ATATT3x…'
+                    value={dashboardSettings.jiraApiToken}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        jiraApiToken: e.target.value,
+                      }))
+                    }
+                    helperText='Create a token at id.atlassian.com → Security → API tokens'
                   />
                 </Grid>
               </Grid>

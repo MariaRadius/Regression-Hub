@@ -21,7 +21,7 @@ import {
   useTestCasePagination,
 } from '@/hooks/useTestCasePagination';
 import { useTestCaseSelection } from '@/hooks/useTestCaseSelection';
-import { createJiraIssues } from '@/lib/api/jira';
+import { createJiraIssues, improveJiraDraft } from '@/lib/api/jira';
 import {
   getTestCaseForRelease,
   listTestCasesForRelease,
@@ -399,6 +399,9 @@ function TestCasesPage({ user, aiConfigured }) {
             }
             toastJiraOutcome(outcome);
           }}
+          onImprove={({ summary, description }) =>
+            improveJiraDraft(releaseId, { summary, description })
+          }
           onClose={() => setJiraDrafts(null)}
         />
       )}

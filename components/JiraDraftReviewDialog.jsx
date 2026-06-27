@@ -1,8 +1,10 @@
 'use client';
 
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import {
   Alert,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -25,6 +27,7 @@ import { useEffect, useState } from 'react';
  * @param {Array<{ tcId: string, summary: string, description: string }>} props.drafts
  * @param {(issue: { tcId: string, summary: string, description: string }) => Promise<unknown>} props.onCreate
  * @param {() => void} props.onClose
+ * @param {((draft: { summary: string, description: string }) => Promise<{ summary: string, description: string }>)=} props.onImprove
  * @see {@link components/__tests__/JiraDraftReviewDialog.test.jsx}
  */
 export default function JiraDraftReviewDialog({
@@ -32,15 +35,18 @@ export default function JiraDraftReviewDialog({
   drafts,
   onCreate,
   onClose,
+  onImprove,
 }) {
   const [index, setIndex] = useState(0);
   const [summary, setSummary] = useState(drafts[0]?.summary ?? '');
   const [description, setDescription] = useState(drafts[0]?.description ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const [improving, setImproving] = useState(false);
   const [error, setError] = useState('');
 
   const draft = drafts[index];
   const total = drafts.length;
+  const busy = submitting || improving;
 
   useEffect(() => {
     setSummary(draft?.summary ?? '');
@@ -66,6 +72,21 @@ export default function JiraDraftReviewDialog({
     }
   }
 
+  async function handleImprove() {
+    if (!onImprove) return;
+    setImproving(true);
+    setError('');
+    try {
+      const improved = await onImprove({ summary, description });
+      setSummary(improved.summary);
+      setDescription(improved.description);
+    } catch (e) {
+      setError(e.message || 'AI improvement failed');
+    } finally {
+      setImproving(false);
+    }
+  }
+
   if (!draft) return null;
 
   return (
@@ -86,6 +107,7 @@ export default function JiraDraftReviewDialog({
             label='Summary'
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
+            disabled={busy}
             slotProps={{ htmlInput: { maxLength: 255 } }}
           />
           <TextField
@@ -96,23 +118,45 @@ export default function JiraDraftReviewDialog({
             maxRows={16}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            disabled={busy}
           />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={submitting}>
-          Cancel remaining
-        </Button>
-        <Button onClick={advance} disabled={submitting}>
-          Skip
-        </Button>
-        <Button
-          variant='contained'
-          onClick={handleCreate}
-          disabled={submitting || !summary.trim() || !description.trim()}
-        >
-          {submitting ? 'Creating…' : 'Create issue'}
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between' }}>
+        <Stack direction='row' spacing={1}>
+          {onImprove && (
+            <Button
+              variant='outlined'
+              size='small'
+              onClick={handleImprove}
+              disabled={busy || !summary.trim() || !description.trim()}
+              startIcon={
+                improving ? (
+                  <CircularProgress size={14} color='inherit' />
+                ) : (
+                  <AutoAwesomeOutlinedIcon />
+                )
+              }
+            >
+              {improving ? 'Improving…' : 'Improve with AI'}
+            </Button>
+          )}
+        </Stack>
+        <Stack direction='row' spacing={1}>
+          <Button onClick={onClose} disabled={busy}>
+            Cancel remaining
+          </Button>
+          <Button onClick={advance} disabled={busy}>
+            Skip
+          </Button>
+          <Button
+            variant='contained'
+            onClick={handleCreate}
+            disabled={busy || !summary.trim() || !description.trim()}
+          >
+            {submitting ? 'Creating…' : 'Create issue'}
+          </Button>
+        </Stack>
       </DialogActions>
     </Dialog>
   );

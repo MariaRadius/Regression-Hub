@@ -16,9 +16,10 @@ const patchBodySchema = z.object({
   failureThreshold: z.number().int().min(1).max(50).optional(),
   topModulesLimit: z.number().int().min(1).max(10).optional(),
   jiraIssueMode: z.enum(Object.values(JIRA_ISSUE_MODES)).optional(),
-  // Optional team-level Jira overrides. Base URL is not a secret.
   jiraBaseUrl: z.string().trim().url().nullable().optional(),
   jiraProjectKey: z.string().trim().nullable().optional(),
+  jiraEmail: z.string().trim().email().nullable().optional(),
+  jiraApiToken: z.string().trim().nullable().optional(),
   aiProvider: z.enum(Object.values(AI_PROVIDERS)).nullable().optional(),
   aiApiKey: z.string().trim().optional(),
 });
@@ -29,6 +30,8 @@ const SETTING_LABELS = {
   jiraIssueMode: 'Jira issue creation',
   jiraBaseUrl: 'Jira domain',
   jiraProjectKey: 'Jira project key',
+  jiraEmail: 'Jira email',
+  jiraApiToken: 'Jira API token',
   aiProvider: 'AI provider',
   aiApiKey: 'AI API key',
 };
