@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
 const { db, reset } = createMockDb();
-const { listTestCases, createTestCase } = vi.hoisted(() => ({
-  listTestCases: vi.fn(),
-  createTestCase: vi.fn(),
-}));
+const { listTestCases, createTestCase, findPotentialDuplicates } = vi.hoisted(
+  () => ({
+    listTestCases: vi.fn(),
+    createTestCase: vi.fn(),
+    findPotentialDuplicates: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/server/withTeam', () => {
   const wrap = (handler) => async (req, ctx) => {
@@ -35,7 +38,11 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
 }));
-vi.mock('@/lib/db/testCasesData', () => ({ listTestCases, createTestCase }));
+vi.mock('@/lib/db/testCasesData', () => ({
+  listTestCases,
+  createTestCase,
+  findPotentialDuplicates,
+}));
 
 import { GET, POST } from '../route';
 
@@ -121,6 +128,7 @@ describe('GET /api/releases/[id]/test-cases', () => {
 
 describe('POST /api/releases/[id]/test-cases', () => {
   it('creates a test case in the release', async () => {
+    findPotentialDuplicates.mockResolvedValue([]);
     createTestCase.mockResolvedValue({ _id: 'tc1', testKey: 'RHE-0001' });
     const req = new Request('http://x', {
       method: 'POST',
@@ -138,5 +146,53 @@ describe('POST /api/releases/[id]/test-cases', () => {
       't1',
       expect.objectContaining({ releaseId: RELEASE_ID }),
     );
+  });
+
+  it('returns 409 when a potential duplicate is found', async () => {
+    findPotentialDuplicates.mockResolvedValue([
+      {
+        id: 'existing1',
+        testCase: 'Login validates credentials',
+        testKey: 'APP-0001',
+      },
+    ]);
+    const req = new Request('http://x', {
+      method: 'POST',
+      body: JSON.stringify({
+        testCase: 'Login validates credentials',
+        applicationId: 'app1',
+        moduleId: 'mod1',
+      }),
+    });
+    const res = await POST(req, PARAMS);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/duplicate/i);
+    expect(body.duplicates).toHaveLength(1);
+    expect(body.duplicates[0].testKey).toBe('APP-0001');
+    expect(createTestCase).not.toHaveBeenCalled();
+  });
+
+  it('bypasses duplicate check when force=true query param is set', async () => {
+    findPotentialDuplicates.mockResolvedValue([
+      {
+        id: 'existing1',
+        testCase: 'Login validates credentials',
+        testKey: 'APP-0001',
+      },
+    ]);
+    createTestCase.mockResolvedValue({ ok: true, id: 'new1' });
+    const req = new Request(`http://x?force=true`, {
+      method: 'POST',
+      body: JSON.stringify({
+        testCase: 'Login validates credentials',
+        applicationId: 'app1',
+        moduleId: 'mod1',
+      }),
+    });
+    const res = await POST(req, PARAMS);
+    expect(res.status).toBe(201);
+    expect(createTestCase).toHaveBeenCalled();
+    expect(findPotentialDuplicates).not.toHaveBeenCalled();
   });
 });

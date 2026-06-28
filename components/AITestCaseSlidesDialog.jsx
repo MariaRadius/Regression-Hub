@@ -877,24 +877,49 @@ export default function AITestCaseSlidesDialog({
         }))
         .filter((s) => s._decision === 'approved');
 
-      await Promise.all(
+      const outcomes = await Promise.allSettled(
         approved.map((draft) =>
-          createTestCaseForRelease(releaseId, {
-            applicationId,
-            moduleId,
-            testCase: draft.testCase,
-            preconditions: draft.preconditions,
-            steps: draft.steps,
-            expectedResult: draft.expectedResult,
-            priority: draft.priority,
-            type: draft.type,
-            jiraStory: storyKey,
-          }),
+          createTestCaseForRelease(
+            releaseId,
+            {
+              applicationId,
+              moduleId,
+              testCase: draft.testCase,
+              preconditions: draft.preconditions,
+              steps: draft.steps,
+              expectedResult: draft.expectedResult,
+              priority: draft.priority,
+              type: draft.type,
+              jiraStory: storyKey,
+            },
+            { suppressToastForStatus: [409] },
+          ),
         ),
       );
-      advanceOrFinish(approved.length);
-    } catch (err) {
-      setCreateError(err.message);
+
+      const created = outcomes.filter((o) => o.status === 'fulfilled').length;
+      const skippedDupes = outcomes.filter(
+        (o) => o.status === 'rejected' && o.reason?.status === 409,
+      ).length;
+      const failures = outcomes.filter(
+        (o) => o.status === 'rejected' && o.reason?.status !== 409,
+      );
+
+      if (failures.length > 0) {
+        setCreateError(
+          failures[0].reason?.message ?? 'Failed to create some test cases',
+        );
+        return;
+      }
+
+      if (skippedDupes > 0 && created === 0) {
+        setCreateError(
+          `All ${skippedDupes} approved test case${skippedDupes > 1 ? 's' : ''} already exist (duplicates). Skip this story or edit the cases before creating.`,
+        );
+        return;
+      }
+
+      advanceOrFinish(created);
     } finally {
       setCreating(false);
     }

@@ -1,6 +1,7 @@
 'use client';
 import CloseIcon from '@mui/icons-material/Close';
 import {
+  Alert,
   Button,
   Checkbox,
   Dialog,
@@ -93,6 +94,8 @@ export default function TestCaseDialog({
   const [creatingModule, setCreatingModule] = useState(false);
   const newModuleInputRef = useRef(null);
 
+  const [dupeWarning, setDupeWarning] = useState(null);
+
   const isOpen = isEdit ? true : open;
   const formId = isEdit ? 'edit-test-case-form' : 'add-test-case-form';
   const jiraStoryError = Boolean(
@@ -130,7 +133,7 @@ export default function TestCaseDialog({
     }
   }
 
-  async function handleSave(e) {
+  async function handleSave(e, { force = false } = {}) {
     e?.preventDefault?.();
     if (jiraStoryError) return;
     if (!isEdit && (!form.applicationId || !form.moduleId)) {
@@ -138,6 +141,7 @@ export default function TestCaseDialog({
       return;
     }
     setSaving(true);
+    setDupeWarning(null);
     try {
       if (isEdit) {
         const applicationName =
@@ -162,16 +166,23 @@ export default function TestCaseDialog({
           (a) => a._id === form.applicationId,
         )?.name;
         const moduleName = modules.find((m) => m._id === form.moduleId)?.name;
-        await createTestCaseForRelease(releaseId, {
-          ...form,
-          applicationName,
-          moduleName,
-        });
+        await createTestCaseForRelease(
+          releaseId,
+          { ...form, applicationName, moduleName },
+          {
+            ...(force ? { params: { force: 'true' } } : {}),
+            suppressToastForStatus: [409],
+          },
+        );
         showToast('Test case added', 'success');
         onSuccess();
       }
     } catch (err) {
-      showToast(err.message || 'Failed to save', 'error');
+      if (err.status === 409 && err.payload?.duplicates?.length) {
+        setDupeWarning(err.payload.duplicates);
+      } else {
+        showToast(err.message || 'Failed to save', 'error');
+      }
     } finally {
       setSaving(false);
     }
@@ -221,6 +232,42 @@ export default function TestCaseDialog({
       </DialogTitle>
       <form id={formId} onSubmit={handleSave}>
         <DialogContent dividers>
+          {dupeWarning && (
+            <Alert
+              severity='warning'
+              sx={{ mb: 1.75 }}
+              action={
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <Button
+                    size='small'
+                    color='warning'
+                    variant='outlined'
+                    onClick={() => handleSave(null, { force: true })}
+                    disabled={saving}
+                  >
+                    Create anyway
+                  </Button>
+                  <Button size='small' onClick={() => setDupeWarning(null)}>
+                    Cancel
+                  </Button>
+                </Stack>
+              }
+            >
+              <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                Possible duplicate detected
+              </Typography>
+              {dupeWarning.map((d) => (
+                <Typography key={d.id} variant='body2'>
+                  {d.testKey ? `${d.testKey}: ` : ''}
+                  {d.testCase}
+                </Typography>
+              ))}
+            </Alert>
+          )}
           {/* Application, Module, Priority, Jira Story */}
           <Grid container spacing={1.75} sx={{ mb: 1.75 }}>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
