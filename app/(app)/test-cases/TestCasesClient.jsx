@@ -1,6 +1,7 @@
 'use client';
 
 import { Alert, Button, Skeleton, Stack } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import {
   Suspense,
   useCallback,
@@ -12,7 +13,7 @@ import {
 import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import JiraDraftReviewDialog from '@/components/JiraDraftReviewDialog';
 import PageHeader from '@/components/PageHeader';
-import ToastProvider, { showToast } from '@/components/Toast';
+import ToastProvider from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { useTestCaseFilters } from '@/hooks/useTestCaseFilters';
 import { useTestCaseKeyNav } from '@/hooks/useTestCaseKeyNav';
@@ -38,6 +39,7 @@ import TestCaseList from './master-detail/TestCaseList';
 function TestCasesPage({ user, aiConfigured }) {
   const { releaseId, environment, environments, activeRelease } =
     useReleaseEnv();
+  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const isArchived = !!activeRelease?.archived;
 
   const [cases, setCases] = useState([]);
@@ -466,17 +468,28 @@ function TestCasesPage({ user, aiConfigured }) {
         onClose={() => setShowAiDialog(false)}
         onSuccess={(count) => {
           setShowAiDialog(false);
-          showToast(
+          const newestFirst = { sortBy: 'createdAt', sortDir: 'desc' };
+          setSort(newestFirst);
+          pagination.setPage(DEFAULT_PAGE);
+          enqueueSnackbar(
             `${count} test case${count !== 1 ? 's' : ''} created`,
-            'success',
+            {
+              variant: 'success',
+              persist: true,
+              action: (id) => (
+                <Button
+                  size='small'
+                  sx={{ color: 'inherit', fontWeight: 600 }}
+                  onClick={() => {
+                    closeSnackbar(id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  View test cases
+                </Button>
+              ),
+            },
           );
-          fetchPage({
-            active: filters.active,
-            page: pagination.page,
-            size: pagination.size,
-            rid: releaseId,
-            env: environment,
-          });
         }}
       />
     </Stack>
