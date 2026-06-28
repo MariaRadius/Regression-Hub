@@ -10,7 +10,11 @@ export const GET = withTeam(async (_req, _ctx, { teamId, db }) => {
   return NextResponse.json({
     ...rest,
     aiConfigured: isAiConfigured(settings),
-    jiraConfigured: isJiraConfigured(),
+    jiraConfigured: isJiraConfigured({
+      jiraBaseUrl: settings.jiraBaseUrl,
+      jiraEmail: settings.jiraEmail,
+      jiraApiToken: settings.jiraApiToken,
+    }),
     // Prefer a team-level Jira base URL if configured; otherwise fall back
     // to the server env var. Base URL is not a secret — the client needs it
     // to link created issues.

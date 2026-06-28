@@ -3,6 +3,7 @@ import { Checkbox, FormControlLabel, Grid, TextField } from '@mui/material';
 import { useState } from 'react';
 import { useQaUserList, useTeamSettings } from '@/hooks/useSharedData';
 import { buildJiraDrafts } from '@/lib/api/jira';
+import { updateTestCaseForRelease } from '@/lib/api/releases';
 import { bulkRecordResults } from '@/lib/api/results';
 import { JIRA_ISSUE_MODES, ROLES, STATUS } from '@/lib/constants';
 import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
@@ -80,6 +81,24 @@ export default function BulkFailModal({
       showToast(`Marked ${selection.length} as Fail`, 'success');
       // Auto mode: server already created — just report.
       toastJiraOutcome(res?.jira);
+
+      // Save jiraStory back onto test cases that don't already have one so the
+      // notification bell tracks this story for all test cases going forward
+      // (covers old/existing test cases from active and archived releases).
+      // Admin-only endpoint — QA failures are silently ignored.
+      if (jiraStory && JIRA_KEY_RE.test(jiraStory) && releaseId) {
+        const unlinked = selection.filter((s) => !s.jiraStory);
+        await Promise.allSettled(
+          unlinked.map((s) =>
+            updateTestCaseForRelease(
+              releaseId,
+              s.tcId,
+              { jiraStory },
+              { silentFailure: true },
+            ),
+          ),
+        );
+      }
 
       // Ask mode: fetch editable drafts and hand them to the review dialog.
       let jiraDrafts = null;

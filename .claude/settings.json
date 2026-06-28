@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit:*)",
             "command": "cp CLAUDE.md AGENTS.md && git add AGENTS.md 2>/dev/null || true",
+            "if": "Bash(git commit:*)",
             "shell": "bash",
             "statusMessage": "Syncing AGENTS.md from CLAUDE.md..."
           }
@@ -31,5 +31,10 @@
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const icons = require\\('@mui/icons-material'\\); console.log\\(['Notifications','Update','Close'].map\\(n => n + ': ' + \\(n in icons\\)\\)\\)\")"
+    ]
   }
 }

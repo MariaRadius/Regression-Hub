@@ -61,4 +61,16 @@ describe('GET /api/settings', () => {
     expect((await res.json()).jiraConfigured).toBe(true);
     vi.unstubAllEnvs();
   });
+
+  it('reports jiraConfigured true when credentials are saved in DB settings (no env vars)', async () => {
+    vi.unstubAllEnvs();
+    getTeamSettings.mockResolvedValue({
+      qaUsers: [],
+      jiraBaseUrl: 'https://example.atlassian.net',
+      jiraEmail: 'qa@example.com',
+      jiraApiToken: 'secret',
+    });
+    const res = await GET();
+    expect((await res.json()).jiraConfigured).toBe(true);
+  });
 });

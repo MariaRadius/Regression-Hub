@@ -49,6 +49,7 @@ export default function BulkModalRenderer({
     testKey: c.testKey,
     testCase: c.testCase,
     status: c.status,
+    jiraStory: c.jiraStory || '',
   });
 
   const selArr = singleActionId

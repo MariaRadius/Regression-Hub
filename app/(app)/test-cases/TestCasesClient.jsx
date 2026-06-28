@@ -12,6 +12,7 @@ import {
 } from 'react';
 import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import JiraDraftReviewDialog from '@/components/JiraDraftReviewDialog';
+import JiraStoryNotifications from '@/components/JiraStoryNotifications';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
@@ -250,26 +251,31 @@ function TestCasesPage({ user, aiConfigured }) {
           )
         }
         actions={
-          !isArchived && (
-            <Stack direction='row' spacing={1}>
-              {isAdmin && aiConfigured && (
+          <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+            <JiraStoryNotifications
+              onViewCases={(key) => filters.setFilter('jiraStory', key)}
+            />
+            {!isArchived && (
+              <>
+                {isAdmin && aiConfigured && (
+                  <Button
+                    variant='outlined'
+                    size='small'
+                    onClick={() => setShowAiDialog(true)}
+                  >
+                    Generate from Story
+                  </Button>
+                )}
                 <Button
-                  variant='outlined'
+                  variant='contained'
                   size='small'
-                  onClick={() => setShowAiDialog(true)}
+                  onClick={() => setShowAddModal(true)}
                 >
-                  Generate from Story
+                  + Add Test Case
                 </Button>
-              )}
-              <Button
-                variant='contained'
-                size='small'
-                onClick={() => setShowAddModal(true)}
-              >
-                + Add Test Case
-              </Button>
-            </Stack>
-          )
+              </>
+            )}
+          </Stack>
         }
       />
 

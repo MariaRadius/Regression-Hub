@@ -128,6 +128,8 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 
 **Jira integration (issue-on-Fail):** `GET /api/settings` includes `jiraIssueMode` (`off`/`ask`/`auto`) and `jiraConfigured` (true only when `JIRA_BASE_URL`+`JIRA_EMAIL`+`JIRA_API_TOKEN` env vars are set). The Fail dialog shows a "Create Jira issue" checkbox only when `jiraConfigured && jiraIssueMode === 'ask'`; ticking it opens a review dialog after the Fail is recorded (drafts from `POST /api/releases/[id]/jira-drafts`, creation via `POST /api/releases/[id]/jira-issues` — both admin+qa). Automatic mode creates server-side during result recording. Smoke runs use a dev env without Jira vars, so the checkbox and review dialog must be absent and no request may leave for `atlassian.net`. The admin settings form (`/admin`) gains a "Jira issue creation" select; changing it goes through `PATCH /api/admin/settings` (admin-only).
 
+**Jira story-watch notifications:** The Test Cases page header shows a bell icon (`JiraStoryNotifications`). On mount it calls `POST /api/jira/sync-story-watches` (withTeam — admin+qa) which batch-fetches Jira `updated` timestamps for all unique story keys linked to the team's test cases, stores them in `jiraStoryWatches` collection (throttled to once/hr), and returns stories where `jiraUpdatedAt > acknowledgedAt`. The badge count reflects unread updates; the popover lists affected story keys with "View test cases" (applies jiraStory filter) and dismiss actions. Dismiss calls `POST /api/jira/acknowledge-story` (withTeam). When Jira is unconfigured the sync returns `[]` silently — bell has no badge.
+
 ---
 
 ## Download surfaces — **all opt-in, skip by default**
