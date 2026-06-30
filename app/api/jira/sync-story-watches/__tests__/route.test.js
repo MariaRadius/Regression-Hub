@@ -64,6 +64,7 @@ beforeEach(() => {
   getTeamSettings.mockResolvedValue({
     jiraBaseUrl: 'https://example.atlassian.net',
     jiraApiToken: 'tok',
+    jiraSyncThrottleHours: 1,
   });
   isJiraConfigured.mockReturnValue(true);
 });
@@ -189,6 +190,29 @@ describe('POST /api/jira/sync-story-watches', () => {
 
     expect(getIssuesByKeys).toHaveBeenCalled();
     expect(body.stories[0].storyKey).toBe('SAP-1');
+  });
+
+  it('uses jiraSyncThrottleHours from settings to compute the throttle cutoff', async () => {
+    getTeamSettings.mockResolvedValue({
+      jiraBaseUrl: 'https://example.atlassian.net',
+      jiraApiToken: 'tok',
+      jiraSyncThrottleHours: 2,
+    });
+    listDistinctStoryKeys.mockResolvedValue(['SAP-1']);
+    // 90 min ago — within 2-hour window, should NOT refresh
+    const ninetyMinAgo = new Date(Date.now() - 90 * 60 * 1000);
+    listStoryWatches.mockResolvedValue([
+      {
+        storyKey: 'SAP-1',
+        jiraCheckedAt: ninetyMinAgo,
+        jiraUpdatedAt: new Date('2026-05-01T00:00:00Z'),
+        acknowledgedAt: null,
+      },
+    ]);
+
+    await POST(REQ, {});
+
+    expect(getIssuesByKeys).not.toHaveBeenCalled();
   });
 
   it('excludes stories where jiraUpdatedAt <= acknowledgedAt', async () => {

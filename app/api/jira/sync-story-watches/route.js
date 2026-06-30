@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import {
-  JIRA_STORY_SYNC_BATCH_LIMIT,
-  JIRA_SYNC_THROTTLE_MS,
-} from '@/lib/constants';
+import { JIRA_STORY_SYNC_BATCH_LIMIT } from '@/lib/constants';
 import {
   listDistinctStoryKeys,
   listStoryWatches,
@@ -46,7 +43,9 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
   const watches = await listStoryWatches(db, teamId);
   const watchMap = Object.fromEntries(watches.map((w) => [w.storyKey, w]));
 
-  const throttleCutoff = new Date(Date.now() - JIRA_SYNC_THROTTLE_MS);
+  const throttleCutoff = new Date(
+    Date.now() - settings.jiraSyncThrottleHours * 3_600_000,
+  );
   const keysToRefresh = force
     ? keys
     : keys.filter((k) => {
