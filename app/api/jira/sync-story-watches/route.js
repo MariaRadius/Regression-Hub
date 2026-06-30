@@ -14,7 +14,7 @@ import { withTeam } from '@/lib/server/withTeam';
  *
  * Checks Jira for updates to story keys linked to the team's test cases.
  * Throttled: only re-fetches from Jira when jiraCheckedAt is older than
- * JIRA_SYNC_THROTTLE_MS. Stale stories (jiraUpdatedAt > acknowledgedAt)
+ * jiraSyncThrottleHours (team setting, default 1 h). Stale stories (jiraUpdatedAt > acknowledgedAt)
  * are returned so the UI can surface notification badges.
  *
  * Open to all authenticated users (withTeam) — QA and admin both see the bell.
