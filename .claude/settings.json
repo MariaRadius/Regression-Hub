@@ -1,5 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const icons = require\\('@mui/icons-material'\\); console.log\\(['Notifications','Update','Close'].map\\(n => n + ': ' + \\(n in icons\\)\\)\\)\")",
+      "Bash(lsof -ti:3000)",
+      "Bash(sleep 3 && grep -a \"Ready in\\\\|Another next dev\\\\|Local:\" /tmp/smoke-dev.log 2>/dev/null | head -5)",
+      "Read(//private/tmp/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -31,10 +39,5 @@
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
-  },
-  "permissions": {
-    "allow": [
-      "Bash(node -e \"const icons = require\\('@mui/icons-material'\\); console.log\\(['Notifications','Update','Close'].map\\(n => n + ': ' + \\(n in icons\\)\\)\\)\")"
-    ]
   }
 }
