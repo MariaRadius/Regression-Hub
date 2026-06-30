@@ -76,9 +76,7 @@ describe('POST /api/releases/[id]/jira-drafts', () => {
 
     expect(res.status).toBe(200);
     expect(buildDraftsForFailures).toHaveBeenCalledWith(db, 't1', {
-      release: RELEASE,
-      environment: 'QA',
-      entries: [{ tcId: 'tc1', notes: 'Broke', testedBy: 'Alice' }],
+      entries: [{ tcId: 'tc1', notes: 'Broke' }],
     });
     expect(await res.json()).toEqual({
       drafts: [{ tcId: 'tc1', summary: 's', description: 'd' }],

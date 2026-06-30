@@ -46,11 +46,8 @@ export const POST = withTeam(
     const release = await getRelease(db, teamId, releaseId);
     validateEnvironment(release, environment);
 
-    const testedBy = session.user.name;
     const result = await buildDraftsForFailures(db, teamId, {
-      release,
-      environment,
-      entries: tcIds.map((tcId) => ({ tcId, notes, testedBy })),
+      entries: tcIds.map((tcId) => ({ tcId, notes })),
     });
 
     return NextResponse.json(result);
