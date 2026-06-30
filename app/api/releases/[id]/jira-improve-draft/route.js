@@ -43,10 +43,16 @@ export const POST = withTeam(async (request, _ctx, { teamId, db, session }) => {
     );
   }
 
-  const improved = await improveJiraIssueDraft(
-    { aiProvider: settings.aiProvider, aiApiKey: settings.aiApiKey },
-    { summary: parsed.data.summary, description: parsed.data.description },
-  );
-
-  return NextResponse.json(improved);
+  try {
+    const improved = await improveJiraIssueDraft(
+      { aiProvider: settings.aiProvider, aiApiKey: settings.aiApiKey },
+      { summary: parsed.data.summary, description: parsed.data.description },
+    );
+    return NextResponse.json(improved);
+  } catch (err) {
+    throw new ApiError(
+      502,
+      err?.message ?? 'AI improvement failed — check your AI provider settings',
+    );
+  }
 });
