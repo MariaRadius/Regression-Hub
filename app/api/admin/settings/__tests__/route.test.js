@@ -104,4 +104,23 @@ describe('PATCH /api/admin/settings', () => {
     const res = await PATCH(makeRequest({ jiraIssueMode: 'always' }));
     expect(res.status).toBe(400);
   });
+
+  it('saves a valid jiraSyncThrottleHours', async () => {
+    updateTeamSettings.mockResolvedValue(undefined);
+    const res = await PATCH(makeRequest({ jiraSyncThrottleHours: 2 }));
+    expect(res.status).toBe(200);
+    expect(updateTeamSettings).toHaveBeenCalledWith(db, 't1', {
+      jiraSyncThrottleHours: 2,
+    });
+  });
+
+  it('rejects jiraSyncThrottleHours below 1', async () => {
+    const res = await PATCH(makeRequest({ jiraSyncThrottleHours: 0 }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects jiraSyncThrottleHours above 24', async () => {
+    const res = await PATCH(makeRequest({ jiraSyncThrottleHours: 25 }));
+    expect(res.status).toBe(400);
+  });
 });

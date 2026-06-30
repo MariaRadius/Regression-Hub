@@ -22,6 +22,7 @@ const patchBodySchema = z.object({
   jiraApiToken: z.string().trim().nullable().optional(),
   aiProvider: z.enum(Object.values(AI_PROVIDERS)).nullable().optional(),
   aiApiKey: z.string().trim().optional(),
+  jiraSyncThrottleHours: z.number().int().min(1).max(24).optional(),
 });
 
 const SETTING_LABELS = {
@@ -34,6 +35,7 @@ const SETTING_LABELS = {
   jiraApiToken: 'Jira API token',
   aiProvider: 'AI provider',
   aiApiKey: 'AI API key',
+  jiraSyncThrottleHours: 'Jira sync throttle',
 };
 
 export const PATCH = withAdmin(
