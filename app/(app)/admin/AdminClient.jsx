@@ -268,6 +268,7 @@ export default function AdminClient({
     jiraBaseUrl: settings?.jiraBaseUrl ?? '',
     jiraEmail: settings?.jiraEmail ?? '',
     jiraApiToken: settings?.jiraApiToken ?? '',
+    jiraSyncThrottleHours: settings?.jiraSyncThrottleHours ?? 1,
     aiProvider: settings?.aiProvider ?? null,
     aiApiKey: settings?.aiApiKey ?? '',
   });
@@ -279,6 +280,7 @@ export default function AdminClient({
     jiraBaseUrl: settings?.jiraBaseUrl ?? '',
     jiraEmail: settings?.jiraEmail ?? '',
     jiraApiToken: settings?.jiraApiToken ?? '',
+    jiraSyncThrottleHours: settings?.jiraSyncThrottleHours ?? 1,
     aiProvider: settings?.aiProvider ?? null,
     aiApiKey: settings?.aiApiKey ?? '',
   }));
@@ -294,6 +296,8 @@ export default function AdminClient({
     (dashboardSettings.jiraEmail || '') !== (savedSettings.jiraEmail || '') ||
     (dashboardSettings.jiraApiToken || '') !==
       (savedSettings.jiraApiToken || '') ||
+    Number(dashboardSettings.jiraSyncThrottleHours) !==
+      Number(savedSettings.jiraSyncThrottleHours) ||
     (dashboardSettings.aiProvider ?? null) !==
       (savedSettings.aiProvider ?? null) ||
     (dashboardSettings.aiApiKey || '') !== (savedSettings.aiApiKey || '');
@@ -374,6 +378,7 @@ export default function AdminClient({
         jiraBaseUrl: dashboardSettings.jiraBaseUrl || undefined,
         jiraEmail: dashboardSettings.jiraEmail || undefined,
         jiraApiToken: dashboardSettings.jiraApiToken || undefined,
+        jiraSyncThrottleHours: Number(dashboardSettings.jiraSyncThrottleHours),
         aiProvider: dashboardSettings.aiProvider,
         aiApiKey: dashboardSettings.aiApiKey || undefined,
       });
@@ -384,6 +389,7 @@ export default function AdminClient({
         jiraBaseUrl: dashboardSettings.jiraBaseUrl,
         jiraEmail: dashboardSettings.jiraEmail,
         jiraApiToken: dashboardSettings.jiraApiToken,
+        jiraSyncThrottleHours: dashboardSettings.jiraSyncThrottleHours,
         aiProvider: dashboardSettings.aiProvider,
         aiApiKey: dashboardSettings.aiApiKey,
       });
@@ -702,6 +708,23 @@ export default function AdminClient({
                       }))
                     }
                     helperText='Atlassian account email used for API access'
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size='small'
+                    type='number'
+                    label='Sync throttle (hours)'
+                    value={dashboardSettings.jiraSyncThrottleHours}
+                    onChange={(e) =>
+                      setDashboardSettings((prev) => ({
+                        ...prev,
+                        jiraSyncThrottleHours: e.target.value,
+                      }))
+                    }
+                    slotProps={{ htmlInput: { min: 1, max: 24 } }}
+                    helperText='How often Jira story data is re-fetched (1–24 hours)'
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }}>
