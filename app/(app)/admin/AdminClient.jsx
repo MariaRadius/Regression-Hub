@@ -1,5 +1,6 @@
 'use client';
 
+import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
@@ -51,7 +52,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider, { showToast } from '@/components/Toast';
 import { listAdminActivity } from '@/lib/api/admin';
-import { updateApplication } from '@/lib/api/applications';
+import { createApplication, updateApplication } from '@/lib/api/applications';
 import { updateAdminSettings } from '@/lib/api/settings';
 import { resetTeamTestCases } from '@/lib/api/testCases';
 import {
@@ -233,6 +234,7 @@ function ActivityRow({ entry }) {
  * "Clear All Data" action that was previously misplaced on the Test Cases page.
  */
 const PREFIX_RE = /^[A-Z0-9]{2,5}$/;
+const PREFIX_CREATE_RE = /^[A-Z0-9]{3}$/;
 
 export default function AdminClient({
   user,
@@ -310,6 +312,13 @@ export default function AdminClient({
   );
   const [prefixSaving, setPrefixSaving] = useState({});
   const [prefixConfirm, setPrefixConfirm] = useState(null); // { app, newInitial }
+  const [newAppOpen, setNewAppOpen] = useState(false);
+  const [newApp, setNewApp] = useState({
+    name: '',
+    prefix: '',
+    prefixTouched: false,
+  });
+  const [newAppSaving, setNewAppSaving] = useState(false);
 
   function requestPrefixSave(app) {
     setPrefixConfirm({ app, newInitial: prefixDrafts[app._id] });
@@ -348,6 +357,57 @@ export default function AdminClient({
       }
     } finally {
       setPrefixSaving((prev) => ({ ...prev, [app._id]: false }));
+    }
+  }
+
+  function handleNewAppNameChange(value) {
+    const derived = value
+      .replace(/[^A-Z0-9]/gi, '')
+      .toUpperCase()
+      .slice(0, 3);
+    setNewApp((prev) => ({
+      name: value,
+      prefix: prev.prefixTouched ? prev.prefix : derived,
+      prefixTouched: prev.prefixTouched,
+    }));
+  }
+
+  function handleNewAppPrefixChange(value) {
+    setNewApp((prev) => ({
+      ...prev,
+      prefix: value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      prefixTouched: true,
+    }));
+  }
+
+  function closeNewAppDialog() {
+    setNewAppOpen(false);
+    setNewApp({ name: '', prefix: '', prefixTouched: false });
+  }
+
+  async function createApp() {
+    setNewAppSaving(true);
+    try {
+      const created = await createApplication({
+        name: newApp.name.trim(),
+        initial: newApp.prefix,
+      });
+      setApplications((prev) => [created, ...prev]);
+      setPrefixDrafts((prev) => ({
+        ...prev,
+        [created._id]: created.initial ?? '',
+      }));
+      closeNewAppDialog();
+      showToast('Application created', 'success');
+    } catch (err) {
+      const msg = err?.message ?? '';
+      if (msg.toLowerCase().includes('already in use')) {
+        showToast('Prefix already in use', 'error');
+      } else {
+        showToast('Failed to create application', 'error');
+      }
+    } finally {
+      setNewAppSaving(false);
     }
   }
 
@@ -951,6 +1011,16 @@ export default function AdminClient({
                     SAP-0001)
                   </Typography>
                 </Stack>
+                <IconButton
+                  size='small'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNewAppOpen(true);
+                  }}
+                  sx={{ color: 'primary.main', flexShrink: 0 }}
+                >
+                  <AddIcon fontSize='small' />
+                </IconButton>
               </Stack>
             </AccordionSummary>
             <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 0.5 }}>
@@ -1064,6 +1134,72 @@ export default function AdminClient({
           </Accordion>
         </Card>
       </Stack>
+
+      <Dialog
+        open={newAppOpen}
+        onClose={closeNewAppDialog}
+        maxWidth='xs'
+        fullWidth
+      >
+        <DialogTitle>New Application</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              fullWidth
+              size='small'
+              label='Application Name'
+              autoFocus
+              value={newApp.name}
+              onChange={(e) => handleNewAppNameChange(e.target.value)}
+              disabled={newAppSaving}
+            />
+            <TextField
+              fullWidth
+              size='small'
+              label='Prefix'
+              value={newApp.prefix}
+              onChange={(e) => handleNewAppPrefixChange(e.target.value)}
+              disabled={newAppSaving}
+              slotProps={{ htmlInput: { maxLength: 3 } }}
+              error={
+                newApp.prefix.length > 0 &&
+                !PREFIX_CREATE_RE.test(newApp.prefix)
+              }
+              helperText={
+                newApp.prefix.length > 0 &&
+                !PREFIX_CREATE_RE.test(newApp.prefix)
+                  ? 'Exactly 3 letters or digits'
+                  : ' '
+              }
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant='outlined'
+            onClick={closeNewAppDialog}
+            disabled={newAppSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant='contained'
+            onClick={createApp}
+            disabled={
+              !newApp.name.trim() ||
+              !PREFIX_CREATE_RE.test(newApp.prefix) ||
+              newAppSaving
+            }
+            startIcon={
+              newAppSaving ? (
+                <CircularProgress size={14} color='inherit' />
+              ) : undefined
+            }
+          >
+            {newAppSaving ? 'Creating…' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Stack spacing={2}>
         <Stack direction='row' spacing={1.5} sx={{ alignItems: 'center' }}>
