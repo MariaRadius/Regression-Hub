@@ -15,8 +15,8 @@ import {
   Typography,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import { acknowledgeStory, syncStoryWatches } from '@/lib/api/jira';
+import { useCallback, useState } from 'react';
+import { useJiraStories } from '@/hooks/useJiraStories';
 
 /**
  * Notification bell for Jira story updates. Placed in the test cases page
@@ -26,49 +26,17 @@ import { acknowledgeStory, syncStoryWatches } from '@/lib/api/jira';
 export default function JiraStoryNotifications({ onViewCases }) {
   const router = useRouter();
   const [anchorEl, setAnchorEl] = useState(null);
-  const [staleStories, setStaleStories] = useState([]);
-  const [checking, setChecking] = useState(false);
-  const [jiraError, setJiraError] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    syncStoryWatches().then(({ stories, jiraError: err }) => {
-      if (!cancelled) {
-        setStaleStories(stories ?? []);
-        setJiraError(err ?? null);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleCheckNow = useCallback(async () => {
-    setChecking(true);
-    setJiraError(null);
-    try {
-      const { stories, jiraError: err } = await syncStoryWatches({
-        force: true,
-      });
-      setStaleStories(stories ?? []);
-      setJiraError(err ?? null);
-    } finally {
-      setChecking(false);
-    }
-  }, []);
+  const {
+    staleStories,
+    checking,
+    jiraError,
+    handleCheckNow,
+    handleDismiss,
+    handleDismissAll,
+  } = useJiraStories();
 
   const open = Boolean(anchorEl);
   const count = staleStories.length;
-
-  const handleDismiss = useCallback(async (storyKey) => {
-    await acknowledgeStory({ storyKey });
-    setStaleStories((prev) => prev.filter((s) => s.storyKey !== storyKey));
-  }, []);
-
-  const handleDismissAll = useCallback(async () => {
-    await acknowledgeStory({ all: true });
-    setStaleStories([]);
-  }, []);
 
   const handleViewCases = useCallback(
     (storyKey) => {
