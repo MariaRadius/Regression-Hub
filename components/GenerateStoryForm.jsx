@@ -42,6 +42,7 @@ export default function GenerateStoryForm({
   initialStoryKey,
   onGenerate,
   aiConfigured,
+  releaseSelected = true,
 }) {
   const [storyKeysRaw, setStoryKeysRaw] = useState(initialStoryKey || '');
   const [selectedApps, setSelectedApps] = useState([]);
@@ -72,7 +73,8 @@ export default function GenerateStoryForm({
     parsedKeys.length > 0 &&
     selectedApps.length > 0 &&
     !!selectedModuleId &&
-    invalidKeys.length === 0;
+    invalidKeys.length === 0 &&
+    releaseSelected;
 
   function handleAppsChange(_, newApps) {
     if (newApps.some((a) => a._id === '__new__')) {
@@ -287,9 +289,11 @@ export default function GenerateStoryForm({
 
           <Tooltip
             title={
-              !aiConfigured
-                ? 'Configure an AI provider in Admin → Settings to enable this feature'
-                : ''
+              !releaseSelected
+                ? 'Select a release from the top bar to use this feature'
+                : !aiConfigured
+                  ? 'Configure an AI provider in Admin → Settings to enable this feature'
+                  : ''
             }
           >
             <span>

@@ -3,6 +3,7 @@
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import SearchIcon from '@mui/icons-material/Search';
 import {
+  Alert,
   Button,
   Chip,
   Grid,
@@ -102,6 +103,12 @@ export default function GenerateClient({
     <Stack spacing={3} sx={{ p: { xs: 2, sm: 3 } }}>
       <PageHeader eyebrow='GENERATE' title='Generate Test Cases' />
 
+      {!releaseId && (
+        <Alert severity='warning'>
+          Select a release from the top bar to enable generation.
+        </Alert>
+      )}
+
       <Grid container spacing={2}>
         <Grid size={6}>
           <JiraStoriesPanel onSelectStory={handleSelectStory} />
@@ -115,6 +122,7 @@ export default function GenerateClient({
             initialStoryKey={selectedStoryKey}
             onGenerate={handleGenerate}
             aiConfigured={aiConfigured}
+            releaseSelected={!!releaseId}
           />
         </Grid>
       </Grid>
