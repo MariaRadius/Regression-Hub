@@ -135,8 +135,11 @@ function SetupPhase({
         <Stack spacing={2}>
           {error && <Alert severity='error'>{error}</Alert>}
           <Alert severity='info' icon={<AutoAwesomeIcon />}>
-            Enter Jira story keys and select applications. The AI generates test
-            cases for each story × application pair, one at a time.
+            Enter one or more Jira story keys and select the applications to
+            test against. For related stories that span multiple apps — e.g. an
+            SSO story tested across Superadmin, Practice Portal, and EYEVIA —
+            the AI generates test cases for each story × app pair, one at a
+            time.
           </Alert>
 
           <TextField
