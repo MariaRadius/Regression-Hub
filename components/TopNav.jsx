@@ -2,6 +2,7 @@
 
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -43,6 +44,7 @@ async function handleSignOut() {
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/test-cases', label: 'Test Cases', Icon: BugReportIcon },
+  { href: '/generate', label: 'Generate', Icon: AutoAwesomeIcon },
   {
     href: '/releases',
     label: 'Releases',
