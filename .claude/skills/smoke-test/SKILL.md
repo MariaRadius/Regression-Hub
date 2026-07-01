@@ -92,8 +92,8 @@ Use `$SMOKE_PORT` for all URLs in the phases below. Do not hard-code port number
 
 ## Route inventory
 
-**All-role routes (3)** — both admin and QA walks visit these:
-`/dashboard`, `/test-cases`, `/reports`
+**All-role routes (4)** — both admin and QA walks visit these:
+`/dashboard`, `/test-cases`, `/generate`, `/reports`
 
 **Admin-only routes (3)** — admin walk only:
 `/admin`, `/users`, `/import-cases`
@@ -115,6 +115,7 @@ On `/admin`, the Activity Logs drawer stays closed until the admin clicks `View 
 | -------------- | ----- | --------------- |
 | `/releases`    | PASS  | REDIRECT → `/dashboard` |
 | `/test-cases`  | PASS  | PASS            |
+| `/generate`    | PASS  | PASS            |
 | `/reports`     | PASS  | PASS            |
 | `/import-cases`| PASS  | REDIRECT → `/dashboard` |
 | `/admin`       | PASS  | REDIRECT → `/dashboard` |
@@ -128,7 +129,7 @@ Tester-visible assignment and result dialogs also fetch `GET /api/users?role=qa`
 
 **Jira integration (issue-on-Fail):** `GET /api/settings` includes `jiraIssueMode` (`off`/`ask`/`auto`) and `jiraConfigured` (true only when `JIRA_BASE_URL`+`JIRA_EMAIL`+`JIRA_API_TOKEN` env vars are set). The Fail dialog shows a "Create Jira issue" checkbox only when `jiraConfigured && jiraIssueMode === 'ask'`; ticking it opens a review dialog after the Fail is recorded (drafts from `POST /api/releases/[id]/jira-drafts`, creation via `POST /api/releases/[id]/jira-issues` — both admin+qa). Automatic mode creates server-side during result recording. Smoke runs use a dev env without Jira vars, so the checkbox and review dialog must be absent and no request may leave for `atlassian.net`. The admin settings form (`/admin`) gains a "Jira issue creation" select; changing it goes through `PATCH /api/admin/settings` (admin-only).
 
-**Jira story-watch notifications:** The Test Cases page header shows a bell icon (`JiraStoryNotifications`). On mount it calls `POST /api/jira/sync-story-watches` (withTeam — admin+qa) which batch-fetches Jira `updated` timestamps for all unique story keys linked to the team's test cases, stores them in `jiraStoryWatches` collection (throttled to once/hr), and returns stories where `jiraUpdatedAt > acknowledgedAt`. The badge count reflects unread updates; the popover lists affected story keys with "View test cases" (applies jiraStory filter) and dismiss actions. Dismiss calls `POST /api/jira/acknowledge-story` (withTeam). When Jira is unconfigured the sync returns `[]` silently — bell has no badge.
+**Jira story-watch notifications:** The `/generate` page left panel (`JiraStoriesPanel`) shows stale Jira story updates. On mount it calls `POST /api/jira/sync-story-watches` (withTeam — admin+qa) which batch-fetches Jira `updated` timestamps for all unique story keys linked to the team's test cases, stores them in `jiraStoryWatches` collection (throttled to once/hr), and returns stories where `jiraUpdatedAt > acknowledgedAt`. Each story row has a "Generate →" button that pre-fills the story key in the `GenerateStoryForm` on the right panel. Dismiss calls `POST /api/jira/acknowledge-story` (withTeam). When Jira is unconfigured the sync returns `[]` silently — panel shows empty state. The bell icon is no longer on the test-cases page.
 
 ---
 
@@ -261,10 +262,10 @@ Before ending each authenticated walk, sign out from the profile menu and verify
 2. A signed-out confirmation message is visible.
 3. One browser Back action does not reveal protected content; accept either staying on `/login` or a brief reload that returns to `/login?reason=auth-required`.
 
-#### Walk all 8 admin routes
+#### Walk all 9 admin routes
 
 For each route in order:
-`/dashboard`, `/test-cases`, `/releases`, `/reports`, `/admin`, `/users`, `/import-cases`
+`/dashboard`, `/test-cases`, `/generate`, `/releases`, `/reports`, `/admin`, `/users`, `/import-cases`
 
 Per route:
 
@@ -385,10 +386,10 @@ new_page url="http://localhost:$SMOKE_PORT/login" isolatedContext="qa-smoke"
 
 Confirm URL is `/dashboard`. If not, fail "QA sign-in failed".
 
-#### Walk 4 QA-visible routes
+#### Walk 5 QA-visible routes
 
 Same per-route check as admin walk (navigate → console errors → HTTP 200):
-`/dashboard`, `/test-cases`, `/releases`, `/reports`
+`/dashboard`, `/test-cases`, `/generate`, `/releases`, `/reports`
 
 Record same fields as admin walk.
 
@@ -734,6 +735,7 @@ Assemble and print the following JSON (fill in real values):
   "adminWalk": [
     { "route": "/dashboard",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-cases",   "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
+    { "route": "/generate",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/releases",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/admin",        "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
@@ -743,6 +745,7 @@ Assemble and print the following JSON (fill in real values):
   "qaWalk": [
     { "route": "/dashboard",    "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/test-cases",   "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
+    { "route": "/generate",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/releases",     "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" },
     { "route": "/reports",      "httpCode": 200, "consoleErrors": 0, "consoleWarns": 0, "status": "PASS" }
   ],
