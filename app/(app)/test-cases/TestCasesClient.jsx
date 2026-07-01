@@ -1,7 +1,6 @@
 'use client';
 
 import { Alert, Button, Skeleton, Stack } from '@mui/material';
-import { useSnackbar } from 'notistack';
 import {
   Suspense,
   useCallback,
@@ -10,9 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import JiraDraftReviewDialog from '@/components/JiraDraftReviewDialog';
-import JiraStoryNotifications from '@/components/JiraStoryNotifications';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
@@ -37,10 +34,9 @@ import TestCaseDetailPanel from './master-detail/TestCaseDetailPanel';
 import TestCaseDialog from './master-detail/TestCaseDialog';
 import TestCaseList from './master-detail/TestCaseList';
 
-function TestCasesPage({ user, aiConfigured }) {
+function TestCasesPage({ user }) {
   const { releaseId, environment, environments, activeRelease } =
     useReleaseEnv();
-  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const isArchived = !!activeRelease?.archived;
 
   const [cases, setCases] = useState([]);
@@ -58,7 +54,6 @@ function TestCasesPage({ user, aiConfigured }) {
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showAiDialog, setShowAiDialog] = useState(false);
 
   // Edit modal
   const [editTc, setEditTc] = useState(null);
@@ -252,28 +247,14 @@ function TestCasesPage({ user, aiConfigured }) {
         }
         actions={
           <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
-            <JiraStoryNotifications
-              onViewCases={(key) => filters.setFilter('jiraStory', key)}
-            />
             {!isArchived && (
-              <>
-                {isAdmin && aiConfigured && (
-                  <Button
-                    variant='outlined'
-                    size='small'
-                    onClick={() => setShowAiDialog(true)}
-                  >
-                    Generate from Story
-                  </Button>
-                )}
-                <Button
-                  variant='contained'
-                  size='small'
-                  onClick={() => setShowAddModal(true)}
-                >
-                  + Add Test Case
-                </Button>
-              </>
+              <Button
+                variant='contained'
+                size='small'
+                onClick={() => setShowAddModal(true)}
+              >
+                + Add Test Case
+              </Button>
             )}
           </Stack>
         }
@@ -461,51 +442,14 @@ function TestCasesPage({ user, aiConfigured }) {
           }}
         />
       )}
-
-      <AITestCaseSlidesDialog
-        open={showAiDialog}
-        releaseId={releaseId}
-        applications={applications}
-        modules={modules}
-        onApplicationCreated={(app) =>
-          setApplications((prev) => [...prev, app])
-        }
-        onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
-        onClose={() => setShowAiDialog(false)}
-        onSuccess={(count) => {
-          setShowAiDialog(false);
-          const newestFirst = { sortBy: 'createdAt', sortDir: 'desc' };
-          setSort(newestFirst);
-          pagination.setPage(DEFAULT_PAGE);
-          enqueueSnackbar(
-            `${count} test case${count !== 1 ? 's' : ''} created`,
-            {
-              variant: 'success',
-              persist: true,
-              action: (id) => (
-                <Button
-                  size='small'
-                  sx={{ color: 'inherit', fontWeight: 600 }}
-                  onClick={() => {
-                    closeSnackbar(id);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                >
-                  View test cases
-                </Button>
-              ),
-            },
-          );
-        }}
-      />
     </Stack>
   );
 }
 
-export default function TestCasesClient({ user, aiConfigured }) {
+export default function TestCasesClient({ user }) {
   return (
     <Suspense>
-      <TestCasesPage user={user} aiConfigured={aiConfigured} />
+      <TestCasesPage user={user} />
     </Suspense>
   );
 }
