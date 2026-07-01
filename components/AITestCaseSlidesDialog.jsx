@@ -382,8 +382,10 @@ function SlidePhase({
   edits,
   setEdits,
   storyKey,
-  currentStoryIndex,
-  totalStories,
+  appName,
+  moduleName,
+  currentCombIndex,
+  totalCombinations,
   creating,
   createError,
   onCreateApproved,
@@ -433,16 +435,18 @@ function SlidePhase({
       <DialogContent sx={{ pt: 1 }}>
         <Stack spacing={2}>
           <Stack spacing={0.5}>
-            {totalStories > 1 && (
+            {totalCombinations > 1 && (
               <Typography variant='caption' color='text.secondary'>
-                Story {currentStoryIndex + 1} of {totalStories}:{' '}
-                <strong>{storyKey}</strong>
+                Combination {currentCombIndex + 1} of {totalCombinations}:{' '}
+                <strong>{storyKey}</strong> · {appName} · {moduleName}
               </Typography>
             )}
             <Stack direction='row' sx={{ justifyContent: 'space-between' }}>
               <Typography variant='caption' sx={{ color: 'text.secondary' }}>
-                {totalStories === 1 ? `${storyKey} — ` : ''}Test case{' '}
-                {currentIndex + 1} of {total}
+                {totalCombinations === 1
+                  ? `${storyKey} · ${appName} · ${moduleName} — `
+                  : ''}
+                Test case {currentIndex + 1} of {total}
               </Typography>
               <Typography variant='caption' sx={{ color: 'text.secondary' }}>
                 {approvedCount} approved
@@ -604,11 +608,13 @@ export default function AITestCaseSlidesDialog({
   onModuleCreated,
 }) {
   const [phase, setPhase] = useState('setup'); // 'setup' | 'generating' | 'slides'
+  // setup-phase state
   const [storyKeysRaw, setStoryKeysRaw] = useState('');
   const [selectedApps, setSelectedApps] = useState([]);
   const [selectedModuleId, setSelectedModuleId] = useState('');
+  // generation queue — built on Generate click, never reactive
   const combinationsRef = useRef([]);
-  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [currentCombIndex, setCurrentCombIndex] = useState(0);
   const [totalCreated, setTotalCreated] = useState(0);
   const [error, setError] = useState(null);
   // slides-phase state
@@ -616,6 +622,8 @@ export default function AITestCaseSlidesDialog({
   const [storyKey, setStoryKey] = useState('');
   const [applicationId, setApplicationId] = useState('');
   const [moduleId, setModuleId] = useState('');
+  const [appName, setAppName] = useState('');
+  const [moduleName, setModuleName] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [decisions, setDecisions] = useState({});
   const [edits, setEdits] = useState({});
@@ -629,7 +637,7 @@ export default function AITestCaseSlidesDialog({
     setSelectedApps([]);
     setSelectedModuleId('');
     combinationsRef.current = [];
-    setCurrentStoryIndex(0);
+    setCurrentCombIndex(0);
     setTotalCreated(0);
     setError(null);
     setCreateError(null);
@@ -637,13 +645,17 @@ export default function AITestCaseSlidesDialog({
     setDecisions({});
     setEdits({});
     setCurrentIndex(0);
+    setStoryKey('');
+    setApplicationId('');
+    setModuleId('');
+    setAppName('');
+    setModuleName('');
   }, [open]);
 
   const handleGenerateNext = useCallback(
     async (index) => {
-      const combinations = combinationsRef.current;
-      const { jiraStory: jiraStoryKey, app } = combinations[index];
-      setCurrentStoryIndex(index);
+      const combo = combinationsRef.current[index];
+      setCurrentCombIndex(index);
       setPhase('generating');
       setError(null);
       try {
@@ -652,15 +664,17 @@ export default function AITestCaseSlidesDialog({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jiraStory: jiraStoryKey }),
+            body: JSON.stringify({ jiraStory: combo.key }),
           },
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Generation failed');
         setSlides(data.testCases);
         setStoryKey(data.story.key);
-        setApplicationId(app._id);
-        setModuleId(selectedModuleId);
+        setApplicationId(combo.app._id);
+        setModuleId(combo.moduleId);
+        setAppName(combo.app.name);
+        setModuleName(combo.moduleName);
         setCurrentIndex(0);
         setDecisions({});
         setEdits({});
@@ -670,21 +684,37 @@ export default function AITestCaseSlidesDialog({
         setPhase('setup');
       }
     },
-    [releaseId, selectedModuleId],
+    [releaseId],
   );
+
+  function handleStartGeneration() {
+    const keys = parseStoryKeys(storyKeysRaw);
+    const modName = modules.find((m) => m._id === selectedModuleId)?.name ?? '';
+    combinationsRef.current = keys.flatMap((key) =>
+      selectedApps.map((app) => ({
+        key,
+        app,
+        moduleId: selectedModuleId,
+        moduleName: modName,
+      })),
+    );
+    setCurrentCombIndex(0);
+    setTotalCreated(0);
+    handleGenerateNext(0);
+  }
 
   const advanceOrFinish = useCallback(
     (addedCount) => {
       const newTotal = totalCreated + addedCount;
       setTotalCreated(newTotal);
-      const next = currentStoryIndex + 1;
+      const next = currentCombIndex + 1;
       if (next < combinationsRef.current.length) {
         handleGenerateNext(next);
       } else {
         onSuccess(newTotal);
       }
     },
-    [totalCreated, currentStoryIndex, handleGenerateNext, onSuccess],
+    [totalCreated, currentCombIndex, handleGenerateNext, onSuccess],
   );
 
   const handleCreateApproved = useCallback(async () => {
@@ -795,14 +825,7 @@ export default function AITestCaseSlidesDialog({
           applications={applications}
           modules={modules}
           error={error}
-          onGenerate={() => {
-            const keys = parseStoryKeys(storyKeysRaw);
-            const combos = keys.flatMap((jiraStory) =>
-              selectedApps.map((app) => ({ jiraStory, app })),
-            );
-            combinationsRef.current = combos;
-            handleGenerateNext(0);
-          }}
+          onGenerate={handleStartGeneration}
           onClose={onClose}
           onApplicationCreated={onApplicationCreated}
           onModuleCreated={onModuleCreated}
@@ -814,9 +837,15 @@ export default function AITestCaseSlidesDialog({
           <Stack spacing={2} sx={{ alignItems: 'center', py: 6 }}>
             <CircularProgress />
             <Typography color='text.secondary'>
-              Generating test cases for combination {currentStoryIndex + 1} of{' '}
-              {combinationsRef.current.length}…
+              Generating for {combinationsRef.current[currentCombIndex]?.key} ·{' '}
+              {combinationsRef.current[currentCombIndex]?.app.name}…
             </Typography>
+            {combinationsRef.current.length > 1 && (
+              <Typography variant='caption' color='text.secondary'>
+                Combination {currentCombIndex + 1} of{' '}
+                {combinationsRef.current.length}
+              </Typography>
+            )}
           </Stack>
         </DialogContent>
       )}
@@ -831,8 +860,10 @@ export default function AITestCaseSlidesDialog({
           edits={edits}
           setEdits={setEdits}
           storyKey={storyKey}
-          currentStoryIndex={currentStoryIndex}
-          totalStories={combinationsRef.current.length}
+          appName={appName}
+          moduleName={moduleName}
+          currentCombIndex={currentCombIndex}
+          totalCombinations={combinationsRef.current.length}
           creating={creating}
           createError={createError}
           onCreateApproved={handleCreateApproved}
