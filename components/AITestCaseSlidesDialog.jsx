@@ -1,24 +1,21 @@
 'use client';
 
-import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import DoDisturbIcon from '@mui/icons-material/DoDisturb';
 import {
   Alert,
+  Autocomplete,
   Button,
-  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   IconButton,
   LinearProgress,
   MenuItem,
@@ -31,6 +28,7 @@ import { createApplication } from '@/lib/api/applications';
 import { createModule } from '@/lib/api/modules';
 import { createTestCaseForRelease } from '@/lib/api/releases';
 import { deriveInitial } from '@/utils/appInitial';
+import { getInvalidKeys, parseStoryKeys } from '@/utils/jiraStories';
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const TYPES = [
@@ -39,17 +37,18 @@ const TYPES = [
   'Negative Test',
   'Security Test',
 ];
-const JIRA_KEY_RE = /^[A-Z]+-\d+$/;
-
-function StoryRow({
-  index,
-  total,
-  entry,
-  firstEntry,
+function SetupPhase({
+  storyKeysRaw,
+  onStoryKeysChange,
+  selectedApps,
+  onAppsChange,
+  selectedModuleId,
+  onModuleChange,
   applications,
   modules,
-  onChange,
-  onRemove,
+  error,
+  onGenerate,
+  onClose,
   onApplicationCreated,
   onModuleCreated,
 }) {
@@ -64,6 +63,33 @@ function StoryRow({
   const [moduleError, setModuleError] = useState(null);
   const newModuleInputRef = useRef(null);
 
+  const parsedKeys = parseStoryKeys(storyKeysRaw);
+  const invalidKeys = getInvalidKeys(storyKeysRaw);
+  const appIds = new Set(selectedApps.map((a) => a._id));
+  const availableModules = modules.filter((m) => appIds.has(m.applicationId));
+  const combinationCount = parsedKeys.length * selectedApps.length;
+  const allValid =
+    parsedKeys.length > 0 &&
+    selectedApps.length > 0 &&
+    !!selectedModuleId &&
+    invalidKeys.length === 0;
+
+  function handleAppsChange(_, newApps) {
+    if (newApps.some((a) => a._id === '__new__')) {
+      setNewAppName('');
+      setTimeout(() => newAppInputRef.current?.focus(), 50);
+      return;
+    }
+    onAppsChange(newApps);
+    if (selectedModuleId) {
+      const newAppIds = new Set(newApps.map((a) => a._id));
+      const stillValid = modules.some(
+        (m) => m._id === selectedModuleId && newAppIds.has(m.applicationId),
+      );
+      if (!stillValid) onModuleChange('');
+    }
+  }
+
   async function handleCreateApp() {
     if (!newAppName?.trim()) return;
     setCreatingApp(true);
@@ -74,7 +100,7 @@ function StoryRow({
         initial: newAppInitial.trim() || undefined,
       });
       onApplicationCreated(app);
-      onChange({ applicationId: app._id, moduleId: '' });
+      onAppsChange([...selectedApps, app]);
       setNewAppName(null);
       setNewAppInitial('');
     } catch (err) {
@@ -85,16 +111,16 @@ function StoryRow({
   }
 
   async function handleCreateModule() {
-    if (!newModuleName?.trim() || !entry.applicationId) return;
+    if (!newModuleName?.trim() || selectedApps.length === 0) return;
     setCreatingModule(true);
     setModuleError(null);
     try {
       const mod = await createModule({
         name: newModuleName.trim(),
-        applicationId: entry.applicationId,
+        applicationId: selectedApps[0]._id,
       });
       onModuleCreated(mod);
-      onChange({ moduleId: mod._id });
+      onModuleChange(mod._id);
       setNewModuleName(null);
     } catch (err) {
       setModuleError(err.message || 'Failed to create module');
@@ -103,382 +129,229 @@ function StoryRow({
     }
   }
 
-  const jiraStoryError = Boolean(
-    entry.jiraStory && !JIRA_KEY_RE.test(entry.jiraStory.trim()),
-  );
-
-  const canCopyFirst =
-    index > 0 && firstEntry.applicationId && firstEntry.moduleId;
-
-  const firstAppName = applications.find(
-    (a) => a._id === firstEntry.applicationId,
-  )?.name;
-  const firstModName = modules.find((m) => m._id === firstEntry.moduleId)?.name;
-
-  return (
-    <Stack
-      spacing={0}
-      sx={{
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: 1.5,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Row header */}
-      <Stack
-        direction='row'
-        sx={{
-          px: 2,
-          py: 0.75,
-          bgcolor: 'grey.50',
-          borderBottom: 1,
-          borderColor: 'divider',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
-          <Stack
-            sx={{
-              width: 22,
-              height: 22,
-              borderRadius: '50%',
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <Typography sx={{ fontSize: 11, fontWeight: 700, lineHeight: 1 }}>
-              {index + 1}
-            </Typography>
-          </Stack>
-          <Typography
-            variant='caption'
-            sx={{ fontWeight: 600, color: 'text.secondary' }}
-          >
-            Story {index + 1}
-          </Typography>
-        </Stack>
-        {total > 1 && (
-          <IconButton
-            size='small'
-            aria-label={`Remove story ${index + 1}`}
-            onClick={onRemove}
-            sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
-          >
-            <CloseIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        )}
-      </Stack>
-
-      {/* Row body */}
-      <Stack spacing={1.5} sx={{ p: 2 }}>
-        <TextField
-          label='Jira Story Key'
-          value={entry.jiraStory}
-          onChange={(e) => {
-            const raw = e.target.value;
-            const fromUrl = raw.match(/\/browse\/([A-Z]+-\d+)/i);
-            onChange({
-              jiraStory: fromUrl ? fromUrl[1].toUpperCase() : raw.toUpperCase(),
-            });
-          }}
-          placeholder='e.g. SCRUM-8'
-          size='small'
-          fullWidth
-          autoFocus={index === 0}
-          error={jiraStoryError}
-          helperText={jiraStoryError ? 'Use format PROJECT-123' : ' '}
-        />
-
-        {/* Same-as-Story-1 shortcut for rows 2+ */}
-        {index > 0 && (
-          <FormControlLabel
-            sx={{ mx: 0, mt: -0.5 }}
-            control={
-              <Checkbox
-                size='small'
-                checked={entry.sameAsFirst}
-                onChange={(e) => onChange({ sameAsFirst: e.target.checked })}
-                disabled={!canCopyFirst}
-              />
-            }
-            label={
-              <Stack
-                direction='row'
-                spacing={0.5}
-                sx={{ alignItems: 'center' }}
-              >
-                <ContentCopyOutlinedIcon
-                  sx={{ fontSize: 13, color: 'text.secondary' }}
-                />
-                <Typography variant='caption' color='text.secondary'>
-                  {canCopyFirst
-                    ? `Same as Story 1 — ${firstAppName} / ${firstModName}`
-                    : 'Same as Story 1 (fill Story 1 first)'}
-                </Typography>
-              </Stack>
-            }
-          />
-        )}
-
-        {/* App & Module — hidden when sameAsFirst is checked */}
-        {!entry.sameAsFirst && (
-          <>
-            <Stack spacing={0.75}>
-              <TextField
-                select
-                label='Application'
-                value={entry.applicationId}
-                onChange={(e) => {
-                  if (e.target.value === '__new__') {
-                    onChange({ applicationId: '', moduleId: '' });
-                    setNewAppName('');
-                    setNewAppInitial('');
-                    setNewModuleName(null);
-                    setTimeout(() => newAppInputRef.current?.focus(), 50);
-                  } else {
-                    onChange({ applicationId: e.target.value, moduleId: '' });
-                    setNewModuleName(null);
-                    setNewAppName(null);
-                  }
-                }}
-                size='small'
-                fullWidth
-                required
-                slotProps={{
-                  select: { displayEmpty: true },
-                  inputLabel: { shrink: true },
-                }}
-              >
-                <MenuItem value=''>Select application</MenuItem>
-                <MenuItem value='__new__'>+ Add new application…</MenuItem>
-                {applications.map((a) => (
-                  <MenuItem key={a._id} value={a._id}>
-                    {a.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              {newAppName !== null && (
-                <Stack spacing={0.5}>
-                  {appError && (
-                    <Alert severity='error' sx={{ py: 0 }}>
-                      {appError}
-                    </Alert>
-                  )}
-                  <Stack direction='row' spacing={0.75}>
-                    <TextField
-                      slotProps={{ htmlInput: { ref: newAppInputRef } }}
-                      size='small'
-                      value={newAppName}
-                      onChange={(e) => {
-                        setNewAppName(e.target.value);
-                        try {
-                          setNewAppInitial(deriveInitial(e.target.value));
-                        } catch {
-                          setNewAppInitial('');
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCreateApp();
-                        }
-                      }}
-                      placeholder='Application name'
-                      sx={{ flex: 2 }}
-                    />
-                    <TextField
-                      size='small'
-                      value={newAppInitial}
-                      onChange={(e) =>
-                        setNewAppInitial(
-                          e.target.value.toUpperCase().slice(0, 3),
-                        )
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCreateApp();
-                        }
-                      }}
-                      placeholder='ABC'
-                      label='Initial'
-                      sx={{ flex: 1 }}
-                      slotProps={{ htmlInput: { maxLength: 3 } }}
-                    />
-                    <Button
-                      variant='contained'
-                      size='small'
-                      onClick={handleCreateApp}
-                      disabled={creatingApp || !newAppName.trim()}
-                      sx={{ whiteSpace: 'nowrap' }}
-                    >
-                      {creatingApp ? '…' : 'Create'}
-                    </Button>
-                    <IconButton
-                      size='small'
-                      aria-label='Cancel new application'
-                      onClick={() => {
-                        setNewAppName(null);
-                        setNewAppInitial('');
-                        setAppError(null);
-                      }}
-                    >
-                      <CloseIcon />
-                    </IconButton>
-                  </Stack>
-                </Stack>
-              )}
-            </Stack>
-
-            <Stack spacing={0.75}>
-              <TextField
-                select
-                label='Module'
-                value={entry.moduleId}
-                onChange={(e) => {
-                  if (e.target.value === '__new__') {
-                    onChange({ moduleId: '' });
-                    setNewModuleName('');
-                    setTimeout(() => newModuleInputRef.current?.focus(), 50);
-                  } else {
-                    onChange({ moduleId: e.target.value });
-                    setNewModuleName(null);
-                  }
-                }}
-                size='small'
-                fullWidth
-                required
-                disabled={!entry.applicationId}
-                slotProps={{
-                  select: { displayEmpty: true },
-                  inputLabel: { shrink: true },
-                }}
-              >
-                <MenuItem value=''>Select module</MenuItem>
-                <MenuItem value='__new__'>+ Add new module…</MenuItem>
-                {modules
-                  .filter(
-                    (m) =>
-                      !entry.applicationId ||
-                      m.applicationId === entry.applicationId,
-                  )
-                  .map((m) => (
-                    <MenuItem key={m._id} value={m._id}>
-                      {m.name}
-                    </MenuItem>
-                  ))}
-              </TextField>
-              {newModuleName !== null && (
-                <Stack spacing={0.5}>
-                  {moduleError && (
-                    <Alert severity='error' sx={{ py: 0 }}>
-                      {moduleError}
-                    </Alert>
-                  )}
-                  <Stack direction='row' spacing={0.75}>
-                    <TextField
-                      slotProps={{ htmlInput: { ref: newModuleInputRef } }}
-                      size='small'
-                      value={newModuleName}
-                      onChange={(e) => setNewModuleName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCreateModule();
-                        }
-                      }}
-                      placeholder='New module name'
-                      sx={{ flex: 1 }}
-                    />
-                    <Button
-                      variant='contained'
-                      size='small'
-                      onClick={handleCreateModule}
-                      disabled={creatingModule || !newModuleName.trim()}
-                      sx={{ whiteSpace: 'nowrap' }}
-                    >
-                      {creatingModule ? '…' : 'Create'}
-                    </Button>
-                    <IconButton
-                      size='small'
-                      aria-label='Cancel new module'
-                      onClick={() => {
-                        setNewModuleName(null);
-                        setModuleError(null);
-                      }}
-                    >
-                      <CloseIcon />
-                    </IconButton>
-                  </Stack>
-                </Stack>
-              )}
-            </Stack>
-          </>
-        )}
-      </Stack>
-    </Stack>
-  );
-}
-
-function SetupPhase({
-  stories,
-  onUpdateStory,
-  onAddStory,
-  onRemoveStory,
-  applications,
-  modules,
-  error,
-  onGenerate,
-  onClose,
-  onApplicationCreated,
-  onModuleCreated,
-}) {
-  const firstEntry = stories[0];
-
-  const allValid = stories.every((s) => {
-    const appId = s.sameAsFirst ? firstEntry.applicationId : s.applicationId;
-    const modId = s.sameAsFirst ? firstEntry.moduleId : s.moduleId;
-    return JIRA_KEY_RE.test(s.jiraStory.trim()) && appId && modId;
-  });
-
   return (
     <>
       <DialogContent>
         <Stack spacing={2}>
           {error && <Alert severity='error'>{error}</Alert>}
           <Alert severity='info' icon={<AutoAwesomeIcon />}>
-            Enter one or more Jira story keys. The AI will read each story and
-            generate test cases for your review, one story at a time.
+            Enter Jira story keys and select applications. The AI generates test
+            cases for each story × application pair, one at a time.
           </Alert>
-          {stories.map((entry, i) => (
-            <StoryRow
-              key={entry._id}
-              index={i}
-              total={stories.length}
-              entry={entry}
-              firstEntry={firstEntry}
-              applications={applications}
-              modules={modules}
-              onChange={(patch) => onUpdateStory(i, patch)}
-              onRemove={() => onRemoveStory(i)}
-              onApplicationCreated={onApplicationCreated}
-              onModuleCreated={onModuleCreated}
-            />
-          ))}
-          <Button
-            variant='outlined'
+
+          <TextField
+            label='Story Keys'
+            value={storyKeysRaw}
+            onChange={(e) => onStoryKeysChange(e.target.value.toUpperCase())}
+            placeholder='e.g. SSO-123, REX-456'
             size='small'
-            startIcon={<AddIcon />}
-            onClick={onAddStory}
-            sx={{ alignSelf: 'flex-start' }}
-          >
-            Add another story
-          </Button>
+            fullWidth
+            autoFocus
+            required
+            error={invalidKeys.length > 0}
+            helperText={
+              invalidKeys.length > 0
+                ? `Invalid: ${invalidKeys.join(', ')} — use PROJECT-123 format`
+                : `Comma-separated, up to 10 stories${parsedKeys.length > 0 ? ` (${parsedKeys.length} valid)` : ''}`
+            }
+          />
+
+          <Stack spacing={0.75}>
+            <Autocomplete
+              multiple
+              options={applications}
+              value={selectedApps}
+              onChange={handleAppsChange}
+              getOptionLabel={(o) => o.name}
+              isOptionEqualToValue={(o, v) => o._id === v._id}
+              filterOptions={(options, { inputValue }) => {
+                const lower = inputValue.toLowerCase();
+                const filtered = options.filter((o) =>
+                  o.name.toLowerCase().includes(lower),
+                );
+                if (newAppName === null) {
+                  filtered.push({ _id: '__new__', name: '+ New application…' });
+                }
+                return filtered;
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label='Applications'
+                  size='small'
+                  required
+                  placeholder={
+                    selectedApps.length === 0
+                      ? 'Select applications'
+                      : undefined
+                  }
+                />
+              )}
+              disableCloseOnSelect
+              size='small'
+            />
+            {newAppName !== null && (
+              <Stack spacing={0.5}>
+                {appError && (
+                  <Alert severity='error' sx={{ py: 0 }}>
+                    {appError}
+                  </Alert>
+                )}
+                <Stack direction='row' spacing={0.75}>
+                  <TextField
+                    slotProps={{ htmlInput: { ref: newAppInputRef } }}
+                    size='small'
+                    value={newAppName}
+                    onChange={(e) => {
+                      setNewAppName(e.target.value);
+                      try {
+                        setNewAppInitial(deriveInitial(e.target.value));
+                      } catch {
+                        setNewAppInitial('');
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateApp();
+                      }
+                    }}
+                    placeholder='Application name'
+                    sx={{ flex: 2 }}
+                  />
+                  <TextField
+                    size='small'
+                    value={newAppInitial}
+                    onChange={(e) =>
+                      setNewAppInitial(e.target.value.toUpperCase().slice(0, 3))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateApp();
+                      }
+                    }}
+                    placeholder='ABC'
+                    label='Initial'
+                    sx={{ flex: 1 }}
+                    slotProps={{ htmlInput: { maxLength: 3 } }}
+                  />
+                  <Button
+                    variant='contained'
+                    size='small'
+                    onClick={handleCreateApp}
+                    disabled={creatingApp || !newAppName.trim()}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    {creatingApp ? '…' : 'Create'}
+                  </Button>
+                  <IconButton
+                    size='small'
+                    aria-label='Cancel new application'
+                    onClick={() => {
+                      setNewAppName(null);
+                      setNewAppInitial('');
+                      setAppError(null);
+                    }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
+              </Stack>
+            )}
+          </Stack>
+
+          <Stack spacing={0.75}>
+            <TextField
+              select
+              label='Module'
+              value={selectedModuleId}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  onModuleChange('');
+                  setNewModuleName('');
+                  setTimeout(() => newModuleInputRef.current?.focus(), 50);
+                } else {
+                  onModuleChange(e.target.value);
+                  setNewModuleName(null);
+                }
+              }}
+              size='small'
+              fullWidth
+              required
+              disabled={selectedApps.length === 0}
+              slotProps={{
+                select: { displayEmpty: true },
+                inputLabel: { shrink: true },
+              }}
+              helperText={
+                selectedApps.length === 0 ? 'Select an application first' : ' '
+              }
+            >
+              <MenuItem value=''>Select module</MenuItem>
+              {selectedApps.length === 1 && (
+                <MenuItem value='__new__'>+ New module…</MenuItem>
+              )}
+              {availableModules.map((m) => (
+                <MenuItem key={m._id} value={m._id}>
+                  {m.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {newModuleName !== null && (
+              <Stack spacing={0.5}>
+                {moduleError && (
+                  <Alert severity='error' sx={{ py: 0 }}>
+                    {moduleError}
+                  </Alert>
+                )}
+                <Stack direction='row' spacing={0.75}>
+                  <TextField
+                    slotProps={{ htmlInput: { ref: newModuleInputRef } }}
+                    size='small'
+                    value={newModuleName}
+                    onChange={(e) => setNewModuleName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateModule();
+                      }
+                    }}
+                    placeholder='New module name'
+                    sx={{ flex: 1 }}
+                  />
+                  <Button
+                    variant='contained'
+                    size='small'
+                    onClick={handleCreateModule}
+                    disabled={creatingModule || !newModuleName.trim()}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    {creatingModule ? '…' : 'Create'}
+                  </Button>
+                  <IconButton
+                    size='small'
+                    aria-label='Cancel new module'
+                    onClick={() => {
+                      setNewModuleName(null);
+                      setModuleError(null);
+                    }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
+              </Stack>
+            )}
+          </Stack>
+
+          {combinationCount > 0 && (
+            <Typography variant='caption' color='text.secondary'>
+              Will generate {combinationCount} combination
+              {combinationCount > 1 ? 's' : ''} ({parsedKeys.length} stor
+              {parsedKeys.length > 1 ? 'ies' : 'y'} × {selectedApps.length} app
+              {selectedApps.length > 1 ? 's' : ''})
+            </Typography>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -491,9 +364,9 @@ function SetupPhase({
           onClick={onGenerate}
           disabled={!allValid}
         >
-          {stories.length === 1
-            ? 'Generate test cases'
-            : `Generate from ${stories.length} stories`}
+          {allValid
+            ? `Generate test cases (${combinationCount})`
+            : 'Generate test cases'}
         </Button>
       </DialogActions>
     </>
@@ -731,20 +604,10 @@ export default function AITestCaseSlidesDialog({
   onModuleCreated,
 }) {
   const [phase, setPhase] = useState('setup'); // 'setup' | 'generating' | 'slides'
-  const storyIdRef = useRef(0);
-  const nextId = () => {
-    storyIdRef.current += 1;
-    return storyIdRef.current;
-  };
-  const [stories, setStories] = useState(() => [
-    {
-      _id: 1,
-      jiraStory: '',
-      applicationId: '',
-      moduleId: '',
-      sameAsFirst: false,
-    },
-  ]);
+  const [storyKeysRaw, setStoryKeysRaw] = useState('');
+  const [selectedApps, setSelectedApps] = useState([]);
+  const [selectedModuleId, setSelectedModuleId] = useState('');
+  const combinationsRef = useRef([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [totalCreated, setTotalCreated] = useState(0);
   const [error, setError] = useState(null);
@@ -761,17 +624,11 @@ export default function AITestCaseSlidesDialog({
 
   useEffect(() => {
     if (!open) return;
-    storyIdRef.current = 1;
     setPhase('setup');
-    setStories([
-      {
-        _id: 1,
-        jiraStory: '',
-        applicationId: '',
-        moduleId: '',
-        sameAsFirst: false,
-      },
-    ]);
+    setStoryKeysRaw('');
+    setSelectedApps([]);
+    setSelectedModuleId('');
+    combinationsRef.current = [];
     setCurrentStoryIndex(0);
     setTotalCreated(0);
     setError(null);
@@ -782,39 +639,10 @@ export default function AITestCaseSlidesDialog({
     setCurrentIndex(0);
   }, [open]);
 
-  function updateStoryEntry(i, patch) {
-    setStories((prev) =>
-      prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)),
-    );
-  }
-  function addStoryEntry() {
-    const id = nextId();
-    setStories((prev) => [
-      ...prev,
-      {
-        _id: id,
-        jiraStory: '',
-        applicationId: '',
-        moduleId: '',
-        sameAsFirst: false,
-      },
-    ]);
-  }
-  function removeStoryEntry(i) {
-    setStories((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
   const handleGenerateNext = useCallback(
     async (index) => {
-      const raw = stories[index];
-      const first = stories[0];
-      const entry = raw.sameAsFirst
-        ? {
-            ...raw,
-            applicationId: first.applicationId,
-            moduleId: first.moduleId,
-          }
-        : raw;
+      const combinations = combinationsRef.current;
+      const { jiraStory: jiraStoryKey, app } = combinations[index];
       setCurrentStoryIndex(index);
       setPhase('generating');
       setError(null);
@@ -824,15 +652,15 @@ export default function AITestCaseSlidesDialog({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jiraStory: entry.jiraStory.trim() }),
+            body: JSON.stringify({ jiraStory: jiraStoryKey }),
           },
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Generation failed');
         setSlides(data.testCases);
         setStoryKey(data.story.key);
-        setApplicationId(entry.applicationId);
-        setModuleId(entry.moduleId);
+        setApplicationId(app._id);
+        setModuleId(selectedModuleId);
         setCurrentIndex(0);
         setDecisions({});
         setEdits({});
@@ -842,7 +670,7 @@ export default function AITestCaseSlidesDialog({
         setPhase('setup');
       }
     },
-    [stories, releaseId],
+    [releaseId, selectedModuleId],
   );
 
   const advanceOrFinish = useCallback(
@@ -850,19 +678,13 @@ export default function AITestCaseSlidesDialog({
       const newTotal = totalCreated + addedCount;
       setTotalCreated(newTotal);
       const next = currentStoryIndex + 1;
-      if (next < stories.length) {
+      if (next < combinationsRef.current.length) {
         handleGenerateNext(next);
       } else {
         onSuccess(newTotal);
       }
     },
-    [
-      totalCreated,
-      currentStoryIndex,
-      stories.length,
-      handleGenerateNext,
-      onSuccess,
-    ],
+    [totalCreated, currentStoryIndex, handleGenerateNext, onSuccess],
   );
 
   const handleCreateApproved = useCallback(async () => {
@@ -964,14 +786,23 @@ export default function AITestCaseSlidesDialog({
 
       {phase === 'setup' && (
         <SetupPhase
-          stories={stories}
-          onUpdateStory={updateStoryEntry}
-          onAddStory={addStoryEntry}
-          onRemoveStory={removeStoryEntry}
+          storyKeysRaw={storyKeysRaw}
+          onStoryKeysChange={setStoryKeysRaw}
+          selectedApps={selectedApps}
+          onAppsChange={setSelectedApps}
+          selectedModuleId={selectedModuleId}
+          onModuleChange={setSelectedModuleId}
           applications={applications}
           modules={modules}
           error={error}
-          onGenerate={() => handleGenerateNext(0)}
+          onGenerate={() => {
+            const keys = parseStoryKeys(storyKeysRaw);
+            const combos = keys.flatMap((jiraStory) =>
+              selectedApps.map((app) => ({ jiraStory, app })),
+            );
+            combinationsRef.current = combos;
+            handleGenerateNext(0);
+          }}
           onClose={onClose}
           onApplicationCreated={onApplicationCreated}
           onModuleCreated={onModuleCreated}
@@ -983,8 +814,8 @@ export default function AITestCaseSlidesDialog({
           <Stack spacing={2} sx={{ alignItems: 'center', py: 6 }}>
             <CircularProgress />
             <Typography color='text.secondary'>
-              Generating test cases for story {currentStoryIndex + 1} of{' '}
-              {stories.length}…
+              Generating test cases for combination {currentStoryIndex + 1} of{' '}
+              {combinationsRef.current.length}…
             </Typography>
           </Stack>
         </DialogContent>
@@ -1001,11 +832,13 @@ export default function AITestCaseSlidesDialog({
           setEdits={setEdits}
           storyKey={storyKey}
           currentStoryIndex={currentStoryIndex}
-          totalStories={stories.length}
+          totalStories={combinationsRef.current.length}
           creating={creating}
           createError={createError}
           onCreateApproved={handleCreateApproved}
-          onSkipStory={stories.length > 1 ? handleSkipStory : null}
+          onSkipStory={
+            combinationsRef.current.length > 1 ? handleSkipStory : null
+          }
           onClose={onClose}
         />
       )}
