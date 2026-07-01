@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockDb } from '@/lib/__tests__/helpers/mockDb';
 
@@ -194,5 +195,53 @@ describe('POST /api/releases/[id]/test-cases', () => {
     expect(res.status).toBe(201);
     expect(createTestCase).toHaveBeenCalled();
     expect(findPotentialDuplicates).not.toHaveBeenCalled();
+  });
+
+  it('stores source:"ai" when provided in body', async () => {
+    findPotentialDuplicates.mockResolvedValue([]);
+    createTestCase.mockResolvedValue({ ok: true, id: 'new-id' });
+
+    const res = await POST(
+      new Request(`http://x/api/releases/${RELEASE_ID}/test-cases`, {
+        method: 'POST',
+        body: JSON.stringify({
+          applicationId: new ObjectId().toString(),
+          moduleId: new ObjectId().toString(),
+          testCase: 'AI generated case',
+          source: 'ai',
+        }),
+      }),
+      PARAMS,
+    );
+
+    expect(res.status).toBe(201);
+    expect(createTestCase).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.objectContaining({ source: 'ai' }),
+    );
+  });
+
+  it('defaults source to "manual" when not provided', async () => {
+    findPotentialDuplicates.mockResolvedValue([]);
+    createTestCase.mockResolvedValue({ ok: true, id: 'new-id' });
+
+    await POST(
+      new Request(`http://x/api/releases/${RELEASE_ID}/test-cases`, {
+        method: 'POST',
+        body: JSON.stringify({
+          applicationId: new ObjectId().toString(),
+          moduleId: new ObjectId().toString(),
+          testCase: 'Manual case',
+        }),
+      }),
+      PARAMS,
+    );
+
+    expect(createTestCase).toHaveBeenCalledWith(
+      db,
+      't1',
+      expect.not.objectContaining({ source: 'ai' }),
+    );
   });
 });
