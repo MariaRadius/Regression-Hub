@@ -17,6 +17,10 @@ export function parseStoryKeys(raw) {
 export function getInvalidKeys(raw) {
   return raw
     .split(',')
-    .map((s) => s.trim().toUpperCase())
+    .map((s) => {
+      const trimmed = s.trim().toUpperCase();
+      const urlMatch = trimmed.match(JIRA_URL_RE);
+      return urlMatch ? urlMatch[1] : trimmed;
+    })
     .filter((k) => k && !JIRA_KEY_RE.test(k));
 }

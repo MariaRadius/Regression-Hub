@@ -285,7 +285,11 @@ function SetupPhase({
                 inputLabel: { shrink: true },
               }}
               helperText={
-                selectedApps.length === 0 ? 'Select an application first' : ' '
+                selectedApps.length === 0
+                  ? 'Select an application first'
+                  : selectedApps.length > 1
+                    ? 'To create a new module, select a single application'
+                    : ' '
               }
             >
               <MenuItem value=''>Select module</MenuItem>

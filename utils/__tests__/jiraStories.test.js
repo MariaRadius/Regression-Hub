@@ -57,4 +57,10 @@ describe('getInvalidKeys', () => {
   it('treats bare numbers or bare letters as invalid', () => {
     expect(getInvalidKeys('123, ABC')).toEqual(['123', 'ABC']);
   });
+
+  it('does not report a pasted Jira browse URL as invalid', () => {
+    expect(getInvalidKeys('https://jira.example.com/browse/SSO-123')).toEqual(
+      [],
+    );
+  });
 });
