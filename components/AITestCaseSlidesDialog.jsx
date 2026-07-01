@@ -613,6 +613,7 @@ export default function AITestCaseSlidesDialog({
   modules,
   onApplicationCreated,
   onModuleCreated,
+  stories,
 }) {
   const [phase, setPhase] = useState('setup'); // 'setup' | 'generating' | 'slides'
   // setup-phase state
@@ -694,6 +695,15 @@ export default function AITestCaseSlidesDialog({
     [releaseId],
   );
 
+  // When dialog opens with pre-built stories, bypass the setup phase.
+  useEffect(() => {
+    if (!open || !stories?.length) return;
+    combinationsRef.current = stories;
+    setCurrentCombIndex(0);
+    setTotalCreated(0);
+    handleGenerateNext(0);
+  }, [open, stories, handleGenerateNext]);
+
   function handleStartGeneration() {
     const keys = parseStoryKeys(storyKeysRaw);
     const modName = modules.find((m) => m._id === selectedModuleId)?.name ?? '';
@@ -750,6 +760,7 @@ export default function AITestCaseSlidesDialog({
               priority: draft.priority,
               type: draft.type,
               jiraStory: storyKey,
+              source: 'ai',
             },
             { suppressToastForStatus: [409] },
           ),
