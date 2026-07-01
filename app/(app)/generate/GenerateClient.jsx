@@ -3,6 +3,7 @@
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import SearchIcon from '@mui/icons-material/Search';
 import {
+  Button,
   Chip,
   Grid,
   InputAdornment,
@@ -24,7 +25,6 @@ import { getGeneratedTestCases } from '@/lib/api/testCases';
 const PAGE_SIZE = 20;
 
 export default function GenerateClient({
-  user,
   aiConfigured,
   applications: initialApplications,
   modules: initialModules,
@@ -184,6 +184,9 @@ export default function GenerateClient({
               Use &quot;Generate from Story&quot; above to create your first
               AI-generated test cases.
             </Typography>
+            <Button variant='contained' component={Link} href='/test-cases'>
+              View Test Cases
+            </Button>
           </Stack>
         ) : (
           <Stack

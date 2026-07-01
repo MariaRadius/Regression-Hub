@@ -21,7 +21,6 @@ export default async function GeneratePage() {
 
   return (
     <GenerateClient
-      user={session.user}
       aiConfigured={isAiConfigured(settings)}
       applications={applications}
       modules={modules}
