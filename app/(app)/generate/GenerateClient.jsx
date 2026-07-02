@@ -15,6 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
@@ -129,61 +130,75 @@ export default function GenerateClient({
         </Grid>
       </Grid>
 
-      <Stack spacing={2}>
-        <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
-          <AutoAwesomeIcon color='primary' fontSize='small' />
-          <Typography variant='h6'>AI-Generated Cases</Typography>
-          <Chip label={total} size='small' />
-        </Stack>
-
-        <Stack direction='row' spacing={2}>
-          <TextField
+      <Stack spacing={1.5}>
+        <Stack
+          direction='row'
+          spacing={1.5}
+          sx={{ alignItems: 'center', pb: 0.5 }}
+        >
+          <AutoAwesomeIcon color='primary' sx={{ fontSize: 18 }} />
+          <Typography variant='subtitle1' fontWeight={600}>
+            AI-Generated Cases
+          </Typography>
+          <Chip
+            label={total}
             size='small'
-            placeholder='Search by title or ID…'
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-              fetchCases({ search: e.target.value, page: 1 });
-            }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position='start'>
-                    <SearchIcon fontSize='small' />
-                  </InputAdornment>
-                ),
-              },
-            }}
-            sx={{ width: 300 }}
+            color='primary'
+            variant='outlined'
+            sx={{ height: 20, fontSize: '0.7rem' }}
           />
-          <TextField
-            select
-            size='small'
-            label='App'
-            value={appFilter}
-            onChange={(e) => {
-              setAppFilter(e.target.value);
-              setPage(1);
-              fetchCases({ appId: e.target.value, page: 1 });
-            }}
-            slotProps={{
-              select: { displayEmpty: true },
-              inputLabel: { shrink: true },
-            }}
-            sx={{ width: 200 }}
-          >
-            <MenuItem value=''>All apps</MenuItem>
-            {applications.map((a) => (
-              <MenuItem key={a._id} value={a._id}>
-                {a.name}
-              </MenuItem>
-            ))}
-          </TextField>
+          <Stack direction='row' spacing={1.5} sx={{ ml: 'auto' }}>
+            <TextField
+              size='small'
+              placeholder='Search…'
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+                fetchCases({ search: e.target.value, page: 1 });
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position='start'>
+                      <SearchIcon
+                        sx={{ fontSize: 16, color: 'text.disabled' }}
+                      />
+                    </InputAdornment>
+                  ),
+                  sx: { fontSize: '0.8125rem' },
+                },
+              }}
+              sx={{ width: 220 }}
+            />
+            <TextField
+              select
+              size='small'
+              label='App'
+              value={appFilter}
+              onChange={(e) => {
+                setAppFilter(e.target.value);
+                setPage(1);
+                fetchCases({ appId: e.target.value, page: 1 });
+              }}
+              slotProps={{
+                select: { displayEmpty: true, sx: { fontSize: '0.8125rem' } },
+                inputLabel: { shrink: true },
+              }}
+              sx={{ width: 160 }}
+            >
+              <MenuItem value=''>All apps</MenuItem>
+              {applications.map((a) => (
+                <MenuItem key={a._id} value={a._id}>
+                  {a.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
         </Stack>
 
         {loading ? (
-          <Typography variant='body2' color='text.secondary'>
+          <Typography variant='body2' color='text.secondary' sx={{ py: 2 }}>
             Loading…
           </Typography>
         ) : cases.length === 0 ? (
@@ -198,7 +213,15 @@ export default function GenerateClient({
             </Button>
           </Stack>
         ) : (
-          <Stack divider={<Divider />}>
+          <Stack
+            sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden',
+            }}
+            divider={<Divider />}
+          >
             {cases.map((tc) => (
               <Stack
                 key={tc._id}
@@ -219,8 +242,8 @@ export default function GenerateClient({
                 }
                 aria-label={`View ${tc.testKey || tc.testCase}`}
                 sx={{
-                  py: 1.5,
-                  px: 1,
+                  py: 1.25,
+                  px: 2,
                   alignItems: 'center',
                   cursor: 'pointer',
                   '&:hover': { bgcolor: 'action.hover' },
@@ -229,16 +252,44 @@ export default function GenerateClient({
                 <Chip
                   label={tc.testKey || '—'}
                   size='small'
+                  color='primary'
                   variant='outlined'
+                  sx={{
+                    fontWeight: 600,
+                    minWidth: 80,
+                    justifyContent: 'center',
+                  }}
                 />
                 <Stack sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant='body2' noWrap>
+                  <Typography variant='body2' fontWeight={500} noWrap>
                     {tc.testCase}
                   </Typography>
-                  <Typography variant='caption' color='text.secondary'>
-                    {tc.applicationName} / {tc.moduleName}
-                    {tc.jiraStory && ` · ${tc.jiraStory}`}
-                  </Typography>
+                  <Stack
+                    direction='row'
+                    spacing={0.75}
+                    sx={{ alignItems: 'center' }}
+                  >
+                    <Typography variant='caption' color='text.secondary' noWrap>
+                      {tc.applicationName} / {tc.moduleName}
+                    </Typography>
+                    {tc.jiraStory && (
+                      <>
+                        <Typography variant='caption' color='text.disabled'>
+                          ·
+                        </Typography>
+                        <Chip
+                          label={tc.jiraStory}
+                          size='small'
+                          variant='outlined'
+                          sx={{
+                            height: 18,
+                            fontSize: '0.65rem',
+                            color: 'text.secondary',
+                          }}
+                        />
+                      </>
+                    )}
+                  </Stack>
                 </Stack>
               </Stack>
             ))}
