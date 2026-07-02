@@ -59,12 +59,39 @@ export const POST = withTeam(async (_request, { params }, { teamId, db }) => {
     existingTestCases: testCases,
   });
 
+  const tcMap = new Map(testCases.map((tc) => [tc._id, tc]));
+  const changedIds = new Set([
+    ...impact.affectedCases.map((c) => c.id),
+    ...impact.obsoleteCases.map((c) => c.id),
+  ]);
+
+  const enrichedImpact = {
+    affectedCases: impact.affectedCases.map((c) => ({
+      ...c,
+      testKey: tcMap.get(c.id)?.testKey ?? null,
+      testCase: tcMap.get(c.id)?.testCase ?? '',
+    })),
+    newCases: impact.newCases,
+    obsoleteCases: impact.obsoleteCases.map((c) => ({
+      ...c,
+      testKey: tcMap.get(c.id)?.testKey ?? null,
+      testCase: tcMap.get(c.id)?.testCase ?? '',
+    })),
+    unaffectedCases: testCases
+      .filter((tc) => !changedIds.has(tc._id))
+      .map((tc) => ({
+        id: tc._id,
+        testKey: tc.testKey ?? null,
+        testCase: tc.testCase,
+      })),
+  };
+
   return NextResponse.json({
     story: {
       key: story.key,
       summary: story.summary,
       acceptanceCriteria: story.acceptanceCriteria,
     },
-    impact,
+    impact: enrichedImpact,
   });
 });

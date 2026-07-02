@@ -2,6 +2,7 @@
 
 import AddCircleOutlinedIcon from '@mui/icons-material/AddCircleOutlined';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import ChecklistIcon from '@mui/icons-material/ChecklistRounded';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
@@ -248,9 +249,28 @@ export default function JiraImpactAnalysisDialog({
                           size='small'
                         />
                         <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant='body2' fontWeight={500}>
-                            {c.id}
-                          </Typography>
+                          <Stack
+                            direction='row'
+                            spacing={1}
+                            sx={{ alignItems: 'center' }}
+                          >
+                            {c.testKey && (
+                              <Chip
+                                label={c.testKey}
+                                size='small'
+                                color='warning'
+                                variant='outlined'
+                                sx={{
+                                  fontWeight: 600,
+                                  height: 20,
+                                  fontSize: '0.7rem',
+                                }}
+                              />
+                            )}
+                            <Typography variant='body2' fontWeight={500} noWrap>
+                              {c.testCase || c.id}
+                            </Typography>
+                          </Stack>
                           <Typography variant='body2' color='text.secondary'>
                             {c.reason}
                           </Typography>
@@ -453,13 +473,97 @@ export default function JiraImpactAnalysisDialog({
                           size='small'
                         />
                         <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant='body2' fontWeight={500}>
-                            {c.id}
-                          </Typography>
+                          <Stack
+                            direction='row'
+                            spacing={1}
+                            sx={{ alignItems: 'center' }}
+                          >
+                            {c.testKey && (
+                              <Chip
+                                label={c.testKey}
+                                size='small'
+                                color='error'
+                                variant='outlined'
+                                sx={{
+                                  fontWeight: 600,
+                                  height: 20,
+                                  fontSize: '0.7rem',
+                                }}
+                              />
+                            )}
+                            <Typography variant='body2' fontWeight={500} noWrap>
+                              {c.testCase || c.id}
+                            </Typography>
+                          </Stack>
                           <Typography variant='body2' color='error.main'>
                             {c.reason}
                           </Typography>
                         </Stack>
+                      </Stack>
+                    ))}
+                  </Stack>
+                )}
+              </AccordionDetails>
+            </Accordion>
+
+            <Divider />
+
+            {/* Unaffected */}
+            <Accordion disableGutters elevation={0}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <CheckCircleOutlinedIcon color='success' fontSize='small' />
+                  <Typography fontWeight={600}>Unaffected</Typography>
+                  <Chip
+                    label={(impact.unaffectedCases ?? []).length}
+                    size='small'
+                    color='success'
+                    variant='outlined'
+                  />
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: 0 }}>
+                {(impact.unaffectedCases ?? []).length === 0 ? (
+                  <Typography
+                    variant='body2'
+                    color='text.secondary'
+                    sx={{ px: 3, pb: 2 }}
+                  >
+                    All cases were categorised above.
+                  </Typography>
+                ) : (
+                  <Stack divider={<Divider />}>
+                    {(impact.unaffectedCases ?? []).map((c) => (
+                      <Stack
+                        key={c.id}
+                        direction='row'
+                        spacing={1}
+                        sx={{ px: 2, py: 1, alignItems: 'center' }}
+                      >
+                        {c.testKey && (
+                          <Chip
+                            label={c.testKey}
+                            size='small'
+                            variant='outlined'
+                            sx={{
+                              fontWeight: 600,
+                              height: 20,
+                              fontSize: '0.7rem',
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                        <Typography
+                          variant='body2'
+                          color='text.secondary'
+                          noWrap
+                        >
+                          {c.testCase || c.id}
+                        </Typography>
                       </Stack>
                     ))}
                   </Stack>
