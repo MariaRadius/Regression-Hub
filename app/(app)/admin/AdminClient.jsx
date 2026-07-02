@@ -1012,6 +1012,7 @@ export default function AdminClient({
                   </Typography>
                 </Stack>
                 <IconButton
+                  component='div'
                   size='small'
                   onClick={(e) => {
                     e.stopPropagation();
