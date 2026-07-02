@@ -109,11 +109,11 @@ export default function GenerateClient({
         </Alert>
       )}
 
-      <Grid container spacing={2}>
-        <Grid size={6}>
+      <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
+        <Grid size={6} sx={{ display: 'flex' }}>
           <JiraStoriesPanel onSelectStory={handleSelectStory} />
         </Grid>
-        <Grid size={6}>
+        <Grid size={6} sx={{ display: 'flex' }}>
           <GenerateStoryForm
             applications={applications}
             modules={modules}
@@ -186,7 +186,6 @@ export default function GenerateClient({
           </Typography>
         ) : cases.length === 0 ? (
           <Stack sx={{ py: 6, alignItems: 'center' }} spacing={1}>
-            <AutoAwesomeIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
             <Typography variant='h6'>No AI-generated cases yet</Typography>
             <Typography variant='body2' color='text.secondary'>
               Use &quot;Generate from Story&quot; above to create your first

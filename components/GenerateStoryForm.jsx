@@ -2,6 +2,7 @@
 
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import {
+  Alert,
   Autocomplete,
   Button,
   Card,
@@ -68,6 +69,7 @@ export default function GenerateStoryForm({
   const invalidKeys = getInvalidKeys(storyKeysRaw);
   const appIds = new Set(selectedApps.map((a) => a._id));
   const availableModules = modules.filter((m) => appIds.has(m.applicationId));
+  const combinationCount = parsedKeys.length * selectedApps.length;
 
   const allValid =
     parsedKeys.length > 0 &&
@@ -148,7 +150,7 @@ export default function GenerateStoryForm({
   return (
     <Card
       variant='outlined'
-      sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}
     >
       <CardHeader
         avatar={<AutoAwesomeIcon color='primary' />}
@@ -157,18 +159,24 @@ export default function GenerateStoryForm({
       />
       <CardContent sx={{ flex: 1 }}>
         <Stack spacing={2}>
+          <Alert severity='info'>
+            Enter one or more Jira story keys and select the applications to
+            test against. For related stories that span multiple apps, the AI
+            generates test cases for each story × app pair, one at a time.
+          </Alert>
+
           <TextField
-            label='Story key'
-            placeholder='e.g. PROJ-123'
+            label='Story Keys'
+            placeholder='e.g. SCRUM-8, PROJ-123'
             size='small'
             fullWidth
             value={storyKeysRaw}
-            onChange={(e) => setStoryKeysRaw(e.target.value)}
+            onChange={(e) => setStoryKeysRaw(e.target.value.toUpperCase())}
             error={invalidKeys.length > 0}
             helperText={
               invalidKeys.length > 0
-                ? `Invalid keys: ${invalidKeys.join(', ')}`
-                : 'Separate multiple keys with commas or spaces'
+                ? `Invalid: ${invalidKeys.join(', ')} — use PROJECT-123 format`
+                : `Comma- or space-separated, up to 10${parsedKeys.length > 0 ? ` (${parsedKeys.length} valid)` : ''}`
             }
           />
 
@@ -287,6 +295,15 @@ export default function GenerateStoryForm({
             </Stack>
           )}
 
+          {combinationCount > 0 && (
+            <Typography variant='caption' color='text.secondary'>
+              Will generate {combinationCount} combination
+              {combinationCount > 1 ? 's' : ''} ({parsedKeys.length} stor
+              {parsedKeys.length > 1 ? 'ies' : 'y'} × {selectedApps.length} app
+              {selectedApps.length > 1 ? 's' : ''})
+            </Typography>
+          )}
+
           <Tooltip
             title={
               !releaseSelected
@@ -302,9 +319,10 @@ export default function GenerateStoryForm({
                 fullWidth
                 disabled={!allValid || !aiConfigured}
                 onClick={handleGenerate}
-                startIcon={<AutoAwesomeIcon />}
               >
-                Generate Test Cases
+                {allValid
+                  ? `Generate test cases (${combinationCount})`
+                  : 'Generate Test Cases'}
               </Button>
             </span>
           </Tooltip>
@@ -313,7 +331,7 @@ export default function GenerateStoryForm({
             <Typography
               variant='caption'
               color='text.secondary'
-              textAlign='center'
+              sx={{ textAlign: 'center' }}
             >
               AI not configured — go to Admin → Settings to enable generation.
             </Typography>

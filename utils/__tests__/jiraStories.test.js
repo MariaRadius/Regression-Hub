@@ -39,6 +39,18 @@ describe('parseStoryKeys', () => {
     expect(parseStoryKeys('')).toEqual([]);
     expect(parseStoryKeys('  ')).toEqual([]);
   });
+
+  it('parses valid space-separated keys', () => {
+    expect(parseStoryKeys('SSO-123 REX-456')).toEqual(['SSO-123', 'REX-456']);
+  });
+
+  it('parses keys separated by mixed commas and spaces', () => {
+    expect(parseStoryKeys('SSO-123 REX-456, PROJ-789')).toEqual([
+      'SSO-123',
+      'REX-456',
+      'PROJ-789',
+    ]);
+  });
 });
 
 describe('getInvalidKeys', () => {
@@ -56,6 +68,10 @@ describe('getInvalidKeys', () => {
 
   it('treats bare numbers or bare letters as invalid', () => {
     expect(getInvalidKeys('123, ABC')).toEqual(['123', 'ABC']);
+  });
+
+  it('flags invalid keys mixed with spaces as separators', () => {
+    expect(getInvalidKeys('SSO-123 oops')).toEqual(['OOPS']);
   });
 
   it('does not report a pasted Jira browse URL as invalid', () => {

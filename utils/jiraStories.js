@@ -3,7 +3,7 @@ const JIRA_URL_RE = /\/browse\/([A-Z]+-\d+)/i;
 
 export function parseStoryKeys(raw) {
   return raw
-    .split(',')
+    .split(/[,\s]+/)
     .map((s) => {
       const trimmed = s.trim().toUpperCase();
       const urlMatch = trimmed.match(JIRA_URL_RE);
@@ -16,7 +16,7 @@ export function parseStoryKeys(raw) {
 
 export function getInvalidKeys(raw) {
   return raw
-    .split(',')
+    .split(/[,\s]+/)
     .map((s) => {
       const trimmed = s.trim().toUpperCase();
       const urlMatch = trimmed.match(JIRA_URL_RE);

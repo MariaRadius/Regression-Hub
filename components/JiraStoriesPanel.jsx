@@ -1,8 +1,8 @@
 'use client';
 
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import UpdateIcon from '@mui/icons-material/Update';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
@@ -15,7 +15,6 @@ import {
   Divider,
   IconButton,
   Stack,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useJiraStories } from '@/hooks/useJiraStories';
@@ -39,7 +38,7 @@ export default function JiraStoriesPanel({ onSelectStory }) {
   return (
     <Card
       variant='outlined'
-      sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}
     >
       <CardHeader
         avatar={
@@ -64,7 +63,16 @@ export default function JiraStoriesPanel({ onSelectStory }) {
         sx={{ pb: 0 }}
       />
 
-      <CardContent sx={{ flex: 1, overflow: 'hidden', pt: 1, px: 0 }}>
+      <CardContent
+        sx={{
+          flex: 1,
+          overflow: 'hidden',
+          pt: 1,
+          px: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {jiraError && (
           <Alert
             severity='warning'
@@ -76,22 +84,50 @@ export default function JiraStoriesPanel({ onSelectStory }) {
         )}
 
         {count === 0 ? (
-          <Stack sx={{ px: 2, py: 3, alignItems: 'center' }}>
-            <Typography variant='body2' color='text.secondary'>
-              No story updates
+          <Stack
+            spacing={1}
+            sx={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              py: 4,
+            }}
+          >
+            <NotificationsNoneIcon
+              sx={{ fontSize: 40, color: 'text.disabled' }}
+            />
+            <Typography variant='subtitle2' fontWeight={600}>
+              All stories up to date
+            </Typography>
+            <Typography
+              variant='body2'
+              color='text.secondary'
+              sx={{ px: 3, textAlign: 'center' }}
+            >
+              No Jira stories have changed since the last check.
             </Typography>
           </Stack>
         ) : (
-          <Stack
-            sx={{ overflowY: 'auto', maxHeight: 340 }}
-            divider={<Divider />}
-          >
+          <Stack sx={{ overflowY: 'auto' }} divider={<Divider />}>
             {staleStories.map((s) => (
               <Stack
                 key={s.storyKey}
                 direction='row'
                 spacing={1.5}
-                sx={{ px: 2, py: 1.25, alignItems: 'flex-start' }}
+                onClick={() => onSelectStory(s.storyKey)}
+                role='button'
+                tabIndex={0}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' && onSelectStory(s.storyKey)
+                }
+                aria-label={`Select ${s.storyKey}`}
+                sx={{
+                  px: 2,
+                  py: 1.25,
+                  alignItems: 'flex-start',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
               >
                 <UpdateIcon
                   color='warning'
@@ -108,21 +144,13 @@ export default function JiraStoriesPanel({ onSelectStory }) {
                     </Typography>
                   )}
                 </Stack>
-                <Tooltip title='Generate test cases from this story'>
-                  <Button
-                    size='small'
-                    variant='outlined'
-                    endIcon={<ArrowForwardIcon fontSize='small' />}
-                    onClick={() => onSelectStory(s.storyKey)}
-                    aria-label={`Generate test cases for ${s.storyKey}`}
-                  >
-                    Generate
-                  </Button>
-                </Tooltip>
                 <IconButton
                   size='small'
                   aria-label={`Dismiss ${s.storyKey}`}
-                  onClick={() => handleDismiss(s.storyKey)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDismiss(s.storyKey);
+                  }}
                 >
                   <CloseIcon fontSize='small' />
                 </IconButton>

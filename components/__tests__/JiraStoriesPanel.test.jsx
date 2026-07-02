@@ -28,10 +28,10 @@ describe('JiraStoriesPanel', () => {
     expect(screen.getByText('Fix login')).toBeInTheDocument();
   });
 
-  it('calls onSelectStory with key when Generate → clicked', () => {
+  it('calls onSelectStory with key when story row is clicked', () => {
     const onSelectStory = vi.fn();
     render(<JiraStoriesPanel onSelectStory={onSelectStory} />);
-    fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+    fireEvent.click(screen.getByRole('button', { name: /select PROJ-1/i }));
     expect(onSelectStory).toHaveBeenCalledWith('PROJ-1');
   });
 
@@ -45,6 +45,6 @@ describe('JiraStoriesPanel', () => {
       handleDismissAll: vi.fn(),
     });
     render(<JiraStoriesPanel onSelectStory={vi.fn()} />);
-    expect(screen.getByText(/no story updates/i)).toBeInTheDocument();
+    expect(screen.getByText(/all stories up to date/i)).toBeInTheDocument();
   });
 });
