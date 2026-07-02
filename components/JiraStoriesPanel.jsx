@@ -1,5 +1,6 @@
 'use client';
 
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CloseIcon from '@mui/icons-material/Close';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
@@ -23,7 +24,7 @@ import { useJiraStories } from '@/hooks/useJiraStories';
  * Inline card variant of Jira story notifications for the /generate page.
  * Shows stale stories with a "Generate →" action that pre-fills the story form.
  */
-export default function JiraStoriesPanel({ onSelectStory }) {
+export default function JiraStoriesPanel({ onSelectStory, onAnalyzeImpact }) {
   const {
     staleStories,
     checking,
@@ -144,6 +145,18 @@ export default function JiraStoriesPanel({ onSelectStory }) {
                     </Typography>
                   )}
                 </Stack>
+                {onAnalyzeImpact && (
+                  <IconButton
+                    size='small'
+                    aria-label={`Analyze impact of ${s.storyKey}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAnalyzeImpact(s.storyKey, s.jiraSummary);
+                    }}
+                  >
+                    <AutoFixHighIcon fontSize='small' color='primary' />
+                  </IconButton>
+                )}
                 <IconButton
                   size='small'
                   aria-label={`Dismiss ${s.storyKey}`}

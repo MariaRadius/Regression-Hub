@@ -47,4 +47,40 @@ describe('JiraStoriesPanel', () => {
     render(<JiraStoriesPanel onSelectStory={vi.fn()} />);
     expect(screen.getByText(/all stories up to date/i)).toBeInTheDocument();
   });
+
+  it('calls onAnalyzeImpact with storyKey and jiraSummary when Analyze button clicked', () => {
+    const onAnalyzeImpact = vi.fn();
+    render(
+      <JiraStoriesPanel
+        onSelectStory={vi.fn()}
+        onAnalyzeImpact={onAnalyzeImpact}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /analyze impact of PROJ-1/i }),
+    );
+    expect(onAnalyzeImpact).toHaveBeenCalledWith('PROJ-1', 'Fix login');
+  });
+
+  it('does not trigger row click when Analyze button is clicked', () => {
+    const onSelectStory = vi.fn();
+    const onAnalyzeImpact = vi.fn();
+    render(
+      <JiraStoriesPanel
+        onSelectStory={onSelectStory}
+        onAnalyzeImpact={onAnalyzeImpact}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /analyze impact of PROJ-1/i }),
+    );
+    expect(onSelectStory).not.toHaveBeenCalled();
+  });
+
+  it('renders no Analyze button when onAnalyzeImpact is not provided', () => {
+    render(<JiraStoriesPanel onSelectStory={vi.fn()} />);
+    expect(
+      screen.queryByRole('button', { name: /analyze impact/i }),
+    ).toBeNull();
+  });
 });
