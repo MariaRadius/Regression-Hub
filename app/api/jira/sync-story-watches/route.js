@@ -14,8 +14,9 @@ import { withTeam } from '@/lib/server/withTeam';
  *
  * Checks Jira for updates to story keys linked to the team's test cases.
  * Throttled: only re-fetches from Jira when jiraCheckedAt is older than
- * jiraSyncThrottleHours (team setting, default 1 h). Stale stories (jiraUpdatedAt > acknowledgedAt)
- * are returned so the UI can surface notification badges.
+ * jiraSyncThrottleHours (team setting, default 1 h). Stale stories (title or
+ * description changed since last acknowledgement) are returned so the UI can
+ * surface notification badges.
  *
  * Open to all authenticated users (withTeam) — QA and admin both see the bell.
  */
@@ -63,6 +64,7 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
             storyKey: issue.key,
             jiraUpdatedAt: issue.updatedAt,
             jiraSummary: issue.summary,
+            jiraDescription: issue.description,
           }),
         ),
       );
@@ -73,6 +75,7 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
           storyKey: issue.key,
           jiraUpdatedAt: issue.updatedAt,
           jiraSummary: issue.summary,
+          jiraDescription: issue.description,
           jiraCheckedAt: new Date(),
         };
       }
@@ -87,9 +90,13 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
   const stale = keys
     .map((k) => watchMap[k])
     .filter((w) => {
-      if (!w?.jiraUpdatedAt) return false;
+      if (!w?.jiraSummary && !w?.jiraDescription) return false;
       if (!w.acknowledgedAt) return true;
-      return w.jiraUpdatedAt > w.acknowledgedAt;
+      const summaryChanged =
+        (w.jiraSummary ?? '') !== (w.acknowledgedSummary ?? '');
+      const descriptionChanged =
+        (w.jiraDescription ?? '') !== (w.acknowledgedDescription ?? '');
+      return summaryChanged || descriptionChanged;
     })
     .map((w) => ({
       storyKey: w.storyKey,
