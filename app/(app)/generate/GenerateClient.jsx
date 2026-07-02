@@ -6,6 +6,7 @@ import {
   Alert,
   Button,
   Chip,
+  Divider,
   Grid,
   InputAdornment,
   MenuItem,
@@ -14,7 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import GenerateStoryForm from '@/components/GenerateStoryForm';
@@ -33,6 +34,7 @@ export default function GenerateClient({
   initialTotal,
 }) {
   const { releaseId } = useReleaseEnv();
+  const router = useRouter();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingStories, setPendingStories] = useState(null);
@@ -196,22 +198,32 @@ export default function GenerateClient({
             </Button>
           </Stack>
         ) : (
-          <Stack
-            divider={<Stack sx={{ borderBottom: 1, borderColor: 'divider' }} />}
-          >
+          <Stack divider={<Divider />}>
             {cases.map((tc) => (
               <Stack
                 key={tc._id}
-                component={Link}
-                href={`/test-cases?highlight=${tc._id}`}
                 direction='row'
                 spacing={2}
+                onClick={() =>
+                  router.push(
+                    `/test-cases?testKey=${encodeURIComponent(tc.testKey || '')}&open=${tc._id}`,
+                  )
+                }
+                role='button'
+                tabIndex={0}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' &&
+                  router.push(
+                    `/test-cases?testKey=${encodeURIComponent(tc.testKey || '')}&open=${tc._id}`,
+                  )
+                }
+                aria-label={`View ${tc.testKey || tc.testCase}`}
                 sx={{
                   py: 1.5,
                   px: 1,
                   alignItems: 'center',
-                  textDecoration: 'none',
-                  color: 'inherit',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' },
                 }}
               >
                 <Chip

@@ -1,6 +1,7 @@
 'use client';
 
 import { Alert, Button, Skeleton, Stack } from '@mui/material';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Suspense,
   useCallback,
@@ -63,7 +64,11 @@ function TestCasesPage({ user }) {
   const pagination = useTestCasePagination();
   const pageIds = useMemo(() => cases.map((c) => c._id), [cases]);
   const selection = useTestCaseSelection(pageIds);
-  const [activeId, setActiveId] = useState(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [activeId, setActiveId] = useState(
+    () => searchParams.get('open') || null,
+  );
   // activeCase holds the currently displayed case independently of the filtered page.
   // The list (`cases`) is a filtered, paginated slice — after a status change the case
   // may fall out of the current filter. activeCase keeps the drawer populated and
@@ -80,6 +85,18 @@ function TestCasesPage({ user }) {
     if (found) setActiveCase(found);
     // no-op when not found — keeps the last-known state visible in the drawer
   }, [activeId, cases]);
+
+  // Strip the `open` param from the URL once it has been applied, so that
+  // refreshing the page doesn't re-open a stale case. Reads window.location.search
+  // at call-time (not searchParams) so this effect runs only on mount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only; router is stable
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('open')) return;
+    params.delete('open');
+    const qs = params.toString();
+    router.replace(qs ? `/test-cases?${qs}` : '/test-cases', { scroll: false });
+  }, []);
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ sortBy: 'createdAt', sortDir: 'asc' });
