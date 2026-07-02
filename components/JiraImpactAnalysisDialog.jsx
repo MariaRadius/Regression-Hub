@@ -56,6 +56,7 @@ export default function JiraImpactAnalysisDialog({
   const [error, setError] = useState(null);
   const [impact, setImpact] = useState(null);
   const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState(null);
 
   const [checkedAffected, setCheckedAffected] = useState(new Set());
   const [checkedObsolete, setCheckedObsolete] = useState(new Set());
@@ -68,6 +69,7 @@ export default function JiraImpactAnalysisDialog({
     setLoading(true);
     setError(null);
     setImpact(null);
+    setApplyError(null);
     setCheckedAffected(new Set());
     setCheckedObsolete(new Set());
     setCheckedNew(new Set());
@@ -100,6 +102,7 @@ export default function JiraImpactAnalysisDialog({
   const handleApply = useCallback(async () => {
     if (!releaseId) return;
     setApplying(true);
+    setApplyError(null);
     try {
       const ops = [
         ...(impact?.affectedCases ?? [])
@@ -120,21 +123,31 @@ export default function JiraImpactAnalysisDialog({
             }),
           ),
       ];
-      await Promise.all(ops);
+      const results = await Promise.allSettled(ops);
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const succeeded = results.length - failed;
 
-      const updated = (impact?.affectedCases ?? []).filter((c) =>
-        checkedAffected.has(c.id),
-      ).length;
-      const deleted = (impact?.obsoleteCases ?? []).filter((c) =>
-        checkedObsolete.has(c.id),
-      ).length;
-      const added = (impact?.newCases ?? []).filter((_, i) =>
-        checkedNew.has(i),
-      ).length;
+      if (failed > 0) {
+        setApplyError(
+          `${failed} operation(s) failed.${succeeded > 0 ? ` ${succeeded} applied successfully.` : ''}`,
+        );
+      }
 
-      onApplied?.({ updated, deleted, added });
-      routerRef.current.refresh();
-      onClose();
+      if (succeeded > 0) {
+        const updated = (impact?.affectedCases ?? []).filter((c) =>
+          checkedAffected.has(c.id),
+        ).length;
+        const deleted = (impact?.obsoleteCases ?? []).filter((c) =>
+          checkedObsolete.has(c.id),
+        ).length;
+        const added = (impact?.newCases ?? []).filter((_, i) =>
+          checkedNew.has(i),
+        ).length;
+        onApplied?.({ updated, deleted, added });
+        routerRef.current.refresh();
+      }
+
+      if (failed === 0) onClose();
     } finally {
       setApplying(false);
     }
@@ -458,7 +471,12 @@ export default function JiraImpactAnalysisDialog({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2 }}>
-        {!releaseId && (
+        {applyError && (
+          <Alert severity='error' sx={{ flex: 1 }}>
+            {applyError}
+          </Alert>
+        )}
+        {!applyError && !releaseId && (
           <Typography variant='caption' color='text.secondary' sx={{ flex: 1 }}>
             Select a release from the top bar to apply changes.
           </Typography>
@@ -469,7 +487,13 @@ export default function JiraImpactAnalysisDialog({
         <Button
           variant='contained'
           onClick={handleApply}
-          disabled={applying || !impact || totalChecked === 0 || !releaseId}
+          disabled={
+            applying ||
+            !impact ||
+            totalChecked === 0 ||
+            !releaseId ||
+            (checkedNew.size > 0 && [...checkedNew].some((i) => !getAppId(i)))
+          }
           startIcon={
             applying ? <CircularProgress size={16} /> : <ChecklistIcon />
           }
