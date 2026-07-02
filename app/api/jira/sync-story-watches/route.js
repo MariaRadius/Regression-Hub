@@ -90,8 +90,9 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
   const stale = keys
     .map((k) => watchMap[k])
     .filter((w) => {
-      if (!w?.jiraSummary && !w?.jiraDescription) return false;
+      if (!w) return false;
       if (!w.acknowledgedAt) return true;
+      if (w.jiraUpdatedAt && w.jiraUpdatedAt <= w.acknowledgedAt) return false;
       const summaryChanged =
         (w.jiraSummary ?? '') !== (w.acknowledgedSummary ?? '');
       const descriptionChanged =
