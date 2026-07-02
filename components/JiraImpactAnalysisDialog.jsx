@@ -458,7 +458,7 @@ export default function JiraImpactAnalysisDialog({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2 }}>
-        {!releaseId && impact && (
+        {!releaseId && (
           <Typography variant='caption' color='text.secondary' sx={{ flex: 1 }}>
             Select a release from the top bar to apply changes.
           </Typography>
