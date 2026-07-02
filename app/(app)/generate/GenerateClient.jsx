@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import GenerateStoryForm from '@/components/GenerateStoryForm';
+import JiraImpactAnalysisDialog from '@/components/JiraImpactAnalysisDialog';
 import JiraStoriesPanel from '@/components/JiraStoriesPanel';
 import PageHeader from '@/components/PageHeader';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
@@ -40,6 +41,9 @@ export default function GenerateClient({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingStories, setPendingStories] = useState(null);
   const [selectedStoryKey, setSelectedStoryKey] = useState('');
+  const [impactDialogOpen, setImpactDialogOpen] = useState(false);
+  const [impactStoryKey, setImpactStoryKey] = useState('');
+  const [impactStorySummary, setImpactStorySummary] = useState('');
 
   const [applications, setApplications] = useState(initialApplications);
   const [modules, setModules] = useState(initialModules);
@@ -72,6 +76,12 @@ export default function GenerateClient({
 
   const handleSelectStory = useCallback((key) => {
     setSelectedStoryKey(key);
+  }, []);
+
+  const handleAnalyzeImpact = useCallback((storyKey, jiraSummary) => {
+    setImpactStoryKey(storyKey);
+    setImpactStorySummary(jiraSummary ?? '');
+    setImpactDialogOpen(true);
   }, []);
 
   const handleGenerate = useCallback((combinations) => {
@@ -114,7 +124,10 @@ export default function GenerateClient({
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={6} sx={{ display: 'flex' }}>
-          <JiraStoriesPanel onSelectStory={handleSelectStory} />
+          <JiraStoriesPanel
+            onSelectStory={handleSelectStory}
+            onAnalyzeImpact={handleAnalyzeImpact}
+          />
         </Grid>
         <Grid size={6} sx={{ display: 'flex' }}>
           <GenerateStoryForm
@@ -308,6 +321,22 @@ export default function GenerateClient({
           />
         )}
       </Stack>
+
+      <JiraImpactAnalysisDialog
+        open={impactDialogOpen}
+        storyKey={impactStoryKey}
+        jiraSummary={impactStorySummary}
+        onClose={() => setImpactDialogOpen(false)}
+        onApplied={({ updated, deleted, added }) => {
+          setImpactDialogOpen(false);
+          if (updated + deleted + added > 0) {
+            setPage(1);
+            fetchCases({ page: 1 });
+          }
+        }}
+        applications={applications}
+        modules={modules}
+      />
 
       <AITestCaseSlidesDialog
         open={dialogOpen}
