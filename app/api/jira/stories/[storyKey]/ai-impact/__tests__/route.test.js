@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   isAiConfigured: vi.fn(),
   getJiraStory: vi.fn(),
   getStoryWatch: vi.fn(),
+  recordAnalyzedStorySnapshot: vi.fn(),
   getTestCasesByStory: vi.fn(),
   analyzeTestCaseImpact: vi.fn(),
 }));
@@ -28,6 +29,7 @@ vi.mock('@/lib/server/aiClient', () => ({
 }));
 vi.mock('@/lib/db/jiraStoryWatchesData', () => ({
   getStoryWatch: mocks.getStoryWatch,
+  recordAnalyzedStorySnapshot: mocks.recordAnalyzedStorySnapshot,
 }));
 vi.mock('@/lib/db/testCasesData', () => ({
   getTestCasesByStory: mocks.getTestCasesByStory,
@@ -101,10 +103,11 @@ describe('POST /api/jira/stories/[storyKey]/ai-impact', () => {
     expect(body.impact.affectedCases).toHaveLength(1);
   });
 
-  it('passes acknowledged snapshot as old values', async () => {
+  it('passes acknowledged snapshot (incl. acceptance criteria) as old values', async () => {
     mocks.getStoryWatch.mockResolvedValue({
       acknowledgedSummary: 'Old',
       acknowledgedDescription: 'Old desc',
+      acknowledgedAcceptanceCriteria: 'Old AC',
     });
     await POST(makeReq(), makeCtx());
     expect(mocks.analyzeTestCaseImpact).toHaveBeenCalledWith(
@@ -112,7 +115,19 @@ describe('POST /api/jira/stories/[storyKey]/ai-impact', () => {
       expect.objectContaining({
         oldSummary: 'Old',
         oldDescription: 'Old desc',
+        oldAcceptanceCriteria: 'Old AC',
+        newAcceptanceCriteria: 'AC',
       }),
+    );
+  });
+
+  it('records the analyzed story snapshot so the next run can diff against it', async () => {
+    await POST(makeReq(), makeCtx());
+    expect(mocks.recordAnalyzedStorySnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      't1',
+      'RXR-1',
+      expect.objectContaining({ jiraAcceptanceCriteria: 'AC' }),
     );
   });
 

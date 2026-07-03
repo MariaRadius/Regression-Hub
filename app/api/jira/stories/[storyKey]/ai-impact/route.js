@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getStoryWatch } from '@/lib/db/jiraStoryWatchesData';
+import {
+  getStoryWatch,
+  recordAnalyzedStorySnapshot,
+} from '@/lib/db/jiraStoryWatchesData';
 import { getTeamSettings } from '@/lib/db/settingsData';
 import { getTestCasesByStory } from '@/lib/db/testCasesData';
 import { ApiError } from '@/lib/errors';
@@ -69,14 +72,25 @@ export const POST = withTeam(async (_request, { params }, { teamId, db }) => {
     impact = await analyzeTestCaseImpact(settings, {
       oldSummary: watch?.acknowledgedSummary ?? '',
       oldDescription: watch?.acknowledgedDescription ?? '',
+      oldAcceptanceCriteria: watch?.acknowledgedAcceptanceCriteria ?? '',
       newSummary: story.summary,
       newDescription: story.description,
-      acceptanceCriteria: story.acceptanceCriteria,
+      newAcceptanceCriteria: story.acceptanceCriteria,
       existingTestCases: testCases,
     });
   } catch (err) {
     throw new ApiError(502, err?.message ?? 'AI analysis failed');
   }
+
+  // Persist the exact story content this analysis ran against (the batch sync
+  // does not fetch acceptance criteria) so acknowledging after apply captures
+  // the analyzed snapshot — the next run then diffs against it and won't
+  // re-surface cases already applied.
+  await recordAnalyzedStorySnapshot(db, teamId, storyKey, {
+    jiraSummary: story.summary,
+    jiraDescription: story.description,
+    jiraAcceptanceCriteria: story.acceptanceCriteria,
+  });
 
   const tcMap = new Map(testCases.map((tc) => [tc._id, tc]));
 
