@@ -67,19 +67,35 @@ export const POST = withTeam(async (_request, { params }, { teamId, db }) => {
     throw new ApiError(400, err?.message ?? 'Failed to fetch story from Jira');
   }
 
+  // Idempotency guard: if the story is unchanged since the last acknowledgement
+  // (same summary, description, AND acceptance criteria), there is definitionally
+  // nothing to analyze. Decide this deterministically instead of trusting the AI
+  // to return empty — otherwise applied cases re-surface on every re-run.
+  const norm = (s) => (s ?? '').trim();
+  const unchangedSinceAck =
+    Boolean(watch?.acknowledgedAt) &&
+    norm(watch.acknowledgedSummary) === norm(story.summary) &&
+    norm(watch.acknowledgedDescription) === norm(story.description) &&
+    norm(watch.acknowledgedAcceptanceCriteria) ===
+      norm(story.acceptanceCriteria);
+
   let impact;
-  try {
-    impact = await analyzeTestCaseImpact(settings, {
-      oldSummary: watch?.acknowledgedSummary ?? '',
-      oldDescription: watch?.acknowledgedDescription ?? '',
-      oldAcceptanceCriteria: watch?.acknowledgedAcceptanceCriteria ?? '',
-      newSummary: story.summary,
-      newDescription: story.description,
-      newAcceptanceCriteria: story.acceptanceCriteria,
-      existingTestCases: testCases,
-    });
-  } catch (err) {
-    throw new ApiError(502, err?.message ?? 'AI analysis failed');
+  if (unchangedSinceAck) {
+    impact = { affectedCases: [], newCases: [], obsoleteCases: [] };
+  } else {
+    try {
+      impact = await analyzeTestCaseImpact(settings, {
+        oldSummary: watch?.acknowledgedSummary ?? '',
+        oldDescription: watch?.acknowledgedDescription ?? '',
+        oldAcceptanceCriteria: watch?.acknowledgedAcceptanceCriteria ?? '',
+        newSummary: story.summary,
+        newDescription: story.description,
+        newAcceptanceCriteria: story.acceptanceCriteria,
+        existingTestCases: testCases,
+      });
+    } catch (err) {
+      throw new ApiError(502, err?.message ?? 'AI analysis failed');
+    }
   }
 
   // Persist the exact story content this analysis ran against (the batch sync

@@ -121,6 +121,35 @@ describe('POST /api/jira/stories/[storyKey]/ai-impact', () => {
     );
   });
 
+  it('returns empty impact WITHOUT calling the AI when the story matches the acknowledged snapshot', async () => {
+    // Story content is identical to the last-acknowledged snapshot — nothing to
+    // analyze. This must be deterministic, not left to the AI to decide.
+    mocks.getStoryWatch.mockResolvedValue({
+      acknowledgedAt: new Date(),
+      acknowledgedSummary: 'New summary',
+      acknowledgedDescription: 'Desc',
+      acknowledgedAcceptanceCriteria: 'AC',
+    });
+    const res = await POST(makeReq(), makeCtx());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.impact.affectedCases).toEqual([]);
+    expect(body.impact.newCases).toEqual([]);
+    expect(body.impact.obsoleteCases).toEqual([]);
+    expect(mocks.analyzeTestCaseImpact).not.toHaveBeenCalled();
+  });
+
+  it('still analyzes when only the acceptance criteria differs from the snapshot', async () => {
+    mocks.getStoryWatch.mockResolvedValue({
+      acknowledgedAt: new Date(),
+      acknowledgedSummary: 'New summary',
+      acknowledgedDescription: 'Desc',
+      acknowledgedAcceptanceCriteria: 'OLD AC',
+    });
+    await POST(makeReq(), makeCtx());
+    expect(mocks.analyzeTestCaseImpact).toHaveBeenCalled();
+  });
+
   it('records the analyzed story snapshot so the next run can diff against it', async () => {
     await POST(makeReq(), makeCtx());
     expect(mocks.recordAnalyzedStorySnapshot).toHaveBeenCalledWith(
@@ -170,5 +199,101 @@ describe('POST /api/jira/stories/[storyKey]/ai-impact', () => {
     const res = await POST(makeReq(), makeCtx());
     expect(res.status).toBe(502);
     expect((await res.json()).error).toBe('Gemini: quota exceeded');
+  });
+});
+
+/**
+ * End-to-end idempotency across repeated runs with a stateful watch.
+ * Reproduces the reported bug: after applying AC-driven updates and
+ * acknowledging, re-running must NOT re-surface the same cases — no matter how
+ * many times it runs, and even after a genuine story update.
+ */
+describe('impact analysis idempotency across repeated runs', () => {
+  let watchState;
+  let storyState;
+
+  // Simulates the dialog acknowledging the story after a successful apply:
+  // copies the analyzed jira* snapshot into the acknowledged* fields.
+  function simulateAcknowledge() {
+    watchState.acknowledgedAt = new Date();
+    watchState.acknowledgedSummary = watchState.jiraSummary;
+    watchState.acknowledgedDescription = watchState.jiraDescription;
+    watchState.acknowledgedAcceptanceCriteria =
+      watchState.jiraAcceptanceCriteria;
+  }
+
+  beforeEach(() => {
+    storyState = {
+      key: 'RXR-1',
+      summary: 'Admin listing',
+      description: 'Desc v1',
+      acceptanceCriteria: 'AC v1',
+    };
+    // A watch already exists (created by sync) but has never been acknowledged.
+    watchState = {
+      storyKey: 'RXR-1',
+      jiraSummary: storyState.summary,
+      jiraDescription: storyState.description,
+      jiraAcceptanceCriteria: 'stale',
+    };
+
+    mocks.getStoryWatch.mockImplementation(async () => ({ ...watchState }));
+    mocks.recordAnalyzedStorySnapshot.mockImplementation(
+      async (_db, _team, _key, snap) => {
+        Object.assign(watchState, snap);
+      },
+    );
+    mocks.getJiraStory.mockImplementation(async () => ({ ...storyState }));
+    // Realistic AI: returns one affected case whenever it is invoked at all.
+    mocks.analyzeTestCaseImpact.mockResolvedValue({
+      affectedCases: [{ id: 'tc1', reason: 'AC changed', update: {} }],
+      newCases: [],
+      obsoleteCases: [],
+    });
+  });
+
+  async function runAnalysis() {
+    const res = await POST(makeReq(), makeCtx());
+    return (await res.json()).impact;
+  }
+
+  it('surfaces cases once, then stays empty across many re-runs after apply', async () => {
+    // 1) First run — never acknowledged → AI runs, surfaces a case.
+    let impact = await runAnalysis();
+    expect(impact.affectedCases).toHaveLength(1);
+    expect(mocks.analyzeTestCaseImpact).toHaveBeenCalledTimes(1);
+
+    // 2) User applies + dialog acknowledges.
+    simulateAcknowledge();
+
+    // 3) Re-run 5 times — must stay empty and never call the AI again.
+    for (let i = 0; i < 5; i++) {
+      impact = await runAnalysis();
+      expect(impact.affectedCases).toHaveLength(0);
+      expect(impact.newCases).toHaveLength(0);
+      expect(impact.obsoleteCases).toHaveLength(0);
+    }
+    expect(mocks.analyzeTestCaseImpact).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-surfaces after a genuine story update, then stays empty again once applied', async () => {
+    // First cycle: run → apply → acknowledge.
+    await runAnalysis();
+    simulateAcknowledge();
+    expect((await runAnalysis()).affectedCases).toHaveLength(0);
+
+    // Story acceptance criteria genuinely changes in Jira.
+    storyState.acceptanceCriteria = 'AC v2 — add First Name column';
+
+    // Next run detects the change and surfaces the case again.
+    expect((await runAnalysis()).affectedCases).toHaveLength(1);
+
+    // User applies the update + acknowledges the new snapshot.
+    simulateAcknowledge();
+
+    // Re-run 3 more times — must stay empty for the updated snapshot.
+    for (let i = 0; i < 3; i++) {
+      expect((await runAnalysis()).affectedCases).toHaveLength(0);
+    }
   });
 });
