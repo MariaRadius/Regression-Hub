@@ -136,7 +136,9 @@ export default function JiraImpactAnalysisDialog({
     if (!releaseId) return;
     setApplying(true);
     setApplyError(null);
-    const callOpts = { suppressToastForStatus: [400, 422, 500] };
+    // 409 = duplicate on create; handled as a "skipped" outcome below, not a
+    // hard failure, so suppress its global toast (matches AITestCaseSlidesDialog).
+    const callOpts = { suppressToastForStatus: [400, 409, 422, 500] };
 
     // Build labeled tasks so we can report exactly what changed per item.
     const tasks = [
@@ -179,24 +181,30 @@ export default function JiraImpactAnalysisDialog({
     try {
       const results = await Promise.allSettled(tasks.map((t) => t.run()));
       const succeeded = [];
+      const skipped = [];
       const failed = [];
       results.forEach((r, idx) => {
-        if (r.status === 'fulfilled') succeeded.push(tasks[idx]);
-        else
+        if (r.status === 'fulfilled') {
+          succeeded.push(tasks[idx]);
+        } else if (r.reason?.status === 409) {
+          // A new case duplicates an existing one — skip, don't fail.
+          skipped.push({ task: tasks[idx], label: tasks[idx].label });
+        } else {
           failed.push({
             task: tasks[idx],
             message: r.reason?.message ?? 'Unknown error',
           });
+        }
       });
 
-      // When everything applied cleanly, acknowledge the story so its snapshot
-      // matches the current Jira content — the next analysis then diffs against
-      // the applied state and won't re-surface these same cases.
-      if (succeeded.length > 0 && failed.length === 0) {
+      // When nothing hard-failed, acknowledge the story so its snapshot matches
+      // current Jira — the next analysis diffs against the applied state and
+      // won't re-surface these cases. Skipped duplicates are already covered.
+      if (failed.length === 0 && (succeeded.length > 0 || skipped.length > 0)) {
         await acknowledgeStory({ storyKey });
       }
 
-      if (succeeded.length > 0) {
+      if (succeeded.length > 0 || skipped.length > 0) {
         const updated = succeeded.filter((t) => t.kind === 'updated');
         const deleted = succeeded.filter((t) => t.kind === 'deleted');
         const added = succeeded.filter((t) => t.kind === 'added');
@@ -206,12 +214,13 @@ export default function JiraImpactAnalysisDialog({
           added: added.length,
         });
         routerRef.current.refresh();
-        setApplyResult({ updated, deleted, added, failed });
+        setApplyResult({ updated, deleted, added, skipped, failed });
 
         const summary = [
           updated.length && `${updated.length} updated`,
           added.length && `${added.length} added`,
           deleted.length && `${deleted.length} removed`,
+          skipped.length && `${skipped.length} skipped`,
         ]
           .filter(Boolean)
           .join(' · ');
@@ -369,6 +378,13 @@ export default function JiraImpactAnalysisDialog({
                   </Typography>
                 ))}
               </Stack>
+            )}
+
+            {applyResult.skipped.length > 0 && (
+              <Alert severity='info'>
+                {applyResult.skipped.length} new case(s) skipped — already
+                exist: {applyResult.skipped.map((s) => s.label).join('; ')}
+              </Alert>
             )}
 
             {applyResult.failed.length > 0 && (

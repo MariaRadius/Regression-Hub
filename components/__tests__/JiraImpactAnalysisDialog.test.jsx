@@ -19,7 +19,10 @@ vi.mock('@/components/Toast', () => ({ showToast: vi.fn() }));
 import { showToast } from '@/components/Toast';
 import * as ReleaseEnvContext from '@/contexts/ReleaseEnvContext';
 import { acknowledgeStory, analyzeStoryImpact } from '@/lib/api/jira';
-import { updateTestCaseContent } from '@/lib/api/testCases';
+import {
+  createTestCaseInRelease,
+  updateTestCaseContent,
+} from '@/lib/api/testCases';
 import JiraImpactAnalysisDialog from '../JiraImpactAnalysisDialog';
 
 const APPS = [{ _id: 'app1', name: 'App A' }];
@@ -139,6 +142,55 @@ describe('JiraImpactAnalysisDialog', () => {
       expect(screen.getByText(/changes applied/i)).toBeInTheDocument(),
     );
     expect(acknowledgeStory).toHaveBeenCalledWith({ storyKey: 'RXR-1' });
+  });
+
+  it('creates a suggested new case with app/module/story/source on Apply', async () => {
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText(/add new/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await waitFor(() =>
+      expect(createTestCaseInRelease).toHaveBeenCalledWith(
+        'rel-1',
+        expect.objectContaining({
+          testCase: 'SSO login',
+          applicationId: 'app1',
+          moduleId: 'mod1',
+          jiraStory: 'RXR-1',
+          source: 'ai',
+        }),
+        expect.objectContaining({ suppressToastForStatus: expect.any(Array) }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/1 added/)).toBeInTheDocument(),
+    );
+  });
+
+  it('treats a duplicate (409) new case as skipped, not failed, and still acknowledges', async () => {
+    createTestCaseInRelease.mockRejectedValueOnce(
+      Object.assign(new Error('Duplicate test case'), { status: 409 }),
+    );
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText(/update affected/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/changes applied/i)).toBeInTheDocument(),
+    );
+    // Duplicate is reported as skipped, not as a failure
+    expect(screen.getByText(/already exist/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/operation\(s\) failed/i),
+    ).not.toBeInTheDocument();
+    // No hard failures → story is still acknowledged and toast is success
+    expect(acknowledgeStory).toHaveBeenCalledWith({ storyKey: 'RXR-1' });
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('skipped'),
+      'success',
+    );
   });
 
   it('shows a success toast after a successful apply', async () => {
