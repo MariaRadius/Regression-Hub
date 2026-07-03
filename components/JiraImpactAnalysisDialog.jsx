@@ -32,6 +32,7 @@ import {
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { showToast } from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { analyzeStoryImpact } from '@/lib/api/jira';
 import {
@@ -199,6 +200,18 @@ export default function JiraImpactAnalysisDialog({
         });
         routerRef.current.refresh();
         setApplyResult({ updated, deleted, added, failed });
+
+        const summary = [
+          updated.length && `${updated.length} updated`,
+          added.length && `${added.length} added`,
+          deleted.length && `${deleted.length} removed`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        showToast(
+          `${summary} for ${storyKey}`,
+          failed.length > 0 ? 'warning' : 'success',
+        );
       } else if (failed.length > 0) {
         const msgs = [...new Set(failed.map((f) => f.message))];
         setApplyError(

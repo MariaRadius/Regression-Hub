@@ -11,7 +11,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/contexts/ReleaseEnvContext', () => ({
   useReleaseEnv: vi.fn(() => ({ releaseId: 'rel-1' })),
 }));
+vi.mock('@/components/Toast', () => ({ showToast: vi.fn() }));
 
+import { showToast } from '@/components/Toast';
 import * as ReleaseEnvContext from '@/contexts/ReleaseEnvContext';
 import { analyzeStoryImpact } from '@/lib/api/jira';
 import { updateTestCaseContent } from '@/lib/api/testCases';
@@ -122,6 +124,21 @@ describe('JiraImpactAnalysisDialog', () => {
     expect(
       screen.queryByRole('button', { name: /^apply/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows a success toast after a successful apply', async () => {
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText(/update affected/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/changes applied/i)).toBeInTheDocument(),
+    );
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('RXR-1'),
+      'success',
+    );
   });
 
   it('returns to the changes view when the back button is clicked from the summary', async () => {
