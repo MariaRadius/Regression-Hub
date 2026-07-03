@@ -40,6 +40,23 @@ import {
   updateTestCaseContent,
 } from '@/lib/api/testCases';
 
+const FIELD_LABELS = {
+  testCase: 'Description',
+  preconditions: 'Preconditions',
+  steps: 'Steps',
+  expectedResult: 'Expected Result',
+  priority: 'Priority',
+};
+
+// AI may return HTML for the `steps` field; strip tags for a readable preview.
+function toPreviewText(val) {
+  return String(val)
+    .replace(/<li>/gi, '\n• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
 export default function JiraImpactAnalysisDialog({
   open,
   storyKey,
@@ -428,17 +445,45 @@ export default function JiraImpactAnalysisDialog({
                           <Typography variant='body2' color='text.secondary'>
                             {c.reason}
                           </Typography>
-                          {c.update &&
-                            Object.entries(c.update).map(([field, val]) => (
-                              <Typography
-                                key={field}
-                                variant='caption'
-                                color='text.secondary'
-                                sx={{ fontFamily: 'monospace' }}
-                              >
-                                {field}: {String(val).slice(0, 120)}
-                              </Typography>
-                            ))}
+                          {c.update && Object.keys(c.update).length > 0 && (
+                            <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+                              {Object.entries(c.update).map(([field, val]) => (
+                                <Stack
+                                  key={field}
+                                  spacing={0.25}
+                                  sx={{
+                                    borderLeft: 3,
+                                    borderColor: 'warning.main',
+                                    bgcolor: 'action.hover',
+                                    borderRadius: 1,
+                                    px: 1.25,
+                                    py: 0.75,
+                                  }}
+                                >
+                                  <Typography
+                                    variant='caption'
+                                    fontWeight={700}
+                                    color='warning.main'
+                                    sx={{
+                                      textTransform: 'uppercase',
+                                      letterSpacing: 0.4,
+                                    }}
+                                  >
+                                    {FIELD_LABELS[field] ?? field}
+                                  </Typography>
+                                  <Typography
+                                    variant='body2'
+                                    sx={{
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {toPreviewText(val)}
+                                  </Typography>
+                                </Stack>
+                              ))}
+                            </Stack>
+                          )}
                         </Stack>
                       </Stack>
                     ))}
