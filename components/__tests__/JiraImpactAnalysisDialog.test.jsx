@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/api/jira', () => ({ analyzeStoryImpact: vi.fn() }));
+vi.mock('@/lib/api/jira', () => ({
+  analyzeStoryImpact: vi.fn(),
+  acknowledgeStory: vi.fn().mockResolvedValue({ ok: true }),
+}));
 vi.mock('@/lib/api/testCases', () => ({
   updateTestCaseContent: vi.fn().mockResolvedValue({}),
   deleteTestCaseById: vi.fn().mockResolvedValue({}),
@@ -15,7 +18,7 @@ vi.mock('@/components/Toast', () => ({ showToast: vi.fn() }));
 
 import { showToast } from '@/components/Toast';
 import * as ReleaseEnvContext from '@/contexts/ReleaseEnvContext';
-import { analyzeStoryImpact } from '@/lib/api/jira';
+import { acknowledgeStory, analyzeStoryImpact } from '@/lib/api/jira';
 import { updateTestCaseContent } from '@/lib/api/testCases';
 import JiraImpactAnalysisDialog from '../JiraImpactAnalysisDialog';
 
@@ -124,6 +127,18 @@ describe('JiraImpactAnalysisDialog', () => {
     expect(
       screen.queryByRole('button', { name: /^apply/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('acknowledges the story after a fully-successful apply so it is not re-surfaced', async () => {
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText(/update affected/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/changes applied/i)).toBeInTheDocument(),
+    );
+    expect(acknowledgeStory).toHaveBeenCalledWith({ storyKey: 'RXR-1' });
   });
 
   it('shows a success toast after a successful apply', async () => {

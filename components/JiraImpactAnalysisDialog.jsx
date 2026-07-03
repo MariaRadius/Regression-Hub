@@ -34,7 +34,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { showToast } from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
-import { analyzeStoryImpact } from '@/lib/api/jira';
+import { acknowledgeStory, analyzeStoryImpact } from '@/lib/api/jira';
 import {
   createTestCaseInRelease,
   deleteTestCaseById,
@@ -188,6 +188,13 @@ export default function JiraImpactAnalysisDialog({
             message: r.reason?.message ?? 'Unknown error',
           });
       });
+
+      // When everything applied cleanly, acknowledge the story so its snapshot
+      // matches the current Jira content — the next analysis then diffs against
+      // the applied state and won't re-surface these same cases.
+      if (succeeded.length > 0 && failed.length === 0) {
+        await acknowledgeStory({ storyKey });
+      }
 
       if (succeeded.length > 0) {
         const updated = succeeded.filter((t) => t.kind === 'updated');
