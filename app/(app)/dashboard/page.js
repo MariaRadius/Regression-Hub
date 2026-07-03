@@ -1,9 +1,12 @@
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
+import EmptyState from '@/components/EmptyState';
 import MetricCards from '@/components/MetricCards';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
@@ -13,6 +16,7 @@ import { getCachedDashboardData } from '@/lib/db/dashboardData';
 import {
   buildAppBarData,
   buildDonutData,
+  buildFailByModuleData,
   buildModuleBarData,
   buildTesterBarData,
 } from '@/lib/db/dashboardTransforms';
@@ -22,6 +26,7 @@ import { getDb } from '@/lib/mongodb';
 import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 import { ChartHoverProvider } from './charts/ChartHoverContext';
 import DonutChart from './charts/DonutChart';
+import FailByModuleChart from './charts/FailByModuleChart';
 import StackedBarChart from './charts/StackedBarChart';
 import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
@@ -106,12 +111,14 @@ export default async function DashboardPage() {
     criticalSummary,
     topFailingModules,
     criticalFailures,
+    failByModule = [],
     moduleGroups,
     testerGroups,
     modulesByApp,
   } = data;
 
   const donutData = buildDonutData(summary);
+  const failByModuleData = buildFailByModuleData(failByModule);
   const moduleBarData = buildModuleBarData(moduleGroups);
   const appBarData = buildAppBarData(modulesByApp);
   const testerBarData = buildTesterBarData(testerGroups);
@@ -200,6 +207,36 @@ export default async function DashboardPage() {
                     encode: true,
                   }}
                 />
+              </Box>
+            </Panel>
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={2} sx={{ justifyContent: 'center' }}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Panel title='Failures by Module' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
+                {failByModuleData.length > 0 ? (
+                  <FailByModuleChart failData={failByModuleData} />
+                ) : (
+                  <EmptyState
+                    icon={
+                      <TaskAltOutlinedIcon
+                        sx={{ fontSize: 34, color: 'success.main' }}
+                      />
+                    }
+                    title='No failures for this selection'
+                  >
+                    <Typography
+                      variant='pageSub'
+                      color='text.disabled'
+                      sx={{ textAlign: 'center', maxWidth: 320 }}
+                    >
+                      Every executed test case has passed or is still pending —
+                      nothing has failed in the active release and environment.
+                    </Typography>
+                  </EmptyState>
+                )}
               </Box>
             </Panel>
           </Grid>

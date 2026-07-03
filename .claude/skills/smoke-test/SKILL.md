@@ -443,7 +443,7 @@ Run in the **admin context** (reuse the `admin-smoke` page if it is still alive,
 
 Steps:
 1. Navigate to `/dashboard`.
-2. `wait_for` text matching any of the visible section labels (e.g. `"Pass / Fail / Pending"` or `"Application Summary"`) timeout=10000.
+2. `wait_for` text matching any of the visible section labels (e.g. `"Pass / Fail / Pending"`, `"Failures by Module"`, or `"Application Summary"`) timeout=10000.
 3. `evaluate_script` → read the current selector value: `document.querySelector('input[placeholder="Select context…"]')?.value` — record as `$PREV_CTX`.
 4. `click` the `input[placeholder="Select context…"]` to open the dropdown.
 5. `wait_for` selector `li[role="option"]` timeout=5000 (wait for options to appear).

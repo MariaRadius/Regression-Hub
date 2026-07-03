@@ -20,6 +20,25 @@ export const CHART_THEME = {
 };
 
 /**
+ * Categorical palette for charts whose slices are entities (e.g. modules), not
+ * statuses. Soft, low-saturation tints tuned to sit with the dashboard's airy
+ * metric cards (mint / blush / peach) rather than shout over them — a blend of
+ * cool and warm hues so slices stay distinguishable without feeling harsh.
+ * `CATEGORICAL_OTHER` colors a rolled-up "Other" bucket.
+ */
+export const CATEGORICAL_PALETTE = [
+  '#5cb8ac', // soft teal
+  '#6fb4d1', // soft cyan
+  '#f2a765', // soft peach
+  '#e592a0', // soft blush
+  '#8fbf8f', // soft sage
+  '#9d93d1', // soft lavender
+  '#7fc7bf', // soft mint
+  '#e0b57e', // soft sand
+];
+export const CATEGORICAL_OTHER = '#c3cbd4'; // soft slate grey — the "Other" rollup
+
+/**
  * Inline style object for chart tooltip containers.
  * Usage: <div style={TOOLTIP_STYLE}>...</div>
  * Plain CSS — no MUI dependency.

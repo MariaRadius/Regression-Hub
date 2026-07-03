@@ -34,7 +34,7 @@ const LABEL_GAP = 24; // minimum vertical separation between same-side labels
  * surplus proportionally from slices already above the floor. Zero-valued
  * slices stay at 0 (no wedge). Returns fractions summing to ~1.
  */
-function minSliceFractions(values, minFraction) {
+export function minSliceFractions(values, minFraction) {
   const total = values.reduce((s, v) => s + (v > 0 ? v : 0), 0);
   if (total <= 0) return values.map(() => 0);
 

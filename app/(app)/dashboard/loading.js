@@ -50,7 +50,18 @@ export default function DashboardLoading() {
         ))}
       </Grid>
 
-      {/* Full-width module bar chart skeleton */}
+      {/* Half-width Failures by Module chart skeleton (centered) */}
+      <Grid container spacing={2} sx={{ justifyContent: 'center' }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Skeleton
+            variant='rectangular'
+            height={280}
+            sx={{ borderRadius: 2 }}
+          />
+        </Grid>
+      </Grid>
+
+      {/* Two half-width insight panel skeletons */}
       <Grid container spacing={2}>
         {INSIGHT_PANEL_KEYS.map((k) => (
           <Grid size={{ xs: 12, lg: 6 }} key={k}>
