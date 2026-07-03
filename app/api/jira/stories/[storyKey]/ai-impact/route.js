@@ -8,6 +8,20 @@ import { analyzeTestCaseImpact, isAiConfigured } from '@/lib/server/aiClient';
 import { getJiraStory, isJiraConfigured } from '@/lib/server/jiraClient';
 import { withTeam } from '@/lib/server/withTeam';
 
+function coerceUpdateFields(update) {
+  if (!update || typeof update !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(update).map(([k, v]) => {
+      if (typeof v === 'string') return [k, v];
+      if (v !== null && typeof v === 'object') {
+        const strVals = Object.values(v).filter((s) => typeof s === 'string');
+        return [k, strVals.length > 0 ? strVals[0] : JSON.stringify(v)];
+      }
+      return [k, String(v)];
+    }),
+  );
+}
+
 /**
  * POST /api/jira/stories/[storyKey]/ai-impact
  *
@@ -50,29 +64,39 @@ export const POST = withTeam(async (_request, { params }, { teamId, db }) => {
     throw new ApiError(400, err?.message ?? 'Failed to fetch story from Jira');
   }
 
-  const impact = await analyzeTestCaseImpact(settings, {
-    oldSummary: watch?.acknowledgedSummary ?? '',
-    oldDescription: watch?.acknowledgedDescription ?? '',
-    newSummary: story.summary,
-    newDescription: story.description,
-    acceptanceCriteria: story.acceptanceCriteria,
-    existingTestCases: testCases,
-  });
+  let impact;
+  try {
+    impact = await analyzeTestCaseImpact(settings, {
+      oldSummary: watch?.acknowledgedSummary ?? '',
+      oldDescription: watch?.acknowledgedDescription ?? '',
+      newSummary: story.summary,
+      newDescription: story.description,
+      acceptanceCriteria: story.acceptanceCriteria,
+      existingTestCases: testCases,
+    });
+  } catch (err) {
+    throw new ApiError(502, err?.message ?? 'AI analysis failed');
+  }
 
   const tcMap = new Map(testCases.map((tc) => [tc._id, tc]));
+
+  const validAffected = impact.affectedCases.filter((c) => tcMap.has(c.id));
+  const validObsolete = impact.obsoleteCases.filter((c) => tcMap.has(c.id));
+
   const changedIds = new Set([
-    ...impact.affectedCases.map((c) => c.id),
-    ...impact.obsoleteCases.map((c) => c.id),
+    ...validAffected.map((c) => c.id),
+    ...validObsolete.map((c) => c.id),
   ]);
 
   const enrichedImpact = {
-    affectedCases: impact.affectedCases.map((c) => ({
+    affectedCases: validAffected.map((c) => ({
       ...c,
       testKey: tcMap.get(c.id)?.testKey ?? null,
       testCase: tcMap.get(c.id)?.testCase ?? '',
+      update: coerceUpdateFields(c.update),
     })),
     newCases: impact.newCases,
-    obsoleteCases: impact.obsoleteCases.map((c) => ({
+    obsoleteCases: validObsolete.map((c) => ({
       ...c,
       testKey: tcMap.get(c.id)?.testKey ?? null,
       testCase: tcMap.get(c.id)?.testCase ?? '',

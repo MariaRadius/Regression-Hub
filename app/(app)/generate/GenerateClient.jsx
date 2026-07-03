@@ -328,7 +328,6 @@ export default function GenerateClient({
         jiraSummary={impactStorySummary}
         onClose={() => setImpactDialogOpen(false)}
         onApplied={({ updated, deleted, added }) => {
-          setImpactDialogOpen(false);
           if (updated + deleted + added > 0) {
             setPage(1);
             fetchCases({ page: 1 });

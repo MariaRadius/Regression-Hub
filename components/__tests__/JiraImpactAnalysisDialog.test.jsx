@@ -91,13 +91,52 @@ describe('JiraImpactAnalysisDialog', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     await waitFor(() =>
-      expect(updateTestCaseContent).toHaveBeenCalledWith('rel-1', 'tc1', {
-        testCase: 'New title',
-      }),
+      expect(updateTestCaseContent).toHaveBeenCalledWith(
+        'rel-1',
+        'tc1',
+        { testCase: 'New title' },
+        expect.objectContaining({ suppressToastForStatus: expect.any(Array) }),
+      ),
     );
     expect(onApplied).toHaveBeenCalledWith(
       expect.objectContaining({ updated: 1 }),
     );
+  });
+
+  it('shows a success summary listing what changed after Apply succeeds', async () => {
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText(/update affected/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/changes applied/i)).toBeInTheDocument(),
+    );
+    // Summary line reflects the applied counts
+    expect(screen.getByText(/1 updated/)).toBeInTheDocument();
+    // Per-item listing shows the new case title and the updated field
+    expect(screen.getByText(/SSO login/)).toBeInTheDocument();
+    expect(screen.getByText(/testCase/)).toBeInTheDocument();
+    // Footer collapses to a single Done button
+    expect(screen.getByRole('button', { name: /done/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^apply/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('returns to the changes view when the back button is clicked from the summary', async () => {
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText(/update affected/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/changes applied/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /back to changes/i }));
+    // The accordion changes view is shown again, summary is gone
+    expect(screen.getByText(/update affected/i)).toBeInTheDocument();
+    expect(screen.queryByText(/changes applied/i)).not.toBeInTheDocument();
   });
 
   it('shows "Select a release" warning and disables Apply when releaseId is null', async () => {

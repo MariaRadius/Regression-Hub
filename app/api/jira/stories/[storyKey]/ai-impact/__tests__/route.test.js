@@ -147,4 +147,13 @@ describe('POST /api/jira/stories/[storyKey]/ai-impact', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('Jira 404');
   });
+
+  it('returns 502 when analyzeTestCaseImpact throws', async () => {
+    mocks.analyzeTestCaseImpact.mockRejectedValue(
+      new Error('Gemini: quota exceeded'),
+    );
+    const res = await POST(makeReq(), makeCtx());
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toBe('Gemini: quota exceeded');
+  });
 });

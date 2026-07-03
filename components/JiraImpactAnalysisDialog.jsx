@@ -1,6 +1,7 @@
 'use client';
 
 import AddCircleOutlinedIcon from '@mui/icons-material/AddCircleOutlined';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import ChecklistIcon from '@mui/icons-material/ChecklistRounded';
@@ -58,6 +59,7 @@ export default function JiraImpactAnalysisDialog({
   const [impact, setImpact] = useState(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState(null);
+  const [applyResult, setApplyResult] = useState(null);
 
   const [checkedAffected, setCheckedAffected] = useState(new Set());
   const [checkedObsolete, setCheckedObsolete] = useState(new Set());
@@ -67,10 +69,12 @@ export default function JiraImpactAnalysisDialog({
 
   useEffect(() => {
     if (!open || !storyKey) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setImpact(null);
     setApplyError(null);
+    setApplyResult(null);
     setCheckedAffected(new Set());
     setCheckedObsolete(new Set());
     setCheckedNew(new Set());
@@ -79,13 +83,23 @@ export default function JiraImpactAnalysisDialog({
 
     analyzeStoryImpact(storyKey)
       .then((data) => {
+        if (cancelled) return;
         setImpact(data.impact);
         setCheckedAffected(new Set(data.impact.affectedCases.map((c) => c.id)));
         setCheckedObsolete(new Set(data.impact.obsoleteCases.map((c) => c.id)));
         setCheckedNew(new Set(data.impact.newCases.map((_, i) => i)));
       })
-      .catch((err) => setError(err?.message ?? 'Analysis failed'))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err?.message ?? 'Analysis failed');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, storyKey]);
 
   const toggle = useCallback((setter, key) => {
@@ -104,51 +118,76 @@ export default function JiraImpactAnalysisDialog({
     if (!releaseId) return;
     setApplying(true);
     setApplyError(null);
-    try {
-      const ops = [
-        ...(impact?.affectedCases ?? [])
-          .filter((c) => checkedAffected.has(c.id))
-          .map((c) => updateTestCaseContent(releaseId, c.id, c.update)),
-        ...(impact?.obsoleteCases ?? [])
-          .filter((c) => checkedObsolete.has(c.id))
-          .map((c) => deleteTestCaseById(releaseId, c.id)),
-        ...(impact?.newCases ?? [])
-          .filter((_, i) => checkedNew.has(i))
-          .map((tc, i) =>
-            createTestCaseInRelease(releaseId, {
-              ...tc,
-              applicationId: newCaseAppIds[i] ?? applications[0]?._id ?? '',
-              moduleId: newCaseModIds[i] ?? modules[0]?._id ?? '',
-              jiraStory: storyKey,
-              source: 'ai',
-            }),
-          ),
-      ];
-      const results = await Promise.allSettled(ops);
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      const succeeded = results.length - failed;
+    const callOpts = { suppressToastForStatus: [400, 422, 500] };
 
-      if (failed > 0) {
+    // Build labeled tasks so we can report exactly what changed per item.
+    const tasks = [
+      ...(impact?.affectedCases ?? [])
+        .filter((c) => checkedAffected.has(c.id))
+        .map((c) => ({
+          kind: 'updated',
+          label: c.testKey || c.testCase || c.id,
+          fields: Object.keys(c.update ?? {}),
+          run: () => updateTestCaseContent(releaseId, c.id, c.update, callOpts),
+        })),
+      ...(impact?.obsoleteCases ?? [])
+        .filter((c) => checkedObsolete.has(c.id))
+        .map((c) => ({
+          kind: 'deleted',
+          label: c.testKey || c.testCase || c.id,
+          run: () => deleteTestCaseById(releaseId, c.id, callOpts),
+        })),
+      ...(impact?.newCases ?? [])
+        .map((tc, i) => ({ tc, i }))
+        .filter(({ i }) => checkedNew.has(i))
+        .map(({ tc, i }) => ({
+          kind: 'added',
+          label: tc.testCase,
+          run: () =>
+            createTestCaseInRelease(
+              releaseId,
+              {
+                ...tc,
+                applicationId: newCaseAppIds[i] ?? applications[0]?._id ?? '',
+                moduleId: newCaseModIds[i] ?? modules[0]?._id ?? '',
+                jiraStory: storyKey,
+                source: 'ai',
+              },
+              callOpts,
+            ),
+        })),
+    ];
+
+    try {
+      const results = await Promise.allSettled(tasks.map((t) => t.run()));
+      const succeeded = [];
+      const failed = [];
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') succeeded.push(tasks[idx]);
+        else
+          failed.push({
+            task: tasks[idx],
+            message: r.reason?.message ?? 'Unknown error',
+          });
+      });
+
+      if (succeeded.length > 0) {
+        const updated = succeeded.filter((t) => t.kind === 'updated');
+        const deleted = succeeded.filter((t) => t.kind === 'deleted');
+        const added = succeeded.filter((t) => t.kind === 'added');
+        onApplied?.({
+          updated: updated.length,
+          deleted: deleted.length,
+          added: added.length,
+        });
+        routerRef.current.refresh();
+        setApplyResult({ updated, deleted, added, failed });
+      } else if (failed.length > 0) {
+        const msgs = [...new Set(failed.map((f) => f.message))];
         setApplyError(
-          `${failed} operation(s) failed.${succeeded > 0 ? ` ${succeeded} applied successfully.` : ''}`,
+          `${failed.length} operation(s) failed: ${msgs.join('; ')}`,
         );
       }
-
-      if (succeeded > 0) {
-        const updated = (impact?.affectedCases ?? []).filter((c) =>
-          checkedAffected.has(c.id),
-        ).length;
-        const deleted = (impact?.obsoleteCases ?? []).filter((c) =>
-          checkedObsolete.has(c.id),
-        ).length;
-        const added = (impact?.newCases ?? []).filter((_, i) =>
-          checkedNew.has(i),
-        ).length;
-        onApplied?.({ updated, deleted, added });
-        routerRef.current.refresh();
-      }
-
-      if (failed === 0) onClose();
     } finally {
       setApplying(false);
     }
@@ -164,7 +203,6 @@ export default function JiraImpactAnalysisDialog({
     applications,
     modules,
     onApplied,
-    onClose,
   ]);
 
   const totalChecked =
@@ -191,7 +229,123 @@ export default function JiraImpactAnalysisDialog({
       </DialogTitle>
 
       <DialogContent dividers sx={{ p: 0 }}>
-        {loading && (
+        {applyResult && (
+          <Stack spacing={2} sx={{ p: 3 }}>
+            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+              <IconButton
+                size='small'
+                aria-label='Back to changes'
+                onClick={() => setApplyResult(null)}
+              >
+                <ArrowBackIcon fontSize='small' />
+              </IconButton>
+              <CheckCircleOutlinedIcon color='success' />
+              <Typography variant='subtitle1' fontWeight={600}>
+                Changes applied
+              </Typography>
+            </Stack>
+            <Typography variant='body2' color='text.secondary'>
+              {[
+                applyResult.updated.length &&
+                  `${applyResult.updated.length} updated`,
+                applyResult.added.length && `${applyResult.added.length} added`,
+                applyResult.deleted.length &&
+                  `${applyResult.deleted.length} removed`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              {' for '}
+              {storyKey}.
+            </Typography>
+
+            {applyResult.updated.length > 0 && (
+              <Stack spacing={0.5}>
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <EditOutlinedIcon color='warning' fontSize='small' />
+                  <Typography variant='body2' fontWeight={600}>
+                    Updated
+                  </Typography>
+                </Stack>
+                {applyResult.updated.map((t) => (
+                  <Typography
+                    key={`u-${t.label}`}
+                    variant='body2'
+                    color='text.secondary'
+                    sx={{ pl: 3.5 }}
+                  >
+                    {t.label}
+                    {t.fields?.length ? ` (${t.fields.join(', ')})` : ''}
+                  </Typography>
+                ))}
+              </Stack>
+            )}
+
+            {applyResult.added.length > 0 && (
+              <Stack spacing={0.5}>
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <AddCircleOutlinedIcon color='success' fontSize='small' />
+                  <Typography variant='body2' fontWeight={600}>
+                    Added
+                  </Typography>
+                </Stack>
+                {applyResult.added.map((t) => (
+                  <Typography
+                    key={`a-${t.label}`}
+                    variant='body2'
+                    color='text.secondary'
+                    sx={{ pl: 3.5 }}
+                  >
+                    {t.label}
+                  </Typography>
+                ))}
+              </Stack>
+            )}
+
+            {applyResult.deleted.length > 0 && (
+              <Stack spacing={0.5}>
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <DeleteOutlinedIcon color='error' fontSize='small' />
+                  <Typography variant='body2' fontWeight={600}>
+                    Removed
+                  </Typography>
+                </Stack>
+                {applyResult.deleted.map((t) => (
+                  <Typography
+                    key={`d-${t.label}`}
+                    variant='body2'
+                    color='text.secondary'
+                    sx={{ pl: 3.5 }}
+                  >
+                    {t.label}
+                  </Typography>
+                ))}
+              </Stack>
+            )}
+
+            {applyResult.failed.length > 0 && (
+              <Alert severity='warning'>
+                {applyResult.failed.length} operation(s) failed:{' '}
+                {[...new Set(applyResult.failed.map((f) => f.message))].join(
+                  '; ',
+                )}
+              </Alert>
+            )}
+          </Stack>
+        )}
+
+        {!applyResult && loading && (
           <Stack spacing={2} sx={{ p: 3 }}>
             <Skeleton variant='rounded' height={56} />
             <Skeleton variant='rounded' height={56} />
@@ -199,13 +353,13 @@ export default function JiraImpactAnalysisDialog({
           </Stack>
         )}
 
-        {error && (
+        {!applyResult && error && (
           <Alert severity='error' sx={{ m: 2 }}>
             {error}
           </Alert>
         )}
 
-        {!loading && !error && impact && (
+        {!applyResult && !loading && !error && impact && (
           <Stack>
             {/* Update affected */}
             <Accordion defaultExpanded disableGutters elevation={0}>
@@ -328,7 +482,7 @@ export default function JiraImpactAnalysisDialog({
                       const appId = getAppId(i);
                       return (
                         <Stack
-                          key={tc.testCase}
+                          key={`${tc.testCase}-${tc.type}-${tc.priority}`}
                           direction='row'
                           spacing={1.5}
                           sx={{ px: 2, py: 1.5, alignItems: 'flex-start' }}
@@ -575,37 +729,50 @@ export default function JiraImpactAnalysisDialog({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2 }}>
-        {applyError && (
-          <Alert severity='error' sx={{ flex: 1 }}>
-            {applyError}
-          </Alert>
+        {applyResult ? (
+          <Button variant='contained' onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            {applyError && (
+              <Alert severity='error' sx={{ flex: 1 }}>
+                {applyError}
+              </Alert>
+            )}
+            {!applyError && !releaseId && (
+              <Typography
+                variant='caption'
+                color='text.secondary'
+                sx={{ flex: 1 }}
+              >
+                Select a release from the top bar to apply changes.
+              </Typography>
+            )}
+            <Button onClick={onClose} disabled={applying}>
+              Cancel
+            </Button>
+            <Button
+              variant='contained'
+              onClick={handleApply}
+              disabled={
+                applying ||
+                !impact ||
+                totalChecked === 0 ||
+                !releaseId ||
+                (checkedNew.size > 0 &&
+                  [...checkedNew].some((i) => !getAppId(i)))
+              }
+              startIcon={
+                applying ? <CircularProgress size={16} /> : <ChecklistIcon />
+              }
+            >
+              {applying
+                ? 'Applying…'
+                : `Apply${totalChecked > 0 ? ` (${totalChecked})` : ''}`}
+            </Button>
+          </>
         )}
-        {!applyError && !releaseId && (
-          <Typography variant='caption' color='text.secondary' sx={{ flex: 1 }}>
-            Select a release from the top bar to apply changes.
-          </Typography>
-        )}
-        <Button onClick={onClose} disabled={applying}>
-          Cancel
-        </Button>
-        <Button
-          variant='contained'
-          onClick={handleApply}
-          disabled={
-            applying ||
-            !impact ||
-            totalChecked === 0 ||
-            !releaseId ||
-            (checkedNew.size > 0 && [...checkedNew].some((i) => !getAppId(i)))
-          }
-          startIcon={
-            applying ? <CircularProgress size={16} /> : <ChecklistIcon />
-          }
-        >
-          {applying
-            ? 'Applying…'
-            : `Apply${totalChecked > 0 ? ` (${totalChecked})` : ''}`}
-        </Button>
       </DialogActions>
     </Dialog>
   );
