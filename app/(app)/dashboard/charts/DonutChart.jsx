@@ -29,6 +29,11 @@ const LABEL_VERT_MARGIN = 10; // top/bottom room for label text half-height
 const LABEL_SIDE_SPACE = 82; // horizontal room each side (elbow + tick + stacked text)
 const LABEL_GAP = 24; // minimum vertical separation between same-side labels
 
+// Compact leader-label text so a long status name fits the reserved side space
+// without shrinking the donut. The tooltip still shows the full status name.
+const SHORT_LABEL = { 'Known Issue': 'Known' };
+const shortLabel = (name) => SHORT_LABEL[name] ?? name;
+
 /**
  * Convert raw slice values into pie fractions where every non-zero slice spans
  * at least `minFraction` of the circle, conserving the whole by trimming the
@@ -307,20 +312,20 @@ export default function DonutChart({ donutData }) {
                           fontWeight={600}
                           fill={color}
                         >
-                          {buildSideLabelText({ name, value }).map(
-                            (line, lineIndex) => (
-                              <tspan
-                                key={`${name}-${line}`}
-                                x={
-                                  positionedLabel.textX +
-                                  positionedLabel.dir * 3
-                                }
-                                dy={lineIndex === 0 ? '-0.15em' : '1.15em'}
-                              >
-                                {line}
-                              </tspan>
-                            ),
-                          )}
+                          {buildSideLabelText({
+                            name: shortLabel(name),
+                            value,
+                          }).map((line, lineIndex) => (
+                            <tspan
+                              key={`${name}-${line}`}
+                              x={
+                                positionedLabel.textX + positionedLabel.dir * 3
+                              }
+                              dy={lineIndex === 0 ? '-0.15em' : '1.15em'}
+                            >
+                              {line}
+                            </tspan>
+                          ))}
                         </text>
                       </g>
                     );

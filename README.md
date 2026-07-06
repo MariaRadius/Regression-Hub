@@ -83,6 +83,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 - Live metrics: total / passed / failed / pending / known issue
 - Donut chart by status (known issues are their own slice, excluded from failure counts)
 - Failures-by-module pie: failure-only slices (top 8 failing modules + an `Other` rollup); each module slice links to `/test-cases?status=Fail&moduleId=<id>`; composed empty state when there are no failures
+- Fail-severity pie: failures split by the test case's priority (High/Medium/Low); each slice links to `/test-cases?status=Fail&priority=<priority>`
 - Bar chart by module
 - Top failing modules panel: shows up to 5 modules with at least 5 failed test cases; otherwise shows a no-action-needed empty state
 - Critical failures panel: failed High priority `testKey`s only, each linking to `/test-cases` with the existing Fail filter plus an exact `testKey` filter applied; module and application context shown under each id

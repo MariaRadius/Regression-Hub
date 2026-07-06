@@ -17,6 +17,7 @@ import {
   buildAppBarData,
   buildDonutData,
   buildFailByModuleData,
+  buildFailBySeverityData,
   buildModuleBarData,
   buildTesterBarData,
 } from '@/lib/db/dashboardTransforms';
@@ -27,6 +28,7 @@ import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 import { ChartHoverProvider } from './charts/ChartHoverContext';
 import DonutChart from './charts/DonutChart';
 import FailByModuleChart from './charts/FailByModuleChart';
+import FailBySeverityChart from './charts/FailBySeverityChart';
 import StackedBarChart from './charts/StackedBarChart';
 import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
@@ -112,6 +114,7 @@ export default async function DashboardPage() {
     topFailingModules,
     criticalFailures,
     failByModule = [],
+    failBySeverity = [],
     moduleGroups,
     testerGroups,
     modulesByApp,
@@ -119,6 +122,7 @@ export default async function DashboardPage() {
 
   const donutData = buildDonutData(summary);
   const failByModuleData = buildFailByModuleData(failByModule);
+  const failBySeverityData = buildFailBySeverityData(failBySeverity);
   const moduleBarData = buildModuleBarData(moduleGroups);
   const appBarData = buildAppBarData(modulesByApp);
   const testerBarData = buildTesterBarData(testerGroups);
@@ -212,7 +216,7 @@ export default async function DashboardPage() {
           </Grid>
         </Grid>
 
-        <Grid container spacing={2} sx={{ justifyContent: 'center' }}>
+        <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Panel title='Failures by Module' sx={DASHBOARD_PANEL_SX}>
               <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
@@ -234,6 +238,34 @@ export default async function DashboardPage() {
                     >
                       Every executed test case has passed or is still pending —
                       nothing has failed in the active release and environment.
+                    </Typography>
+                  </EmptyState>
+                )}
+              </Box>
+            </Panel>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Panel title='Fail Severity Summary' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
+                {failBySeverityData.length > 0 ? (
+                  <FailBySeverityChart severityData={failBySeverityData} />
+                ) : (
+                  <EmptyState
+                    icon={
+                      <TaskAltOutlinedIcon
+                        sx={{ fontSize: 34, color: 'success.main' }}
+                      />
+                    }
+                    title='No failures for this selection'
+                  >
+                    <Typography
+                      variant='pageSub'
+                      color='text.disabled'
+                      sx={{ textAlign: 'center', maxWidth: 320 }}
+                    >
+                      Failures are grouped by test-case priority
+                      (High/Medium/Low); none have been recorded for the active
+                      release and environment.
                     </Typography>
                   </EmptyState>
                 )}

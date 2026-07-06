@@ -41,6 +41,18 @@ export const CATEGORICAL_PALETTE = [
 export const CATEGORICAL_OTHER = '#c3cbd4'; // soft slate grey — the "Other" rollup
 
 /**
+ * Severity colors for the fail-severity pie, keyed by test-case priority.
+ * Reads as decreasing severity: red → amber → slate; unknown priorities fall
+ * back to the neutral slate.
+ */
+export const SEVERITY_COLORS = {
+  High: '#e14d5a', // error — most severe
+  Medium: '#f08d2f', // warning
+  Low: '#9ca3af', // muted grey — least severe
+};
+export const SEVERITY_FALLBACK = '#c3cbd4';
+
+/**
  * Inline style object for chart tooltip containers.
  * Usage: <div style={TOOLTIP_STYLE}>...</div>
  * Plain CSS — no MUI dependency.

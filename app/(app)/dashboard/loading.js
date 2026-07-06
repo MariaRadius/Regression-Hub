@@ -11,6 +11,7 @@ const METRIC_CARD_KEYS = [
   'tc-failrate',
 ];
 const CHART_PANEL_KEYS = ['chart-donut', 'chart-app', 'chart-tester'];
+const FAIL_PIE_KEYS = ['fail-by-module', 'fail-by-severity'];
 const INSIGHT_PANEL_KEYS = ['insight-modules', 'insight-critical'];
 const SUMMARY_PANEL_KEYS = ['summary-left', 'summary-right'];
 
@@ -50,15 +51,17 @@ export default function DashboardLoading() {
         ))}
       </Grid>
 
-      {/* Half-width Failures by Module chart skeleton (centered) */}
-      <Grid container spacing={2} sx={{ justifyContent: 'center' }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Skeleton
-            variant='rectangular'
-            height={280}
-            sx={{ borderRadius: 2 }}
-          />
-        </Grid>
+      {/* Two half-width failure pie skeletons (by module + by severity) */}
+      <Grid container spacing={2}>
+        {FAIL_PIE_KEYS.map((k) => (
+          <Grid size={{ xs: 12, md: 6 }} key={k}>
+            <Skeleton
+              variant='rectangular'
+              height={280}
+              sx={{ borderRadius: 2 }}
+            />
+          </Grid>
+        ))}
       </Grid>
 
       {/* Two half-width insight panel skeletons */}
