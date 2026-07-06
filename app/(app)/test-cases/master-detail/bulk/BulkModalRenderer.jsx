@@ -1,4 +1,5 @@
 import BulkFailModal from './BulkFailModal';
+import BulkKnownIssueModal from './BulkKnownIssueModal';
 import BulkPassModal from './BulkPassModal';
 import BulkPendingModal from './BulkPendingModal';
 import BulkReassignModal from './BulkReassignModal';
@@ -7,6 +8,7 @@ const MODAL_MAP = {
   pass: BulkPassModal,
   fail: BulkFailModal,
   pending: BulkPendingModal,
+  'known-issue': BulkKnownIssueModal,
   reassign: BulkReassignModal,
 };
 

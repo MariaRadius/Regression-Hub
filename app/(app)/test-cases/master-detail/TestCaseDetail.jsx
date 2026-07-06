@@ -1,4 +1,6 @@
 'use client';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
@@ -35,6 +37,7 @@ const STATUS_COLOR = {
   [STATUS.PASS]: 'success',
   [STATUS.FAIL]: 'error',
   [STATUS.PENDING]: 'warning',
+  [STATUS.KNOWN_ISSUE]: 'info',
 };
 
 const FIELD_LABELS = Object.freeze({
@@ -170,6 +173,7 @@ function HistoryDetailRow({ detail }) {
   function statusIcon(status) {
     if (status === STATUS.PASS) return <CheckCircleOutlinedIcon />;
     if (status === STATUS.FAIL) return <HighlightOffOutlinedIcon />;
+    if (status === STATUS.KNOWN_ISSUE) return <BugReportOutlinedIcon />;
     return <HourglassEmptyOutlinedIcon />;
   }
 
@@ -511,7 +515,7 @@ function ExecutionDetails({ envResults, envLoading }) {
 /**
  * Detail panel: read-only sectioned view of a selected test case.
  * All edits go through modals — identity fields via the Edit modal (onEdit),
- * execution fields via the Pass / Fail / Pending modals (onAction).
+ * execution fields via the Pass / Fail / Pending / Known Issue modals (onAction).
  *
  * Shows a per-environment results grid when releaseId + environments are provided.
  */
@@ -666,6 +670,39 @@ export default function TestCaseDetail({
           >
             Pending
           </Button>
+        </Tooltip>
+        <Tooltip
+          title={
+            st === STATUS.KNOWN_ISSUE
+              ? 'Already marked as Known Issue — select a different status to change it'
+              : st !== STATUS.FAIL
+                ? 'Available only for failed tests'
+                : ''
+          }
+        >
+          {/* span wrapper lets the tooltip surface even when the button is disabled */}
+          <span>
+            <Button
+              size='small'
+              variant={st === STATUS.KNOWN_ISSUE ? 'contained' : 'outlined'}
+              color='info'
+              disabled={st !== STATUS.FAIL && st !== STATUS.KNOWN_ISSUE}
+              startIcon={
+                st === STATUS.KNOWN_ISSUE ? (
+                  <BugReportIcon />
+                ) : (
+                  <BugReportOutlinedIcon />
+                )
+              }
+              onClick={
+                st === STATUS.FAIL
+                  ? () => onAction('known-issue', tc._id)
+                  : undefined
+              }
+            >
+              Known Issue
+            </Button>
+          </span>
         </Tooltip>
       </Stack>
 

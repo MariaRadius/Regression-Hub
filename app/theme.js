@@ -48,6 +48,10 @@ const theme = createTheme({
       main: '#f08d2f', // --pending
       light: '#fff3e7', // --pending-bg
     },
+    info: {
+      main: '#6366f1', // --known-issue
+      light: '#eef2ff', // --known-issue-bg
+    },
     // Custom keys
     nav: {
       main: '#0f172a', // --nav
@@ -68,6 +72,11 @@ const theme = createTheme({
       main: '#f08d2f', // --pending
       light: '#fff3e7', // --pending-bg
       border: '#f7cc9d', // --pending-border
+    },
+    knownIssue: {
+      main: '#6366f1', // --known-issue
+      light: '#eef2ff', // --known-issue-bg
+      border: '#c7d2fe', // --known-issue-border
     },
   },
 

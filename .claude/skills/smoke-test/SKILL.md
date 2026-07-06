@@ -491,7 +491,7 @@ Steps:
    Record `$INITIAL_ASSIGNEE`.
 
 **Bulk status change (choose a status different from `$INITIAL_STATUS`; if unknown default to "Pending"):**
-8. Click the appropriate bulk toolbar button (one of: `button` with text "Pass", "Fail", or "Pending" — pick one that differs from `$INITIAL_STATUS`). Note which status was selected as `$TARGET_STATUS`.
+8. Click the appropriate bulk toolbar button (one of: `button` with text "Pass", "Fail", or "Pending" — pick one that differs from `$INITIAL_STATUS`). Note which status was selected as `$TARGET_STATUS`. Do NOT pick the "Known Issue" bulk button here — Known Issue is only accepted on a case currently marked Fail and the API rejects it otherwise, so a mixed/arbitrary selection would 400.
 9. A modal opens. The confirm button text is `Mark ${selection.length} as ${$TARGET_STATUS}` — e.g. `"Mark 1 as Pass"`. Use `wait_for` for that text then click the button.
 10. `wait_for` absence of modal timeout=10000 (modal closes after API call).
 11. `list_network_requests resourceTypes=["fetch","xhr"]` — find the `PATCH /api/releases/.*/results` call and confirm it returned 200.
@@ -524,7 +524,7 @@ Steps:
 8. `wait_for` text `"Results by Environment"` timeout=5000 — section is rendered.
 
 **Status change from detail panel:**
-9. Click one of the status buttons inside `#execution-action-buttons` (Pass, Fail, or Pending — pick any one).
+9. Click one of the status buttons inside `#execution-action-buttons` (Pass, Fail, or Pending — pick any one). A 4th "Known Issue" button also lives here but is disabled unless the case is currently Fail (it reclassifies a failure and auto-fetches the linked Test Issue's Jira key from the DB), so do not pick it for this generic status-change step.
 10. `wait_for` text `["Mark 1 as Pass", "Mark 1 as Fail", "Mark 1 as Pending"]` timeout=5000 — confirmation modal opened. `click` the button whose text is `"Mark 1 as ${chosen_status}"`.
 11. `wait_for` absence of modal timeout=10000.
 12. `list_network_requests resourceTypes=["fetch","xhr"]` — confirm `PATCH /api/releases/.*/results` returned 200.

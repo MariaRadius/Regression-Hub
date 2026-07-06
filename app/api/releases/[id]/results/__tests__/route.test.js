@@ -252,6 +252,35 @@ describe('POST /api/releases/[id]/results — Jira issue on Fail', () => {
   });
 });
 
+describe('POST /api/releases/[id]/results — Known Issue', () => {
+  it('forwards jiraKey to recordResult and does not fire the Jira-on-fail flow', async () => {
+    recordResult.mockResolvedValue(undefined);
+    const req = new Request('http://x', {
+      method: 'POST',
+      body: JSON.stringify({
+        tcId: '6642f000000000000000abc1',
+        environment: 'QA',
+        status: 'Known Issue',
+        jiraKey: 'RXR-42',
+      }),
+    });
+    const res = await POST(req, PARAMS);
+
+    expect(res.status).toBe(200);
+    expect(recordResult).toHaveBeenCalledWith(
+      db,
+      't1',
+      RELEASE_ID,
+      '6642f000000000000000abc1',
+      'QA',
+      expect.objectContaining({ status: 'Known Issue', jiraKey: 'RXR-42' }),
+    );
+    // Reclassifying a failure never creates a new Jira issue.
+    expect(createIssuesForFailures).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
 describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
   it('bulk-records Pass for multiple cases', async () => {
     bulkRecordResult.mockResolvedValue(undefined);

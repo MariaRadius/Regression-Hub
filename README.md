@@ -80,8 +80,8 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 ### Dashboard
 
 - Scoped to the active (Release, Environment) selection
-- Live metrics: total / passed / failed / pending
-- Donut chart by status
+- Live metrics: total / passed / failed / pending / known issue
+- Donut chart by status (known issues are their own slice, excluded from failure counts)
 - Failures-by-module pie: failure-only slices (top 8 failing modules + an `Other` rollup); each module slice links to `/test-cases?status=Fail&moduleId=<id>`; composed empty state when there are no failures
 - Bar chart by module
 - Top failing modules panel: shows up to 5 modules with at least 5 failed test cases; otherwise shows a no-action-needed empty state
@@ -110,15 +110,16 @@ Search is server-backed and matches test-case title, application name, module na
 
 Sort is explicit from the list header (not column-click) and supports oldest/newest, title A→Z / Z→A, and assignee A→Z / Z→A.
 
-**Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
+**Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / Known issues / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
 
-**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Reassign / Edit modals. Single-row actions are also available from the detail panel.
+**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Known Issue / Reassign / Edit modals. Single-row actions are also available from the detail panel.
 
 **Test-case business rules (enforcement is server-side; UI reflects these constraints):**
 
 - **BR-15 — Tester identity.** QA users record results as themselves; admin may record on behalf of any active QA user.
 - **R21 — Fail requires notes.** Resetting to Pending requires a reason and clears tester/date while keeping the result row.
 - **Expected result required** before a case can be marked Pass or Fail.
+- **Known Issue** reclassifies a failure as a tracked, accepted problem. It is settable only on a case currently marked Fail. The Jira reference is auto-fetched from the Test Issue linked when the case failed (`jiraIssueKeys` on the result row); a key is requested manually only when the failure has none linked (e.g. Jira disabled). It is its own dashboard category, excluded from failure counts, and is not importable via Excel (interactive-only).
 
 **Detail panel:** Shows `testKey`, full editable fields, a per-environment results grid, and a bottom History toggle that lazy-loads the selected case's activity log without closing the panel. Offers opt-in "reset all environments to Pending" on content edit.
 

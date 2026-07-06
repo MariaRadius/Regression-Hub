@@ -139,7 +139,8 @@ export const POST = withTeam(
       );
     }
 
-    const { tcId, environment, status, testedOn, notes, reason } = parsed.data;
+    const { tcId, environment, status, testedOn, notes, reason, jiraKey } =
+      parsed.data;
 
     // Validate the release exists and the environment is declared
     const release = await getRelease(db, teamId, releaseId);
@@ -165,6 +166,7 @@ export const POST = withTeam(
       testedOn,
       notes,
       reason,
+      jiraKey,
     });
 
     // Auto-mode Jira creation runs only after the result is saved and never
@@ -221,7 +223,8 @@ export const PATCH = withTeam(
       );
     }
 
-    const { environment, status, tcIds, testedOn, notes, reason } = parsed.data;
+    const { environment, status, tcIds, testedOn, notes, reason, jiraKey } =
+      parsed.data;
 
     // Validate the release exists and the environment is declared
     const release = await getRelease(db, teamId, releaseId);
@@ -248,6 +251,7 @@ export const PATCH = withTeam(
       testedOn,
       notes,
       reason,
+      jiraKey,
     }));
 
     await bulkRecordResult(db, teamId, releaseId, environment, entries);

@@ -2,7 +2,9 @@ import { STATUS } from '@/lib/constants';
 
 /** @see {@link __tests__/formatters.test.js} */
 export function normalizedStatus(status) {
-  return status === STATUS.PASS || status === STATUS.FAIL
+  return status === STATUS.PASS ||
+    status === STATUS.FAIL ||
+    status === STATUS.KNOWN_ISSUE
     ? status
     : STATUS.PENDING;
 }

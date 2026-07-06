@@ -4,14 +4,16 @@
  * Chart design tokens — aligned with the app's light MUI theme.
  *
  * Status colors mirror theme.js exactly:
- *   pass    → success.main  #03a769
- *   fail    → error.main    #e14d5a
- *   pending → warning.main  #f08d2f
+ *   pass       → success.main  #03a769
+ *   fail       → error.main    #e14d5a
+ *   pending    → warning.main  #f08d2f
+ *   knownIssue → info.main     #6366f1
  */
 export const CHART_THEME = {
   pass: '#03a769', // bright emerald
   fail: '#e14d5a', // vivid rose red
   pending: '#f08d2f', // softened amber orange
+  knownIssue: '#6366f1', // indigo — a triaged/accepted failure
   bg: '#ffffff', // chart card background (paper)
   surface: '#f9fafb', // donut inner / legend area (background.default)
   text: '#6b7280', // axis labels, legend text (theme text.disabled)

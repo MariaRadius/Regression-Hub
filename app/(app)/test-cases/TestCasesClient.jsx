@@ -102,7 +102,7 @@ function TestCasesPage({ user }) {
   const [sort, setSort] = useState({ sortBy: 'createdAt', sortDir: 'asc' });
   // Jira drafts awaiting QA review after a Fail (ask mode); null = dialog closed.
   const [jiraDrafts, setJiraDrafts] = useState(null);
-  const [openModal, setOpenModal] = useState(null); // 'pass'|'fail'|'pending'|'reassign'|'edit'|null
+  const [openModal, setOpenModal] = useState(null); // 'pass'|'fail'|'pending'|'known-issue'|'reassign'|'edit'|null
   const [singleActionId, setSingleActionId] = useState(null);
   useTestCaseKeyNav({
     cases,

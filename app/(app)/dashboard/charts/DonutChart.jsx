@@ -10,11 +10,12 @@ import { useState } from 'react';
 import { useChartHover } from './ChartHoverContext';
 import { CHART_FADE_IN_STYLE, CHART_THEME, TOOLTIP_STYLE } from './chartTheme';
 
-const KEYS = ['Pass', 'Fail', 'Pending'];
+const KEYS = ['Pass', 'Fail', 'Pending', 'Known Issue'];
 const STATUS_COLOR = {
   Pass: CHART_THEME.pass,
   Fail: CHART_THEME.fail,
   Pending: CHART_THEME.pending,
+  'Known Issue': CHART_THEME.knownIssue,
 };
 const INNER_RADIUS_FRACTION = 0.6;
 const ACTIVE_EXPAND = 6;
@@ -354,7 +355,9 @@ export default function DonutChart({ donutData }) {
                           hideTooltip();
                         }}
                         onClick={() =>
-                          router.push(`/test-cases?status=${name}`)
+                          router.push(
+                            `/test-cases?status=${encodeURIComponent(name)}`,
+                          )
                         }
                       />
                       {label}

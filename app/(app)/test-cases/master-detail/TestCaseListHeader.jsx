@@ -1,4 +1,5 @@
 'use client';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
@@ -107,6 +108,16 @@ export default function TestCaseListHeader({
         >
           Pending
         </Button>
+        <Tooltip title='Reclassify failed cases as a tracked known issue'>
+          <Button
+            size='small'
+            color='info'
+            startIcon={<BugReportOutlinedIcon />}
+            onClick={() => onAction('known-issue')}
+          >
+            Known Issue
+          </Button>
+        </Tooltip>
         <Divider orientation='vertical' flexItem />
         <Button
           size='small'
