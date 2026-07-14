@@ -64,7 +64,7 @@ describe('buildExcelExportData', () => {
       { releaseName: '2.10.1', environment: 'QA' },
     );
 
-    expect(workbook.summaryRows[0]).toEqual(['Regression Hub Export']);
+    expect(workbook.summaryRows[0]).toEqual(['Test Atlas Export']);
     expect(workbook.summaryRows).toContainEqual(['Applications Covered', 2]);
     expect(workbook.summaryRows).toContainEqual(['Release', '2.10.1']);
     expect(workbook.summaryRows).toContainEqual(['Total Test Cases', 2]);

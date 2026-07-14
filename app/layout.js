@@ -6,7 +6,7 @@ import ThemeTopLoader from './ThemeTopLoader';
 import './globals.css';
 
 export const metadata = {
-  title: 'QA Regression Hub',
+  title: 'QA Test Atlas',
 };
 
 export default function RootLayout({ children }) {

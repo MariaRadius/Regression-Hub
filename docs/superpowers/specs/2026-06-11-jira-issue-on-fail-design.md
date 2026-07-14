@@ -5,7 +5,7 @@
 
 ## Goal
 
-When a QA marks a test case as Fail, regression-hub creates a Jira issue in the
+When a QA marks a test case as Fail, test-atlas creates a Jira issue in the
 team's Jira Cloud instance (`irisvisionglobal.atlassian.net`), pre-filled with the
 failure details, and links it to the test case's existing user story (`jiraStory`).
 
@@ -51,7 +51,7 @@ On `POST /api/releases/[id]/results` recording a **Fail**:
 - **Summary:** `[<Environment>] <Test case title> — failed in <Release name>`
 - **Description (ADF):** test case id/module/priority, release + environment,
   failure comments from the fail dialog, recorded-by user, link back to the test
-  case in regression-hub (`NEXT_PUBLIC_APP_URL`).
+  case in test-atlas (`NEXT_PUBLIC_APP_URL`).
 
 ## Failure handling
 
@@ -86,7 +86,7 @@ Approved changes:
    editable draft per case ({tcId, summary, description} | {tcId, reason}) →
    a stepper dialog lets QA edit summary/description and Create or Skip per
    ticket → `POST /api/releases/[id]/jira-issues` ({environment, issues}) creates
-   them. Project key, issue type, story link, and the `regression-hub` label are
+   them. Project key, issue type, story link, and the `test-atlas` label are
    re-derived server-side; the client controls only summary/description text.
 3. **Automatic mode unchanged** — server-side creation during result recording
    (`jiraOnFail` now runs only in auto mode; the `createJiraIssue` request flag

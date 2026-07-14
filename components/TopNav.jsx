@@ -124,7 +124,7 @@ export default function TopNav({ user }) {
             variant='navBrand'
             sx={{ color: 'white', display: 'block' }}
           >
-            Regression Hub
+            Test Atlas
           </Typography>
           <Typography
             variant='metricSub'
@@ -240,7 +240,7 @@ export default function TopNav({ user }) {
                 variant='navBrand'
                 sx={{ color: 'white', display: 'block' }}
               >
-                Regression Hub
+                Test Atlas
               </Typography>
               <Typography
                 variant='metricSub'

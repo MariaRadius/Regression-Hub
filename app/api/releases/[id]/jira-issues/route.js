@@ -10,7 +10,7 @@ import { withTeam } from '@/lib/server/withTeam';
 /**
  * Creates reviewed Jira issue drafts — step 2 of the ask-mode review flow.
  * The client supplies only summary/description per case; project, issue type,
- * story link, and the regression-hub label are re-derived server-side from the
+ * story link, and the test-atlas label are re-derived server-side from the
  * stored test case and environment.
  *
  * Body (application/json): environment, issues[{ tcId, summary, description }]

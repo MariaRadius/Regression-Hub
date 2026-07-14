@@ -1,9 +1,9 @@
 ---
 name: optimize-page
-description: Use when optimizing, debugging, or refactoring a regression-hub app route via dual-phase parallel agents — browser diagnostics, seven-skill code review, and coordinated implementation. Triggered by /optimize-page with a single route argument (e.g. /test-runs).
+description: Use when optimizing, debugging, or refactoring a test-atlas app route via dual-phase parallel agents — browser diagnostics, seven-skill code review, and coordinated implementation. Triggered by /optimize-page with a single route argument (e.g. /test-runs).
 ---
 
-# Optimize Page — regression-hub
+# Optimize Page — test-atlas
 
 ## Overview
 

@@ -8,7 +8,7 @@
 
 ## Overview
 
-Add a "Run Pipeline" button to the Regression Hub release page that triggers the GitLab Playwright automation suite, maps results back to Regression Hub test cases, records pass/fail outcomes, fires the existing Jira on-fail flow, and maintains a per-release run history.
+Add a "Run Pipeline" button to the Test Atlas release page that triggers the GitLab Playwright automation suite, maps results back to Test Atlas test cases, records pass/fail outcomes, fires the existing Jira on-fail flow, and maintains a per-release run history.
 
 ---
 
@@ -62,7 +62,7 @@ One document per triggered run.
   summary: {
     passed: 12,
     failed: 3,
-    unmapped: 2         // TC IDs in GitLab report with no mapping in Regression Hub
+    unmapped: 2         // TC IDs in GitLab report with no mapping in Test Atlas
   },
   results: [
     { gitlabId: "TC001", testKey: "SAP-0001", status: "pass" | "fail", title: "..." },
@@ -79,7 +79,7 @@ One document per triggered run.
 
 ### `pipelineTestMappings` collection
 
-One document per team. Admin-managed. Maps GitLab annotation IDs to Regression Hub testKeys.
+One document per team. Admin-managed. Maps GitLab annotation IDs to Test Atlas testKeys.
 
 ```js
 {
@@ -182,7 +182,7 @@ Runs server-side inside `GET /api/pipeline-runs/[runId]` when GitLab reports com
 ## Test ID Mapping
 
 ### Problem
-Playwright tests are annotated with generic IDs (`TC001`, `TC002`) that don't match Regression Hub's `testKey` format (`SAP-0001`).
+Playwright tests are annotated with generic IDs (`TC001`, `TC002`) that don't match Test Atlas's `testKey` format (`SAP-0001`).
 
 ### Solution
 An admin-managed mapping table (`pipelineTestMappings`) links the two ID spaces. Admins maintain this table in Admin > Pipeline Mappings.

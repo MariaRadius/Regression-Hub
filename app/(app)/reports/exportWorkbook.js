@@ -82,7 +82,7 @@ function buildSummaryRows(cases, releaseName, environment) {
   const applicationCounts = countByApplication(cases);
 
   return [
-    ['Regression Hub Export'],
+    ['Test Atlas Export'],
     ['Editable workbook for release review'],
     [],
     ['Overview'],

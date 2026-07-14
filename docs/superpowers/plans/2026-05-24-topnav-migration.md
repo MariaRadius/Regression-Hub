@@ -90,7 +90,7 @@ export default function TopNav({ user }) {
                 variant='navBrand'
                 sx={{ color: 'white', display: 'block' }}
               >
-                Regression Hub
+                Test Atlas
               </Typography>
               <Typography
                 variant='metricSub'
@@ -138,7 +138,7 @@ export default async function AppLayout({ children }) {
 - [ ] **Step 3: Verify the app loads with brand visible in AppBar**
 
 Run: `npm run dev`
-Expected: AppBar at top shows "QA" box + "Regression Hub". Content sits below the bar. No sidebar.
+Expected: AppBar at top shows "QA" box + "Test Atlas". Content sits below the bar. No sidebar.
 
 - [ ] **Step 4: Commit**
 
@@ -483,7 +483,7 @@ const drawerContent = (
           variant='navBrand'
           sx={{ color: 'white', display: 'block' }}
         >
-          Regression Hub
+          Test Atlas
         </Typography>
         <Typography
           variant='metricSub'

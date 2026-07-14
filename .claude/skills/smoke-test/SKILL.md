@@ -1,9 +1,9 @@
 ---
 name: smoke-test
-description: Use when verifying regression-hub pages render correctly end-to-end with no console or network errors — runs automated DevTools walk for both admin and QA roles and emits a structured JSON report. Download checks (PDF and Excel) are opt-in and only run when explicitly requested.
+description: Use when verifying test-atlas pages render correctly end-to-end with no console or network errors — runs automated DevTools walk for both admin and QA roles and emits a structured JSON report. Download checks (PDF and Excel) are opt-in and only run when explicitly requested.
 ---
 
-# Smoke Test — regression-hub (automated)
+# Smoke Test — test-atlas (automated)
 
 ## When to use
 

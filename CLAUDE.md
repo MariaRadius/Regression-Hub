@@ -1,4 +1,4 @@
-# Regression Hub Rules
+# Test Atlas Rules
 
 > **"Clean as you go"** — rules marked with this tag require opportunistic cleanup: whenever a task touches a file that violates that rule, fix the violation in the same commit. No separate cleanup pass needed; just don't leave the old practice in files you're already editing.
 
