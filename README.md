@@ -87,6 +87,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 - Bar chart by module
 - Top failing modules panel: shows up to 5 modules with at least 5 failed test cases; otherwise shows a no-action-needed empty state
 - Critical failures panel: failed High priority `testKey`s only, each linking to `/test-cases` with the existing Fail filter plus an exact `testKey` filter applied; module and application context shown under each id
+- Known Issues panel: scoped to the active **release** but NOT the active environment — it always covers every environment defined for that release (plus any env that still holds a known issue). An in-panel environment filter (options: `All environments` + each env) defaults to `All`; the top-bar env selector does not drive it. Each visible environment shows its Known Issue count; a count > 0 is clickable and expands an inline list of the known-issue cases (`testKey`, name, Jira key(s) linked to `jiraBaseUrl/browse/<key>` when configured, else plain text). Composed empty state when the selected release has zero known issues.
 - Drag-and-drop `.xlsx` upload tile
 
 ### Releases

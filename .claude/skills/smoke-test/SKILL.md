@@ -459,6 +459,23 @@ Record: `{ scenario: "D1", status: "PASS"|"FAIL"|"SKIPPED", prevCtx, newCtx, das
 
 ---
 
+#### Scenario D1b — Dashboard: Known Issues panel (release-scoped) expand
+
+**Important:** The `"Known Issues by Environment — <release>"` panel is scoped to the active **release** but NOT the active environment — it lists every environment of the selected release. Its in-panel `Environment` filter defaults to `All environments`; the top-bar env selector does not drive it. Non-zero count cells are buttons that expand an inline case list purely client-side — no `/api/…` fetch and no navigation.
+
+Steps:
+1. Navigate to `/dashboard`.
+2. `wait_for` text starting with `"Known Issues by Environment"` timeout=10000.
+3. `evaluate_script` → find a non-zero cell button: `Array.from(document.querySelectorAll('button[aria-label*="known issues"]')).length`. If `0`, mark D1b as `SKIPPED` with reason "no known issues recorded".
+4. `click` the first `button[aria-label*="known issues"]`.
+5. `wait_for` selector matching the expanded row (a table row containing a `testKey`) timeout=5000.
+6. `list_network_requests resourceTypes=["xhr","fetch"]` — confirm NO new `/api/…` request fired from the click (expansion is client-side).
+7. `list_console_messages types=["error"]` — assert zero errors.
+
+Record: `{ scenario: "D1b", status: "PASS"|"FAIL"|"SKIPPED", consoleErrors }`.
+
+---
+
 #### Scenario D2 — Test Cases: checkbox selection + bulk status + bulk reassign
 
 Steps:

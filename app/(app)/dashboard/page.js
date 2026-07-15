@@ -21,6 +21,7 @@ import {
   buildModuleBarData,
   buildTesterBarData,
 } from '@/lib/db/dashboardTransforms';
+import { getCachedReleaseKnownIssues } from '@/lib/db/knownIssuesData';
 import { resolveActiveReleaseEnv } from '@/lib/db/releasesData';
 import { getTeamSettings } from '@/lib/db/settingsData';
 import { getDb } from '@/lib/mongodb';
@@ -32,6 +33,7 @@ import FailBySeverityChart from './charts/FailBySeverityChart';
 import StackedBarChart from './charts/StackedBarChart';
 import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
+import KnownIssuesPanel from './KnownIssuesPanel';
 
 // Re-execute on every router.refresh() so the RSC re-runs the query with the
 // latest selection from the release-context cookie (which the client updates
@@ -83,11 +85,13 @@ export default async function DashboardPage() {
     (await cookies()).get(RELEASE_CTX_COOKIE)?.value,
   );
   const db = await getDb();
-  const [{ releaseId, environment }, { failureThreshold, topModulesLimit }] =
-    await Promise.all([
-      resolveActiveReleaseEnv(db, teamId, stored),
-      getTeamSettings(db, teamId),
-    ]);
+  const [
+    { releaseId, environment },
+    { failureThreshold, topModulesLimit, jiraBaseUrl },
+  ] = await Promise.all([
+    resolveActiveReleaseEnv(db, teamId, stored),
+    getTeamSettings(db, teamId),
+  ]);
 
   // No releases exist yet — render an empty state rather than crashing.
   if (!releaseId || !environment) {
@@ -103,10 +107,13 @@ export default async function DashboardPage() {
     );
   }
 
-  const data = await getCachedDashboardData(teamId, releaseId, environment, {
-    failureThreshold,
-    topModulesLimit,
-  });
+  const [data, knownIssues] = await Promise.all([
+    getCachedDashboardData(teamId, releaseId, environment, {
+      failureThreshold,
+      topModulesLimit,
+    }),
+    getCachedReleaseKnownIssues(teamId, releaseId),
+  ]);
 
   const {
     summary,
@@ -295,6 +302,18 @@ export default async function DashboardPage() {
           criticalFailures={criticalFailures}
           failureThreshold={failureThreshold}
         />
+
+        <Panel
+          title={`Known Issues by Environment — ${knownIssues.releaseName ?? 'Release'}`}
+          sx={DASHBOARD_PANEL_SX}
+        >
+          <Box sx={DASHBOARD_PANEL_BODY_SX}>
+            <KnownIssuesPanel
+              data={knownIssues}
+              jiraBaseUrl={jiraBaseUrl ?? null}
+            />
+          </Box>
+        </Panel>
 
         <Grid container spacing={2}>
           {Object.entries(modulesByApp)

@@ -80,6 +80,9 @@ export default function DashboardLoading() {
       {/* Full-width module bar chart skeleton */}
       <Skeleton variant='rectangular' height={320} sx={{ borderRadius: 2 }} />
 
+      {/* Full-width Known Issues matrix panel skeleton */}
+      <Skeleton variant='rectangular' height={220} sx={{ borderRadius: 2 }} />
+
       {/* Two half-width summary panel skeletons */}
       <Grid container spacing={2}>
         {SUMMARY_PANEL_KEYS.map((k) => (
