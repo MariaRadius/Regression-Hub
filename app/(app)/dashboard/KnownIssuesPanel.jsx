@@ -5,9 +5,9 @@ import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import Box from '@mui/material/Box';
 import Collapse from '@mui/material/Collapse';
 import Link from '@mui/material/Link';
-import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
 import EmptyState from '@/components/EmptyState';
@@ -16,9 +16,10 @@ const ALL_ENVS = 'ALL';
 
 /**
  * Known Issues for the active release, broken down by environment. Scoped to the
- * release (NOT the active environment): an in-panel filter (default "All
- * environments") narrows the visible environments. Each environment that holds a
- * known issue is clickable and expands an inline list of the cases.
+ * release (NOT the active environment): a tab filter (default "All") narrows the
+ * visible environments; picking a single environment reveals its cases directly.
+ * Each environment that holds a known issue is clickable and expands an inline
+ * list of the cases.
  *
  * @param {object} props
  * @param {import('@/lib/db/knownIssuesData').ReleaseKnownIssues} props.data
@@ -60,33 +61,51 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
     0,
   );
 
+  const handleFilterChange = (_e, value) => {
+    setEnvFilter(value);
+    // Picking a specific env reveals its cases immediately; "All" collapses.
+    setExpandedEnv(value === ALL_ENVS ? null : value);
+  };
+
   return (
     <Stack spacing={1.5}>
       <Stack
         direction='row'
-        spacing={1.5}
-        sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+        spacing={2}
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
       >
-        <TextField
-          select
-          size='small'
-          label='Environment'
+        <Tabs
           value={envFilter}
-          onChange={(e) => {
-            setEnvFilter(e.target.value);
-            setExpandedEnv(null);
+          onChange={handleFilterChange}
+          variant='scrollable'
+          scrollButtons='auto'
+          sx={{
+            minHeight: 36,
+            '& .MuiTab-root': {
+              minHeight: 36,
+              minWidth: 'auto',
+              px: 1.5,
+              textTransform: 'none',
+              fontSize: 13,
+            },
           }}
-          sx={{ width: 180 }}
         >
-          <MenuItem value={ALL_ENVS}>All environments</MenuItem>
+          <Tab value={ALL_ENVS} label='All' />
           {environments.map((env) => (
-            <MenuItem key={env} value={env}>
-              {env}
-            </MenuItem>
+            <Tab key={env} value={env} label={env} />
           ))}
-        </TextField>
+        </Tabs>
 
-        <Typography variant='caption' color='text.secondary'>
+        <Typography
+          variant='caption'
+          color='text.secondary'
+          sx={{ flexShrink: 0, pb: 0.5 }}
+        >
           {visibleTotal} known {visibleTotal === 1 ? 'issue' : 'issues'}
         </Typography>
       </Stack>
@@ -107,13 +126,14 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
             >
               <Stack
                 component={hasIssues ? 'button' : 'div'}
+                type={hasIssues ? 'button' : undefined}
                 direction='row'
                 sx={{
                   width: '100%',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   py: 0.75,
-                  px: 0.5,
+                  px: 0.75,
                   border: 0,
                   m: 0,
                   font: 'inherit',
@@ -122,7 +142,15 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
                   backgroundColor: 'transparent',
                   cursor: hasIssues ? 'pointer' : 'default',
                   borderRadius: 1,
-                  ...(hasIssues && { '&:hover': { bgcolor: 'action.hover' } }),
+                  transition: 'background-color 0.15s ease',
+                  ...(hasIssues && {
+                    '&:hover': { bgcolor: 'action.hover' },
+                    '&:focus-visible': {
+                      outline: '2px solid',
+                      outlineColor: 'primary.main',
+                      outlineOffset: -2,
+                    },
+                  }),
                 }}
                 aria-label={
                   hasIssues ? `${env}: ${cell.count} known issues` : undefined
@@ -134,19 +162,35 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
                     : undefined
                 }
               >
-                <Typography variant='body2'>{env}</Typography>
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center', minWidth: 0 }}
+                >
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 999,
+                      flexShrink: 0,
+                      backgroundColor: hasIssues ? 'warning.main' : 'grey.300',
+                    }}
+                  />
+                  <Typography variant='body2' noWrap>
+                    {env}
+                  </Typography>
+                </Stack>
                 <Stack
                   direction='row'
                   spacing={0.5}
-                  sx={{ alignItems: 'center' }}
+                  sx={{ alignItems: 'center', flexShrink: 0 }}
                 >
                   <Typography
                     variant='body2'
                     sx={{
                       fontWeight: hasIssues ? 700 : 400,
                       color: hasIssues ? 'warning.main' : 'text.disabled',
-                      minWidth: 16,
-                      textAlign: 'right',
+                      fontVariantNumeric: 'tabular-nums',
                     }}
                   >
                     {cell.count}
@@ -167,8 +211,16 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
               {hasIssues && (
                 <Collapse in={isExpanded} unmountOnExit>
                   <Stack
-                    spacing={0.5}
-                    sx={{ pl: 1.5, pr: 0.5, pb: 1, pt: 0.25 }}
+                    spacing={0.75}
+                    sx={{
+                      ml: 1.75,
+                      pl: 1.5,
+                      pr: 0.5,
+                      pb: 1.25,
+                      pt: 0.25,
+                      borderLeft: '2px solid',
+                      borderColor: 'warning.light',
+                    }}
                   >
                     {cell.cases.map((c) => (
                       <Stack
@@ -177,7 +229,10 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
                         spacing={1}
                         sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
                       >
-                        <Typography variant='caption' sx={{ fontWeight: 700 }}>
+                        <Typography
+                          variant='caption'
+                          sx={{ fontWeight: 700, flexShrink: 0 }}
+                        >
                           {c.testKey}
                         </Typography>
                         <Typography variant='caption' color='text.secondary'>
@@ -192,6 +247,7 @@ export default function KnownIssuesPanel({ data, jiraBaseUrl }) {
                               target='_blank'
                               rel='noopener noreferrer'
                               underline='hover'
+                              sx={{ fontWeight: 600 }}
                             >
                               {key}
                             </Link>

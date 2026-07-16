@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import KnownIssuesPanel from '../KnownIssuesPanel';
 
@@ -51,19 +51,22 @@ describe('KnownIssuesPanel', () => {
     expect(screen.getByText(/no known issues/i)).toBeInTheDocument();
   });
 
-  it('defaults the environment filter to All and shows every environment of the release', () => {
+  it('defaults the filter to the All tab and shows every environment of the release', () => {
     render(<KnownIssuesPanel data={DATA} jiraBaseUrl='https://jira.test' />);
-    // Both env rows visible under the default "All environments" filter.
+    // "All" tab is selected by default.
+    expect(screen.getByRole('tab', { name: 'All' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // Both env rows visible under the default "All" filter.
     expect(screen.getByRole('button', { name: /QA:/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Prod:/i })).toBeInTheDocument();
   });
 
-  it('narrows to a single environment when the filter changes', () => {
+  it('narrows to a single environment when its tab is selected', () => {
     render(<KnownIssuesPanel data={DATA} jiraBaseUrl='https://jira.test' />);
 
-    fireEvent.mouseDown(screen.getByLabelText('Environment'));
-    const listbox = within(screen.getByRole('listbox'));
-    fireEvent.click(listbox.getByText('QA'));
+    fireEvent.click(screen.getByRole('tab', { name: 'QA' }));
 
     expect(screen.getByRole('button', { name: /QA:/i })).toBeInTheDocument();
     expect(

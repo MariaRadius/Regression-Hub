@@ -1,3 +1,4 @@
+import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
@@ -7,6 +8,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import EmptyState from '@/components/EmptyState';
+import MetaChip from '@/components/MetaChip';
 import MetricCards from '@/components/MetricCards';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
@@ -34,6 +36,7 @@ import StackedBarChart from './charts/StackedBarChart';
 import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
 import KnownIssuesPanel from './KnownIssuesPanel';
+import { DASHBOARD_PANEL_BODY_SX, DASHBOARD_PANEL_SX } from './panelStyles';
 
 // Re-execute on every router.refresh() so the RSC re-runs the query with the
 // latest selection from the release-context cookie (which the client updates
@@ -57,20 +60,6 @@ function formatPercent(value) {
 function formatCount(value) {
   return Number(value || 0).toLocaleString();
 }
-
-const DASHBOARD_PANEL_SX = Object.freeze({
-  overflow: 'hidden',
-  background:
-    'linear-gradient(180deg, rgba(249,250,251,0.9) 0%, rgba(255,255,255,1) 26%)',
-  boxShadow: 1,
-});
-
-const DASHBOARD_PANEL_BODY_SX = Object.freeze({
-  p: 2.5,
-  borderRadius: 3,
-  background:
-    'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.88) 100%)',
-});
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -304,7 +293,17 @@ export default async function DashboardPage() {
         />
 
         <Panel
-          title={`Known Issues by Environment — ${knownIssues.releaseName ?? 'Release'}`}
+          title='Known Issues by Environment'
+          headerActions={
+            knownIssues.releaseName ? (
+              <MetaChip
+                icon={<LabelOutlinedIcon fontSize='small' />}
+                label={knownIssues.releaseName}
+                color='info'
+                variant='outlined'
+              />
+            ) : undefined
+          }
           sx={DASHBOARD_PANEL_SX}
         >
           <Box sx={DASHBOARD_PANEL_BODY_SX}>
