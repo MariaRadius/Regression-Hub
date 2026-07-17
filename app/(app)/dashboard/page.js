@@ -1,4 +1,3 @@
-import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
@@ -8,7 +7,6 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import EmptyState from '@/components/EmptyState';
-import MetaChip from '@/components/MetaChip';
 import MetricCards from '@/components/MetricCards';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
@@ -37,6 +35,7 @@ import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
 import KnownIssuesPanel from './KnownIssuesPanel';
 import { DASHBOARD_PANEL_BODY_SX, DASHBOARD_PANEL_SX } from './panelStyles';
+import ReleaseChip from './ReleaseChip';
 
 // Re-execute on every router.refresh() so the RSC re-runs the query with the
 // latest selection from the release-context cookie (which the client updates
@@ -294,16 +293,7 @@ export default async function DashboardPage() {
 
         <Panel
           title='Known Issues by Environment'
-          headerActions={
-            knownIssues.releaseName ? (
-              <MetaChip
-                icon={<LabelOutlinedIcon fontSize='small' />}
-                label={knownIssues.releaseName}
-                color='info'
-                variant='outlined'
-              />
-            ) : undefined
-          }
+          headerActions={<ReleaseChip name={knownIssues.releaseName} />}
           sx={DASHBOARD_PANEL_SX}
         >
           <Box sx={DASHBOARD_PANEL_BODY_SX}>
