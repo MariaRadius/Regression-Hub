@@ -18,11 +18,20 @@ import {
   tickLabelProps,
 } from './chartTheme';
 
-const KEYS = ['Pass', 'Fail', 'Pending'];
+const KEYS = ['Pass', 'Fail', 'Pending', 'Known Issue'];
 const STATUS_COLOR = {
   Pass: CHART_THEME.pass,
   Fail: CHART_THEME.fail,
   Pending: CHART_THEME.pending,
+  'Known Issue': CHART_THEME.knownIssue,
+};
+// Raw-count field name per status key. Explicit map (not `${key}Count`) because
+// "Known Issue" contains a space that no case transform would resolve cleanly.
+const COUNT_KEY = {
+  Pass: 'passCount',
+  Fail: 'failCount',
+  Pending: 'pendingCount',
+  'Known Issue': 'knownIssueCount',
 };
 const CORNER_RADIUS = 3;
 // Minimum on-screen thickness for any present-but-tiny segment. A 1px line at
@@ -310,7 +319,7 @@ export default function StackedBarChart({
           const raw = bar.bar.data[navTo.valueField] ?? '';
           const val = navTo.encode ? encodeURIComponent(raw) : raw;
           router.push(
-            `/test-cases?${navTo.filterKey}=${val}&status=${barStack.key}`,
+            `/test-cases?${navTo.filterKey}=${val}&status=${encodeURIComponent(barStack.key)}`,
           );
         },
       }),
@@ -340,7 +349,7 @@ export default function StackedBarChart({
   // still has a count, so presence must consider both.
   function segmentPresent(datum, key) {
     const value = datum[key];
-    const count = datum[`${key.toLowerCase()}Count`];
+    const count = datum[COUNT_KEY[key]];
     return (
       (Number.isFinite(value) && value > 0) ||
       (Number.isFinite(count) && count > 0)
@@ -587,7 +596,7 @@ export default function StackedBarChart({
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {KEYS.map((key) => {
-                const countKey = `${key.toLowerCase()}Count`;
+                const countKey = COUNT_KEY[key];
                 const value =
                   scaleType === 'percentage'
                     ? `${tooltipData.bar[key]}% (${tooltipData.bar[countKey]})`

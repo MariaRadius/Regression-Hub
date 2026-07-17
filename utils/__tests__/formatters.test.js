@@ -15,6 +15,10 @@ describe('normalizedStatus', () => {
     expect(normalizedStatus('Fail')).toBe('Fail');
   });
 
+  it('returns Known Issue unchanged', () => {
+    expect(normalizedStatus('Known Issue')).toBe('Known Issue');
+  });
+
   it('converts empty string to Pending', () => {
     expect(normalizedStatus('')).toBe('Pending');
   });

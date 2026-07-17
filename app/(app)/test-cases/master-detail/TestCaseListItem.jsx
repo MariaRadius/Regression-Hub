@@ -10,6 +10,7 @@ const STATUS_COLOR = {
   [STATUS.PASS]: 'success.main',
   [STATUS.FAIL]: 'error.main',
   [STATUS.PENDING]: 'warning.main',
+  [STATUS.KNOWN_ISSUE]: 'info.main',
 };
 const PRIORITY_BAR = {
   [PRIORITIES.HIGH]: 'error.main',

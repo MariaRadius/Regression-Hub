@@ -12,7 +12,7 @@ export default function PageHeader({ eyebrow, title, sub, actions }) {
       {eyebrow && <Typography variant='pageEyebrow'>{eyebrow}</Typography>}
       <Typography variant='pageTitle'>{title}</Typography>
       {sub && (
-        <Typography variant='pageSub' component='div'>
+        <Typography variant='pageSub' component='div' suppressHydrationWarning>
           {sub}
         </Typography>
       )}

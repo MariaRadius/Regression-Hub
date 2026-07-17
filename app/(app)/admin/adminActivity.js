@@ -1,5 +1,16 @@
 import { AUDIT_ACTION, AUDIT_CATEGORY } from '@/lib/constants';
 
+const RELEASE_ACTION_TITLES = {
+  [AUDIT_ACTION.CREATE]: 'Release created',
+  [AUDIT_ACTION.CLONE]: 'Release cloned',
+  [AUDIT_ACTION.ARCHIVE]: 'Release archived',
+  [AUDIT_ACTION.UNARCHIVE]: 'Release unarchived',
+  [AUDIT_ACTION.DELETE]: 'Release deleted',
+  [AUDIT_ACTION.UPDATE]: 'Release renamed',
+  [AUDIT_ACTION.ADD_ENVIRONMENT]: 'Environment added',
+  [AUDIT_ACTION.REMOVE_ENVIRONMENT]: 'Environment removed',
+};
+
 function titleCase(value) {
   if (!value) return 'Unknown';
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -21,11 +32,21 @@ function buildTitle(event) {
   }
 
   if (event.category === AUDIT_CATEGORY.IMPORT) return 'Import completed';
-  if (
-    event.category === AUDIT_CATEGORY.CONFIG &&
-    event.action === AUDIT_ACTION.RESET_DATA
-  ) {
-    return 'Team data cleared';
+
+  if (event.category === AUDIT_CATEGORY.RELEASE) {
+    return RELEASE_ACTION_TITLES[event.action] ?? 'Release updated';
+  }
+
+  if (event.category === AUDIT_CATEGORY.TEST_CASE) {
+    if (event.action === AUDIT_ACTION.EDIT) return 'Test case updated';
+    if (event.action === AUDIT_ACTION.DELETE) return 'Test case deleted';
+    return 'Test case changed';
+  }
+
+  if (event.category === AUDIT_CATEGORY.CONFIG) {
+    if (event.action === AUDIT_ACTION.RESET_DATA) return 'Team data cleared';
+    if (event.action === AUDIT_ACTION.UPDATE) return 'Settings updated';
+    return 'Config updated';
   }
 
   return `${titleCase(event.category)} updated`;
@@ -33,8 +54,10 @@ function buildTitle(event) {
 
 function buildSubject(event) {
   if (event.targetUserName) return event.targetUserName;
+  if (event.subject) return event.subject;
   if (event.environment) return `${event.environment} environment`;
-  return event.subject || 'Admin activity';
+  if (event.tcId) return event.tcId;
+  return 'Admin activity';
 }
 
 function buildDetails(event) {
@@ -51,6 +74,10 @@ function buildDetails(event) {
       details.push(`Updated ${event.updatedCount} test cases`);
     }
     return details;
+  }
+
+  if (event.category === AUDIT_CATEGORY.RELEASE && event.environment) {
+    return [`Environment: ${event.environment}`];
   }
 
   if (event.category === AUDIT_CATEGORY.CONFIG && event.deleted) {

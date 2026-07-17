@@ -60,7 +60,7 @@ const db = client.db(dbName);
 await db.collection('users').createIndex({ username: 1 }, { unique: true });
 
 console.warn('\n══════════════════════════════════════════════════════════');
-console.warn('  QA Regression Hub — User Seed');
+console.warn('  QA Test Atlas — User Seed');
 console.warn('══════════════════════════════════════════════════════════\n');
 
 for (const { teamId, teamName, users } of LOCATIONS) {

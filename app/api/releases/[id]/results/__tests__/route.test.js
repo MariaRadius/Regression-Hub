@@ -14,6 +14,9 @@ const {
   validateEnvironment: vi.fn(),
 }));
 const { getRelease } = vi.hoisted(() => ({ getRelease: vi.fn() }));
+const { createIssuesForFailures } = vi.hoisted(() => ({
+  createIssuesForFailures: vi.fn(),
+}));
 const { checkRateLimit } = vi.hoisted(() => ({
   checkRateLimit: vi.fn(() => ({ ok: true })),
 }));
@@ -49,6 +52,7 @@ vi.mock('@/lib/db/testResultsData', () => ({
   validateEnvironment,
 }));
 vi.mock('@/lib/db/releasesData', () => ({ getRelease }));
+vi.mock('@/lib/server/jiraOnFail', () => ({ createIssuesForFailures }));
 vi.mock('@/lib/rateLimit', () => ({ checkRateLimit }));
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -71,6 +75,7 @@ beforeEach(() => {
   getRelease.mockResolvedValue(ACTIVE_RELEASE);
   validateEnvironment.mockReturnValue(undefined);
   checkRateLimit.mockReturnValue({ ok: true });
+  createIssuesForFailures.mockResolvedValue(null);
 });
 
 describe('GET /api/releases/[id]/results', () => {
@@ -164,6 +169,118 @@ describe('POST /api/releases/[id]/results — BR-15 (QA forces self)', () => {
   });
 });
 
+describe('POST /api/releases/[id]/results — Jira issue on Fail', () => {
+  function failRequest(extra = {}) {
+    return new Request('http://x', {
+      method: 'POST',
+      body: JSON.stringify({
+        tcId: '6642f000000000000000abc1',
+        environment: 'QA',
+        status: 'Fail',
+        notes: 'Crashed on relaunch',
+        ...extra,
+      }),
+    });
+  }
+
+  it('asks the Jira layer after saving a Fail and returns its outcome', async () => {
+    recordResult.mockResolvedValue(undefined);
+    createIssuesForFailures.mockResolvedValue({
+      created: [{ tcId: '6642f000000000000000abc1', key: 'RXR-5678' }],
+      skipped: [],
+      errors: [],
+    });
+
+    const res = await POST(failRequest(), PARAMS);
+
+    expect(res.status).toBe(200);
+    expect(createIssuesForFailures).toHaveBeenCalledWith(db, 't1', {
+      release: ACTIVE_RELEASE,
+      releaseId: RELEASE_ID,
+      environment: 'QA',
+      entries: [
+        {
+          tcId: '6642f000000000000000abc1',
+          notes: 'Crashed on relaunch',
+          testedBy: 'Alice',
+        },
+      ],
+    });
+    expect(await res.json()).toEqual({
+      ok: true,
+      jira: {
+        created: [{ tcId: '6642f000000000000000abc1', key: 'RXR-5678' }],
+        skipped: [],
+        errors: [],
+      },
+    });
+  });
+
+  it('still returns ok with the jira errors when Jira creation fails', async () => {
+    recordResult.mockResolvedValue(undefined);
+    createIssuesForFailures.mockResolvedValue({
+      created: [],
+      skipped: [],
+      errors: [{ tcId: '6642f000000000000000abc1', error: 'auth failed' }],
+    });
+
+    const res = await POST(failRequest(), PARAMS);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).jira.errors).toHaveLength(1);
+  });
+
+  it('omits jira from the response when the Jira layer declines (ask/off mode)', async () => {
+    recordResult.mockResolvedValue(undefined);
+    createIssuesForFailures.mockResolvedValue(null);
+    const res = await POST(failRequest(), PARAMS);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it('does not invoke the Jira layer for Pass results', async () => {
+    recordResult.mockResolvedValue(undefined);
+    const req = new Request('http://x', {
+      method: 'POST',
+      body: JSON.stringify({
+        tcId: '6642f000000000000000abc1',
+        environment: 'QA',
+        status: 'Pass',
+      }),
+    });
+    await POST(req, PARAMS);
+    expect(createIssuesForFailures).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/releases/[id]/results — Known Issue', () => {
+  it('forwards jiraKey to recordResult and does not fire the Jira-on-fail flow', async () => {
+    recordResult.mockResolvedValue(undefined);
+    const req = new Request('http://x', {
+      method: 'POST',
+      body: JSON.stringify({
+        tcId: '6642f000000000000000abc1',
+        environment: 'QA',
+        status: 'Known Issue',
+        jiraKey: 'RXR-42',
+      }),
+    });
+    const res = await POST(req, PARAMS);
+
+    expect(res.status).toBe(200);
+    expect(recordResult).toHaveBeenCalledWith(
+      db,
+      't1',
+      RELEASE_ID,
+      '6642f000000000000000abc1',
+      'QA',
+      expect.objectContaining({ status: 'Known Issue', jiraKey: 'RXR-42' }),
+    );
+    // Reclassifying a failure never creates a new Jira issue.
+    expect(createIssuesForFailures).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
 describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
   it('bulk-records Pass for multiple cases', async () => {
     bulkRecordResult.mockResolvedValue(undefined);
@@ -193,6 +310,48 @@ describe('PATCH /api/releases/[id]/results — R21 bulk record', () => {
         }),
       ]),
     );
+  });
+
+  it('bulk Fail forwards one Jira entry per case and returns the outcome', async () => {
+    bulkRecordResult.mockResolvedValue(undefined);
+    createIssuesForFailures.mockResolvedValue({
+      created: [{ tcId: '6642f000000000000000abc1', key: 'RXR-5678' }],
+      skipped: [
+        { tcId: '6642f000000000000000abc2', reason: 'no-linked-story' },
+      ],
+      errors: [],
+    });
+
+    const req = new Request('http://x', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        environment: 'QA',
+        status: 'Fail',
+        notes: 'Broken everywhere',
+        tcIds: ['6642f000000000000000abc1', '6642f000000000000000abc2'],
+      }),
+    });
+    const res = await PATCH(req, PARAMS);
+
+    expect(res.status).toBe(200);
+    expect(createIssuesForFailures).toHaveBeenCalledWith(db, 't1', {
+      release: ACTIVE_RELEASE,
+      releaseId: RELEASE_ID,
+      environment: 'QA',
+      entries: [
+        {
+          tcId: '6642f000000000000000abc1',
+          notes: 'Broken everywhere',
+          testedBy: 'Alice',
+        },
+        {
+          tcId: '6642f000000000000000abc2',
+          notes: 'Broken everywhere',
+          testedBy: 'Alice',
+        },
+      ],
+    });
+    expect((await res.json()).jira.skipped).toHaveLength(1);
   });
 
   it('returns 400 when tcIds is empty', async () => {

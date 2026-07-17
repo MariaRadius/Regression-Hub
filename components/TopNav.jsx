@@ -2,6 +2,7 @@
 
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -35,9 +36,15 @@ import { locationToChipColor, roleToChipColor } from '@/app/theme';
 import ReleaseEnvSelector from '@/components/ReleaseEnvSelector';
 import { ROLES } from '@/lib/constants';
 
+async function handleSignOut() {
+  await signOut({ redirect: false });
+  window.location.replace('/login');
+}
+
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/test-cases', label: 'Test Cases', Icon: BugReportIcon },
+  { href: '/generate', label: 'Generate', Icon: AutoAwesomeIcon },
   {
     href: '/releases',
     label: 'Releases',
@@ -69,12 +76,6 @@ const TOP_NAV_SX = Object.freeze({
   borderColor: 'rgba(255,255,255,0.08)',
   boxShadow: '0 10px 24px rgba(15,23,42,0.18)',
 });
-
-async function handleSignOut() {
-  const callbackUrl = `${window.location.origin}/login`;
-  await signOut({ redirect: false, callbackUrl });
-  window.location.replace(callbackUrl);
-}
 
 /** @see {@link __tests__/TopNav.test.jsx} */
 export default function TopNav({ user }) {
@@ -123,7 +124,7 @@ export default function TopNav({ user }) {
             variant='navBrand'
             sx={{ color: 'white', display: 'block' }}
           >
-            Regression Hub
+            Test Atlas
           </Typography>
           <Typography
             variant='metricSub'
@@ -239,7 +240,7 @@ export default function TopNav({ user }) {
                 variant='navBrand'
                 sx={{ color: 'white', display: 'block' }}
               >
-                Regression Hub
+                Test Atlas
               </Typography>
               <Typography
                 variant='metricSub'

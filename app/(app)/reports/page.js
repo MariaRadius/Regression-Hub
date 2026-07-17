@@ -5,7 +5,7 @@ import { getDb } from '@/lib/mongodb';
 import ReportsClient from './ReportsClient';
 
 export const metadata = {
-  title: 'Reports | Regression Hub',
+  title: 'Reports | Test Atlas',
   description:
     'Generate PDF signoff reports and Excel exports for any release and environment.',
 };

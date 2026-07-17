@@ -1,5 +1,19 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const icons = require\\('@mui/icons-material'\\); console.log\\(['Notifications','Update','Close'].map\\(n => n + ': ' + \\(n in icons\\)\\)\\)\")",
+      "Bash(lsof -ti:3000)",
+      "Bash(sleep 3 && grep -a \"Ready in\\\\|Another next dev\\\\|Local:\" /tmp/smoke-dev.log 2>/dev/null | head -5)",
+      "Read(//private/tmp/**)",
+      "Bash(git filter-branch *)",
+      "Bash(mkdir -p /Users/Maria/Downloads/regression-hub/app/api/releases/\\\\[id\\\\]/jira-improve-draft/__tests__)",
+      "Bash(git commit -m ' *)"
+    ],
+    "additionalDirectories": [
+      "/Users/Maria/Downloads/regression-hub/app/api/releases/[id]/jira-improve-draft"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -7,8 +21,8 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit:*)",
             "command": "cp CLAUDE.md AGENTS.md && git add AGENTS.md 2>/dev/null || true",
+            "if": "Bash(git commit:*)",
             "shell": "bash",
             "statusMessage": "Syncing AGENTS.md from CLAUDE.md..."
           }

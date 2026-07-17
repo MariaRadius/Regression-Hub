@@ -30,13 +30,6 @@ const LABEL_TO_SURFACE = {
   'Fail Rate': 'fail.light',
 };
 
-const SURFACE_TO_CSS = {
-  'background.paper': '#ffffff',
-  'pass.light': '#e9fbf3',
-  'fail.light': '#fff1f3',
-  'pending.light': '#fff3e7',
-};
-
 export function resolveMetricAccent({ cls, label }) {
   return CLS_TO_PALETTE[cls] ?? LABEL_TO_ACCENT[label] ?? 'divider';
 }
@@ -57,7 +50,6 @@ export default function MetricCards({ cards, loading = false }) {
     <Grid container spacing={2}>
       {cards.map(({ label, value, cls, sub }) => {
         const surfaceKey = resolveMetricSurface({ cls, label });
-        const surfaceColor = SURFACE_TO_CSS[surfaceKey];
         const accentColor = resolveMetricAccent({ cls, label });
 
         return (
@@ -67,25 +59,13 @@ export default function MetricCards({ cards, loading = false }) {
               data-testid='metric-card'
               sx={{
                 height: '100%',
-                position: 'relative',
                 overflow: 'hidden',
                 borderColor: accentColor,
                 backgroundColor: surfaceKey,
                 boxShadow: 1,
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  top: -36,
-                  right: -28,
-                  width: 108,
-                  height: 108,
-                  borderRadius: '50%',
-                  background: `radial-gradient(circle at center, rgba(255,255,255,0.92) 0%, ${surfaceColor} 72%)`,
-                  opacity: 0.7,
-                },
               }}
             >
-              <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+              <CardContent>
                 <Typography variant='metricLabel' color='text.secondary'>
                   {label}
                 </Typography>

@@ -5,9 +5,13 @@ import { ApiError } from '@/lib/errors';
 
 const { db, reset } = createMockDb();
 
-const { updateTeamSettings } = vi.hoisted(() => ({
-  updateTeamSettings: vi.fn(),
-}));
+const { appendAdminActivity, getTeamSettings, updateTeamSettings } = vi.hoisted(
+  () => ({
+    appendAdminActivity: vi.fn(),
+    getTeamSettings: vi.fn(),
+    updateTeamSettings: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/server/withTeam', () => ({
   withAdmin: (handler) => async (req, ctx) => {
@@ -34,13 +38,24 @@ vi.mock('@/lib/server/withTeam', () => ({
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
-vi.mock('@/lib/db/settingsData', () => ({ updateTeamSettings }));
+vi.mock('@/lib/db/settingsData', () => ({
+  getTeamSettings,
+  updateTeamSettings,
+}));
+
+vi.mock('@/lib/db/adminActivityData', () => ({ appendAdminActivity }));
 
 import { PATCH } from '../route';
 
 beforeEach(() => {
   reset();
   vi.clearAllMocks();
+  getTeamSettings.mockResolvedValue({
+    failureThreshold: 5,
+    topModulesLimit: 5,
+    jiraIssueMode: 'ask',
+  });
+  appendAdminActivity.mockResolvedValue(undefined);
 });
 
 function makeRequest(body) {
@@ -73,6 +88,39 @@ describe('PATCH /api/admin/settings', () => {
 
   it('rejects empty body', async () => {
     const res = await PATCH(makeRequest({}));
+    expect(res.status).toBe(400);
+  });
+
+  it('saves a valid jiraIssueMode', async () => {
+    updateTeamSettings.mockResolvedValue(undefined);
+    const res = await PATCH(makeRequest({ jiraIssueMode: 'auto' }));
+    expect(res.status).toBe(200);
+    expect(updateTeamSettings).toHaveBeenCalledWith(db, 't1', {
+      jiraIssueMode: 'auto',
+    });
+  });
+
+  it('rejects an unknown jiraIssueMode', async () => {
+    const res = await PATCH(makeRequest({ jiraIssueMode: 'always' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('saves a valid jiraSyncThrottleHours', async () => {
+    updateTeamSettings.mockResolvedValue(undefined);
+    const res = await PATCH(makeRequest({ jiraSyncThrottleHours: 2 }));
+    expect(res.status).toBe(200);
+    expect(updateTeamSettings).toHaveBeenCalledWith(db, 't1', {
+      jiraSyncThrottleHours: 2,
+    });
+  });
+
+  it('rejects jiraSyncThrottleHours below 1', async () => {
+    const res = await PATCH(makeRequest({ jiraSyncThrottleHours: 0 }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects jiraSyncThrottleHours above 24', async () => {
+    const res = await PATCH(makeRequest({ jiraSyncThrottleHours: 25 }));
     expect(res.status).toBe(400);
   });
 });

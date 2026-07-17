@@ -46,7 +46,7 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 
 1. Push the repo to GitHub.
 2. Import the repo in Vercel.
-3. Set `MONGODB_URI`, `MONGODB_DB`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
+3. Set `MONGODB_URI`, `MONGODB_DB`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` (+ optional `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` for Jira issue creation).
 4. Deploy.
 
 ## Roles
@@ -80,11 +80,14 @@ Every shared module in `utils/`, `hooks/`, and `components/` must ship with a te
 ### Dashboard
 
 - Scoped to the active (Release, Environment) selection
-- Live metrics: total / passed / failed / pending
-- Donut chart by status
+- Live metrics: total / passed / failed / pending / known issue
+- Donut chart by status (known issues are their own slice, excluded from failure counts)
+- Failures-by-module pie: failure-only slices (top 8 failing modules + an `Other` rollup); each module slice links to `/test-cases?status=Fail&moduleId=<id>`; composed empty state when there are no failures
+- Fail-severity pie: failures split by the test case's priority (High/Medium/Low); each slice links to `/test-cases?status=Fail&priority=<priority>`
 - Bar chart by module
 - Top failing modules panel: shows up to 5 modules with at least 5 failed test cases; otherwise shows a no-action-needed empty state
 - Critical failures panel: failed High priority `testKey`s only, each linking to `/test-cases` with the existing Fail filter plus an exact `testKey` filter applied; module and application context shown under each id
+- Known Issues panel: scoped to the active **release** but NOT the active environment — it always covers every environment defined for that release (plus any env that still holds a known issue). An in-panel environment filter (options: `All environments` + each env) defaults to `All`; the top-bar env selector does not drive it. Each visible environment shows its Known Issue count; a count > 0 is clickable and expands an inline list of the known-issue cases (`testKey`, name, Jira key(s) linked to `jiraBaseUrl/browse/<key>` when configured, else plain text). Composed empty state when the selected release has zero known issues.
 - Drag-and-drop `.xlsx` upload tile
 
 ### Releases
@@ -109,15 +112,16 @@ Search is server-backed and matches test-case title, application name, module na
 
 Sort is explicit from the list header (not column-click) and supports oldest/newest, title A→Z / Z→A, and assignee A→Z / Z→A.
 
-**Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
+**Filters:** Linear-style chip strip with saved-view toggles (Mine / Pending / Failed / Known issues / High priority). All filter state is URL-persisted (`?status=`, `?testedBy=`, etc.) and survives reload. "All" clears all filters.
 
-**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Reassign / Edit modals. Single-row actions are also available from the detail panel.
+**Bulk actions:** Select rows → header swaps to Gmail-style toolbar → Pass / Fail / Pending / Known Issue / Reassign / Edit modals. Single-row actions are also available from the detail panel.
 
 **Test-case business rules (enforcement is server-side; UI reflects these constraints):**
 
 - **BR-15 — Tester identity.** QA users record results as themselves; admin may record on behalf of any active QA user.
 - **R21 — Fail requires notes.** Resetting to Pending requires a reason and clears tester/date while keeping the result row.
 - **Expected result required** before a case can be marked Pass or Fail.
+- **Known Issue** reclassifies a failure as a tracked, accepted problem. It is settable only on a case currently marked Fail. The Jira reference is auto-fetched from the Test Issue linked when the case failed (`jiraIssueKeys` on the result row); a key is requested manually only when the failure has none linked (e.g. Jira disabled). It is its own dashboard category, excluded from failure counts, and is not importable via Excel (interactive-only).
 
 **Detail panel:** Shows `testKey`, full editable fields, a per-environment results grid, and a bottom History toggle that lazy-loads the selected case's activity log without closing the panel. Offers opt-in "reset all environments to Pending" on content edit.
 
@@ -166,6 +170,18 @@ Per-case history is read from the detail panel only when the user opens History.
 
 Admin activity logs are a separate admin-only read surface over non-test-case events. They are opened on demand from `/admin`, never loaded with the initial page, and support download after load.
 
+### Jira Integration
+
+Creates a Jira Cloud issue when a test case is marked **Fail**, pre-filled with the failure details, and links it to the case's Jira Story.
+
+- Server-only env vars: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (Atlassian API token, Basic auth). Any missing var disables the integration; the token is never stored in the DB or sent to the client. Optional `JIRA_FIX_VERSION` (e.g. `testRelease`) sets the Jira Release on every created issue — the version must already exist in the target project.
+- Admin → Settings: **Jira issue creation** mode — `Off` / `Ask each time` (default) / `Automatic`.
+- **Ask mode = review before create.** After the Fail is recorded, the client fetches editable drafts (`POST /api/releases/[id]/jira-drafts`) and a stepper dialog walks through each case — QA can edit the summary/description, then Create or Skip per ticket (`POST /api/releases/[id]/jira-issues`). **Automatic mode** creates server-side during result recording with no review.
+- Draft description is a structured template built from the test case: Steps to Reproduce (HTML steps flattened to plain text), Expected Result, Actual Result (the QA's failure notes), module/priority, release/environment, recorded by.
+- Target project is derived from the case's Jira Story key (`RXR-123` → `RXR`); issue type is `Bug` for `Production` (case-insensitive), `Test Issue` otherwise; both are re-derived server-side on create — the client can edit only summary/description. The issue is labelled `test-atlas`, linked "Relates" to the story, and its key is appended to the result row's `jiraIssueKeys` (repeat failures keep every ticket).
+- Cases without a Jira Story are skipped. Jira failures never block result recording — the result saves first; creation errors surface as warnings.
+- **Story-watch notifications**: a bell icon in the Test Cases page header shows a badge when any linked Jira story has been updated since QA last acknowledged it. Click to see which stories changed and filter the list to their test cases. Stories are re-checked from Jira at most once per hour; dismissed via per-story or "Dismiss all" (`POST /api/jira/acknowledge-story`).
+
 ### Reports
 
 One unified, release-grouped surface — every active Release × Environment is a card (no top-of-page selection):
@@ -197,6 +213,8 @@ All routes under `/api/releases/**` are protected; 401 is enforced in `proxy.js`
 | GET | `/api/releases/[id]/results` | admin+qa | List results |
 | GET | `/api/releases/[id]/results/[tcId]` | admin+qa | Minimal per-environment execution rows for one test case (detail panel) |
 | POST | `/api/releases/[id]/results` | admin+qa | Record / bulk-record result |
+| POST | `/api/releases/[id]/jira-drafts` | admin+qa | Build editable Jira issue drafts for failed cases |
+| POST | `/api/releases/[id]/jira-issues` | admin+qa | Create reviewed Jira issues (link story, store key) |
 | POST | `/api/releases/[id]/import` | admin | Import Excel (analyse or commit) |
 | GET | `/api/admin/events` | admin | Lazy-load admin activity logs for the current team |
 | POST | `/api/releases/[id]/snapshot` | admin+qa | Generate + store PDF snapshot (replaces prior snapshot for same release+environment; writes EXPORT/PDF audit event) |

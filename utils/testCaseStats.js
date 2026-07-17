@@ -12,12 +12,23 @@ export function summarizeCases(cases) {
   const failed = cases.filter(
     (t) => normalizedStatus(t.status) === STATUS.FAIL,
   ).length;
-  const pending = total - passed - failed;
+  const knownIssue = cases.filter(
+    (t) => normalizedStatus(t.status) === STATUS.KNOWN_ISSUE,
+  ).length;
+  const pending = total - passed - failed - knownIssue;
   const passPercent = total ? Math.round((passed / total) * 100) : 0;
   const failedCases = cases.filter(
     (t) => normalizedStatus(t.status) === STATUS.FAIL,
   );
-  return { total, passed, failed, pending, passPercent, failedCases };
+  return {
+    total,
+    passed,
+    failed,
+    knownIssue,
+    pending,
+    passPercent,
+    failedCases,
+  };
 }
 
 /**

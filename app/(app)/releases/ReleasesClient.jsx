@@ -26,6 +26,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { showToast } from '@/components/Toast';
 import { deleteRelease, updateRelease } from '@/lib/api/releases';
 import { ROLES } from '@/lib/constants';
 import ReleaseFormDialog from './ReleaseFormDialog';
@@ -86,7 +87,7 @@ function EnvList({ environments }) {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -161,6 +162,15 @@ export default function ReleasesClient({ user, releases: initialReleases }) {
     try {
       await updateRelease(release._id, { archived: !release.archived });
       handleArchiveClose();
+      setReleases((prev) =>
+        prev.map((r) =>
+          r._id === release._id ? { ...r, archived: !r.archived } : r,
+        ),
+      );
+      showToast(
+        `${release.name} ${release.archived ? 'unarchived' : 'archived'}`,
+        'success',
+      );
       router.refresh();
     } catch (err) {
       setError(err?.message ?? 'Failed to update release.');
@@ -182,8 +192,8 @@ export default function ReleasesClient({ user, releases: initialReleases }) {
     try {
       await deleteRelease(release._id, { confirm: 'DELETE' });
       handleDeleteClose();
-      // Optimistically remove from list; router.refresh keeps SSR in sync
       setReleases((prev) => prev.filter((r) => r._id !== release._id));
+      showToast(`${release.name} deleted`, 'success');
       router.refresh();
     } catch (err) {
       setError(err?.message ?? 'Failed to delete release.');

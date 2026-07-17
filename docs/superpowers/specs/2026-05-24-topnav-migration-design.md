@@ -30,7 +30,7 @@ Single `'use client'` component. Receives `user` prop from the server layout.
 Left to right:
 
 1. **Hamburger** — hidden on desktop (`display: { xs: 'flex', md: 'none' }`), opens mobile Drawer
-2. **Brand** — "QA" filled box + "Regression Hub" / "Testing management" text (same visual as current sidebar header)
+2. **Brand** — "QA" filled box + "Test Atlas" / "Testing management" text (same visual as current sidebar header)
 3. **Nav IconButtons** — visible on desktop (`display: { xs: 'none', md: 'flex' }`). One `Tooltip`-wrapped `IconButton` per NAV item. Active route: `color="primary"`. Inactive: `color="inherit"`.
 4. **Spacer** — `Box sx={{ flex: 1 }}`
 5. **Admin menu** — `AdminPanelSettingsIcon` `IconButton`, shown only when `user.role === ROLES.ADMIN`. Opens `Menu` with two `MenuItem`s: Users and Import Test Cases (each a Next.js `Link`).

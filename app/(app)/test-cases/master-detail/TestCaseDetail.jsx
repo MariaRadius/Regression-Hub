@@ -1,4 +1,6 @@
 'use client';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
@@ -27,6 +29,7 @@ import {
   Typography,
 } from '@mui/material';
 import RichTextDisplay from '@/components/RichTextDisplay';
+import { useTeamSettings } from '@/hooks/useSharedData';
 import { STATUS } from '@/lib/constants';
 import { normalizedStatus } from '@/utils/formatters';
 
@@ -34,6 +37,7 @@ const STATUS_COLOR = {
   [STATUS.PASS]: 'success',
   [STATUS.FAIL]: 'error',
   [STATUS.PENDING]: 'warning',
+  [STATUS.KNOWN_ISSUE]: 'info',
 };
 
 const FIELD_LABELS = Object.freeze({
@@ -169,6 +173,7 @@ function HistoryDetailRow({ detail }) {
   function statusIcon(status) {
     if (status === STATUS.PASS) return <CheckCircleOutlinedIcon />;
     if (status === STATUS.FAIL) return <HighlightOffOutlinedIcon />;
+    if (status === STATUS.KNOWN_ISSUE) return <BugReportOutlinedIcon />;
     return <HourglassEmptyOutlinedIcon />;
   }
 
@@ -407,6 +412,7 @@ function latestExecution(envResults) {
  * @param {{ envResults: Array<{env:string,result:object|null}>|null, envLoading: boolean }} props
  */
 function ExecutionDetails({ envResults, envLoading }) {
+  const { data: teamSettings } = useTeamSettings();
   const latest = envLoading ? null : latestExecution(envResults);
 
   // Loaded, but nothing has been executed across any environment yet.
@@ -470,6 +476,35 @@ function ExecutionDetails({ envResults, envLoading }) {
           loading={envLoading}
         />
       </Grid>
+      {result?.jiraIssueKeys?.length > 0 && (
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <Stack spacing={0.25}>
+            <Typography variant='formLabel' color='text.disabled'>
+              {result.jiraIssueKeys.length === 1 ? 'Jira Issue' : 'Jira Issues'}
+            </Typography>
+            <Stack direction='row' spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+              {result.jiraIssueKeys.map((key) => (
+                <Chip
+                  key={key}
+                  size='small'
+                  clickable
+                  color='primary'
+                  variant='outlined'
+                  label={key}
+                  component='a'
+                  href={
+                    teamSettings?.jiraBaseUrl
+                      ? `${teamSettings.jiraBaseUrl}/browse/${key}`
+                      : undefined
+                  }
+                  target='_blank'
+                  rel='noopener noreferrer'
+                />
+              ))}
+            </Stack>
+          </Stack>
+        </Grid>
+      )}
       <Grid size={12}>
         <ReadField label='Notes' value={result?.notes} loading={envLoading} />
       </Grid>
@@ -480,7 +515,7 @@ function ExecutionDetails({ envResults, envLoading }) {
 /**
  * Detail panel: read-only sectioned view of a selected test case.
  * All edits go through modals — identity fields via the Edit modal (onEdit),
- * execution fields via the Pass / Fail / Pending modals (onAction).
+ * execution fields via the Pass / Fail / Pending / Known Issue modals (onAction).
  *
  * Shows a per-environment results grid when releaseId + environments are provided.
  */
@@ -635,6 +670,39 @@ export default function TestCaseDetail({
           >
             Pending
           </Button>
+        </Tooltip>
+        <Tooltip
+          title={
+            st === STATUS.KNOWN_ISSUE
+              ? 'Already marked as Known Issue — select a different status to change it'
+              : st !== STATUS.FAIL
+                ? 'Available only for failed tests'
+                : ''
+          }
+        >
+          {/* span wrapper lets the tooltip surface even when the button is disabled */}
+          <span>
+            <Button
+              size='small'
+              variant={st === STATUS.KNOWN_ISSUE ? 'contained' : 'outlined'}
+              color='info'
+              disabled={st !== STATUS.FAIL && st !== STATUS.KNOWN_ISSUE}
+              startIcon={
+                st === STATUS.KNOWN_ISSUE ? (
+                  <BugReportIcon />
+                ) : (
+                  <BugReportOutlinedIcon />
+                )
+              }
+              onClick={
+                st === STATUS.FAIL
+                  ? () => onAction('known-issue', tc._id)
+                  : undefined
+              }
+            >
+              Known Issue
+            </Button>
+          </span>
         </Tooltip>
       </Stack>
 

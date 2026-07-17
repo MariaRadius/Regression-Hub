@@ -19,10 +19,11 @@ const STATUS_DOT = {
   [STATUS.PASS]: 'success.main',
   [STATUS.FAIL]: 'error.main',
   [STATUS.PENDING]: 'warning.main',
+  [STATUS.KNOWN_ISSUE]: 'info.main',
 };
 
 /**
- * Shared shell for all 5 bulk action modals.
+ * Shared shell for all bulk action modals.
  * Renders: header (title + close), selection summary box (first 6 + "N more"),
  * optional helper note, children (modal-specific fields), footer (Cancel + Confirm).
  *

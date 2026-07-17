@@ -1,9 +1,12 @@
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
+import EmptyState from '@/components/EmptyState';
 import MetricCards from '@/components/MetricCards';
 import PageHeader from '@/components/PageHeader';
 import Panel from '@/components/Panel';
@@ -13,18 +16,26 @@ import { getCachedDashboardData } from '@/lib/db/dashboardData';
 import {
   buildAppBarData,
   buildDonutData,
+  buildFailByModuleData,
+  buildFailBySeverityData,
   buildModuleBarData,
   buildTesterBarData,
 } from '@/lib/db/dashboardTransforms';
+import { getCachedReleaseKnownIssues } from '@/lib/db/knownIssuesData';
 import { resolveActiveReleaseEnv } from '@/lib/db/releasesData';
 import { getTeamSettings } from '@/lib/db/settingsData';
 import { getDb } from '@/lib/mongodb';
 import { parseReleaseCtxCookie, RELEASE_CTX_COOKIE } from '@/lib/releaseCtx';
 import { ChartHoverProvider } from './charts/ChartHoverContext';
 import DonutChart from './charts/DonutChart';
+import FailByModuleChart from './charts/FailByModuleChart';
+import FailBySeverityChart from './charts/FailBySeverityChart';
 import StackedBarChart from './charts/StackedBarChart';
 import DashboardInsightsPanels from './DashboardInsightsPanels';
 import DashboardRefresh from './DashboardRefresh';
+import KnownIssuesPanel from './KnownIssuesPanel';
+import { DASHBOARD_PANEL_BODY_SX, DASHBOARD_PANEL_SX } from './panelStyles';
+import ReleaseChip from './ReleaseChip';
 
 // Re-execute on every router.refresh() so the RSC re-runs the query with the
 // latest selection from the release-context cookie (which the client updates
@@ -49,20 +60,6 @@ function formatCount(value) {
   return Number(value || 0).toLocaleString();
 }
 
-const DASHBOARD_PANEL_SX = Object.freeze({
-  overflow: 'hidden',
-  background:
-    'linear-gradient(180deg, rgba(249,250,251,0.9) 0%, rgba(255,255,255,1) 26%)',
-  boxShadow: 1,
-});
-
-const DASHBOARD_PANEL_BODY_SX = Object.freeze({
-  p: 2.5,
-  borderRadius: 3,
-  background:
-    'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.88) 100%)',
-});
-
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const teamId = session?.user?.teamId;
@@ -76,11 +73,13 @@ export default async function DashboardPage() {
     (await cookies()).get(RELEASE_CTX_COOKIE)?.value,
   );
   const db = await getDb();
-  const [{ releaseId, environment }, { failureThreshold, topModulesLimit }] =
-    await Promise.all([
-      resolveActiveReleaseEnv(db, teamId, stored),
-      getTeamSettings(db, teamId),
-    ]);
+  const [
+    { releaseId, environment },
+    { failureThreshold, topModulesLimit, jiraBaseUrl },
+  ] = await Promise.all([
+    resolveActiveReleaseEnv(db, teamId, stored),
+    getTeamSettings(db, teamId),
+  ]);
 
   // No releases exist yet — render an empty state rather than crashing.
   if (!releaseId || !environment) {
@@ -96,22 +95,29 @@ export default async function DashboardPage() {
     );
   }
 
-  const data = await getCachedDashboardData(teamId, releaseId, environment, {
-    failureThreshold,
-    topModulesLimit,
-  });
+  const [data, knownIssues] = await Promise.all([
+    getCachedDashboardData(teamId, releaseId, environment, {
+      failureThreshold,
+      topModulesLimit,
+    }),
+    getCachedReleaseKnownIssues(teamId, releaseId),
+  ]);
 
   const {
     summary,
     criticalSummary,
     topFailingModules,
     criticalFailures,
+    failByModule = [],
+    failBySeverity = [],
     moduleGroups,
     testerGroups,
     modulesByApp,
   } = data;
 
   const donutData = buildDonutData(summary);
+  const failByModuleData = buildFailByModuleData(failByModule);
+  const failBySeverityData = buildFailBySeverityData(failBySeverity);
   const moduleBarData = buildModuleBarData(moduleGroups);
   const appBarData = buildAppBarData(modulesByApp);
   const testerBarData = buildTesterBarData(testerGroups);
@@ -205,6 +211,64 @@ export default async function DashboardPage() {
           </Grid>
         </Grid>
 
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Panel title='Failures by Module' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
+                {failByModuleData.length > 0 ? (
+                  <FailByModuleChart failData={failByModuleData} />
+                ) : (
+                  <EmptyState
+                    icon={
+                      <TaskAltOutlinedIcon
+                        sx={{ fontSize: 34, color: 'success.main' }}
+                      />
+                    }
+                    title='No failures for this selection'
+                  >
+                    <Typography
+                      variant='pageSub'
+                      color='text.disabled'
+                      sx={{ textAlign: 'center', maxWidth: 320 }}
+                    >
+                      Every executed test case has passed or is still pending —
+                      nothing has failed in the active release and environment.
+                    </Typography>
+                  </EmptyState>
+                )}
+              </Box>
+            </Panel>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Panel title='Fail Severity Summary' sx={DASHBOARD_PANEL_SX}>
+              <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 280 }}>
+                {failBySeverityData.length > 0 ? (
+                  <FailBySeverityChart severityData={failBySeverityData} />
+                ) : (
+                  <EmptyState
+                    icon={
+                      <TaskAltOutlinedIcon
+                        sx={{ fontSize: 34, color: 'success.main' }}
+                      />
+                    }
+                    title='No failures for this selection'
+                  >
+                    <Typography
+                      variant='pageSub'
+                      color='text.disabled'
+                      sx={{ textAlign: 'center', maxWidth: 320 }}
+                    >
+                      Failures are grouped by test-case priority
+                      (High/Medium/Low); none have been recorded for the active
+                      release and environment.
+                    </Typography>
+                  </EmptyState>
+                )}
+              </Box>
+            </Panel>
+          </Grid>
+        </Grid>
+
         <Panel title='Results by Module' sx={DASHBOARD_PANEL_SX}>
           <Box sx={{ ...DASHBOARD_PANEL_BODY_SX, height: 380 }}>
             <StackedBarChart
@@ -226,6 +290,19 @@ export default async function DashboardPage() {
           criticalFailures={criticalFailures}
           failureThreshold={failureThreshold}
         />
+
+        <Panel
+          title='Known Issues by Environment'
+          headerActions={<ReleaseChip name={knownIssues.releaseName} />}
+          sx={DASHBOARD_PANEL_SX}
+        >
+          <Box sx={DASHBOARD_PANEL_BODY_SX}>
+            <KnownIssuesPanel
+              data={knownIssues}
+              jiraBaseUrl={jiraBaseUrl ?? null}
+            />
+          </Box>
+        </Panel>
 
         <Grid container spacing={2}>
           {Object.entries(modulesByApp)

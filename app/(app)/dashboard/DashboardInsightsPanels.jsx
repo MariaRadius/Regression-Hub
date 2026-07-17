@@ -12,6 +12,7 @@ import Link from 'next/link';
 import MetaChip from '@/components/MetaChip';
 import Panel from '@/components/Panel';
 import { PRIORITIES } from '@/lib/constants';
+import { DASHBOARD_PANEL_SX } from './panelStyles';
 
 function SummaryChip({ icon, label, color, variant = 'filled' }) {
   return (
@@ -105,7 +106,7 @@ export default function DashboardInsightsPanels({
   return (
     <Grid container spacing={2}>
       <Grid size={{ xs: 12, lg: 6 }}>
-        <Panel title='Top Failing Modules'>
+        <Panel title='Top Failing Modules' sx={DASHBOARD_PANEL_SX}>
           {topFailingModules.length > 0 ? (
             <Stack divider={<Divider flexItem />} spacing={0}>
               {topFailingModules.map((module) => (
@@ -151,6 +152,7 @@ export default function DashboardInsightsPanels({
       <Grid size={{ xs: 12, lg: 6 }}>
         <Panel
           title='Critical Failures'
+          sx={DASHBOARD_PANEL_SX}
           headerActions={
             <SummaryChip
               icon={<ErrorOutlinedIcon />}

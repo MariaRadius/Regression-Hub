@@ -1,6 +1,10 @@
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
-import { createTestCase, listTestCases } from '@/lib/db/testCasesData';
+import {
+  createTestCase,
+  findPotentialDuplicates,
+  listTestCases,
+} from '@/lib/db/testCasesData';
 import { ApiError } from '@/lib/errors';
 import { createTestCaseBodySchema } from '@/lib/schemas/testCases';
 import { withAdmin, withTeam } from '@/lib/server/withTeam';
@@ -62,10 +66,26 @@ export const GET = withTeam(async (request, { params }, { teamId, db }) => {
 export const POST = withAdmin(async (request, { params }, { teamId, db }) => {
   const { id: releaseId } = await params;
   const body = await request.json();
+  const { searchParams } = new URL(request.url);
+  const force = searchParams.get('force') === 'true';
 
   const parsed = createTestCaseBodySchema.safeParse({ ...body, releaseId });
   if (!parsed.success) {
     throw new ApiError(400, parsed.error.issues[0]?.message || 'Invalid body');
+  }
+
+  if (!force) {
+    const duplicates = await findPotentialDuplicates(db, teamId, {
+      testCase: parsed.data.testCase,
+      applicationId: parsed.data.applicationId,
+      moduleId: parsed.data.moduleId,
+    });
+    if (duplicates.length > 0) {
+      return NextResponse.json(
+        { error: 'Duplicate test case', duplicates },
+        { status: 409 },
+      );
+    }
   }
 
   const result = await createTestCase(db, teamId, parsed.data);

@@ -70,7 +70,7 @@ export default async function LoginPage({ searchParams }) {
             QA
           </Stack>
           <Typography variant='pageTitle' component='h1' display='block'>
-            Regression Hub
+            Test Atlas
           </Typography>
           <Typography variant='pageSub' color='text.secondary' display='block'>
             Sign in to your team account

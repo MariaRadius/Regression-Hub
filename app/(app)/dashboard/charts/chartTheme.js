@@ -4,20 +4,53 @@
  * Chart design tokens — aligned with the app's light MUI theme.
  *
  * Status colors mirror theme.js exactly:
- *   pass    → success.main  #03a769
- *   fail    → error.main    #e14d5a
- *   pending → warning.main  #f08d2f
+ *   pass       → success.main  #03a769
+ *   fail       → error.main    #e14d5a
+ *   pending    → warning.main  #f08d2f
+ *   knownIssue → info.main     #6366f1
  */
 export const CHART_THEME = {
   pass: '#03a769', // bright emerald
   fail: '#e14d5a', // vivid rose red
   pending: '#f08d2f', // softened amber orange
+  knownIssue: '#6366f1', // indigo — a triaged/accepted failure
   bg: '#ffffff', // chart card background (paper)
   surface: '#f9fafb', // donut inner / legend area (background.default)
   text: '#6b7280', // axis labels, legend text (theme text.disabled)
   grid: 'rgba(0,0,0,0.05)', // grid lines
   axis: '#e5e7eb', // axis baseline stroke (theme divider)
 };
+
+/**
+ * Categorical palette for charts whose slices are entities (e.g. modules), not
+ * statuses. Soft, low-saturation tints tuned to sit with the dashboard's airy
+ * metric cards (mint / blush / peach) rather than shout over them — a blend of
+ * cool and warm hues so slices stay distinguishable without feeling harsh.
+ * `CATEGORICAL_OTHER` colors a rolled-up "Other" bucket.
+ */
+export const CATEGORICAL_PALETTE = [
+  '#5cb8ac', // soft teal
+  '#6fb4d1', // soft cyan
+  '#f2a765', // soft peach
+  '#e592a0', // soft blush
+  '#8fbf8f', // soft sage
+  '#9d93d1', // soft lavender
+  '#7fc7bf', // soft mint
+  '#e0b57e', // soft sand
+];
+export const CATEGORICAL_OTHER = '#c3cbd4'; // soft slate grey — the "Other" rollup
+
+/**
+ * Severity colors for the fail-severity pie, keyed by test-case priority.
+ * Reads as decreasing severity: red → amber → slate; unknown priorities fall
+ * back to the neutral slate.
+ */
+export const SEVERITY_COLORS = {
+  High: '#e14d5a', // error — most severe
+  Medium: '#f08d2f', // warning
+  Low: '#9ca3af', // muted grey — least severe
+};
+export const SEVERITY_FALLBACK = '#c3cbd4';
 
 /**
  * Inline style object for chart tooltip containers.

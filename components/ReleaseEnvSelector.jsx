@@ -111,30 +111,23 @@ export default function ReleaseEnvSelector() {
             >
               {option.release.name}
             </Typography>
-            <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
-              <Chip
-                label={option.env}
-                size='small'
-                sx={{
-                  height: 20,
-                  color: '#d5fbef',
-                  bgcolor: 'rgba(13,148,136,0.18)',
-                  borderRadius: 999,
-                  '& .MuiChip-label': {
-                    px: 1,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                  },
-                }}
-              />
-              <Typography
-                variant='metricSub'
-                sx={{ color: 'rgba(255,255,255,0.55)' }}
-              >
-                Active context
-              </Typography>
-            </Stack>
+            <Chip
+              label={option.env}
+              size='small'
+              sx={{
+                width: 'fit-content',
+                height: 20,
+                color: '#d5fbef',
+                bgcolor: 'rgba(13,148,136,0.18)',
+                borderRadius: 999,
+                '& .MuiChip-label': {
+                  px: 1,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                },
+              }}
+            />
           </Stack>
         </li>
       )}

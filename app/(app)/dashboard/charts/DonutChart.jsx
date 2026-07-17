@@ -10,11 +10,12 @@ import { useState } from 'react';
 import { useChartHover } from './ChartHoverContext';
 import { CHART_FADE_IN_STYLE, CHART_THEME, TOOLTIP_STYLE } from './chartTheme';
 
-const KEYS = ['Pass', 'Fail', 'Pending'];
+const KEYS = ['Pass', 'Fail', 'Pending', 'Known Issue'];
 const STATUS_COLOR = {
   Pass: CHART_THEME.pass,
   Fail: CHART_THEME.fail,
   Pending: CHART_THEME.pending,
+  'Known Issue': CHART_THEME.knownIssue,
 };
 const INNER_RADIUS_FRACTION = 0.6;
 const ACTIVE_EXPAND = 6;
@@ -28,13 +29,18 @@ const LABEL_VERT_MARGIN = 10; // top/bottom room for label text half-height
 const LABEL_SIDE_SPACE = 82; // horizontal room each side (elbow + tick + stacked text)
 const LABEL_GAP = 24; // minimum vertical separation between same-side labels
 
+// Compact leader-label text so a long status name fits the reserved side space
+// without shrinking the donut. The tooltip still shows the full status name.
+const SHORT_LABEL = { 'Known Issue': 'Known' };
+const shortLabel = (name) => SHORT_LABEL[name] ?? name;
+
 /**
  * Convert raw slice values into pie fractions where every non-zero slice spans
  * at least `minFraction` of the circle, conserving the whole by trimming the
  * surplus proportionally from slices already above the floor. Zero-valued
  * slices stay at 0 (no wedge). Returns fractions summing to ~1.
  */
-function minSliceFractions(values, minFraction) {
+export function minSliceFractions(values, minFraction) {
   const total = values.reduce((s, v) => s + (v > 0 ? v : 0), 0);
   if (total <= 0) return values.map(() => 0);
 
@@ -306,20 +312,20 @@ export default function DonutChart({ donutData }) {
                           fontWeight={600}
                           fill={color}
                         >
-                          {buildSideLabelText({ name, value }).map(
-                            (line, lineIndex) => (
-                              <tspan
-                                key={`${name}-${line}`}
-                                x={
-                                  positionedLabel.textX +
-                                  positionedLabel.dir * 3
-                                }
-                                dy={lineIndex === 0 ? '-0.15em' : '1.15em'}
-                              >
-                                {line}
-                              </tspan>
-                            ),
-                          )}
+                          {buildSideLabelText({
+                            name: shortLabel(name),
+                            value,
+                          }).map((line, lineIndex) => (
+                            <tspan
+                              key={`${name}-${line}`}
+                              x={
+                                positionedLabel.textX + positionedLabel.dir * 3
+                              }
+                              dy={lineIndex === 0 ? '-0.15em' : '1.15em'}
+                            >
+                              {line}
+                            </tspan>
+                          ))}
                         </text>
                       </g>
                     );
@@ -354,7 +360,9 @@ export default function DonutChart({ donutData }) {
                           hideTooltip();
                         }}
                         onClick={() =>
-                          router.push(`/test-cases?status=${name}`)
+                          router.push(
+                            `/test-cases?status=${encodeURIComponent(name)}`,
+                          )
                         }
                       />
                       {label}

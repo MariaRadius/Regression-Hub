@@ -82,7 +82,7 @@ function buildSummaryRows(cases, releaseName, environment) {
   const applicationCounts = countByApplication(cases);
 
   return [
-    ['Regression Hub Export'],
+    ['Test Atlas Export'],
     ['Editable workbook for release review'],
     [],
     ['Overview'],
@@ -103,6 +103,11 @@ function buildSummaryRows(cases, releaseName, environment) {
     [
       'Pending',
       cases.filter((t) => normalizedStatus(t.status) === STATUS.PENDING).length,
+    ],
+    [
+      'Known Issue',
+      cases.filter((t) => normalizedStatus(t.status) === STATUS.KNOWN_ISSUE)
+        .length,
     ],
     ['Generated', new Date().toLocaleString()],
     [],

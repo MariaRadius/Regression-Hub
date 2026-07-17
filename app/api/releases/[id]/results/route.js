@@ -1,6 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
-import { ROLES } from '@/lib/constants';
+import { ROLES, STATUS } from '@/lib/constants';
 import { getRelease } from '@/lib/db/releasesData';
 import {
   bulkRecordResult,
@@ -14,6 +14,7 @@ import {
   bulkRecordResultBodySchema,
   recordResultBodySchema,
 } from '@/lib/schemas/results';
+import { createIssuesForFailures } from '@/lib/server/jiraOnFail';
 import { withTeam } from '@/lib/server/withTeam';
 
 // ---------------------------------------------------------------------------
@@ -138,7 +139,8 @@ export const POST = withTeam(
       );
     }
 
-    const { tcId, environment, status, testedOn, notes, reason } = parsed.data;
+    const { tcId, environment, status, testedOn, notes, reason, jiraKey } =
+      parsed.data;
 
     // Validate the release exists and the environment is declared
     const release = await getRelease(db, teamId, releaseId);
@@ -164,10 +166,23 @@ export const POST = withTeam(
       testedOn,
       notes,
       reason,
+      jiraKey,
     });
 
+    // Auto-mode Jira creation runs only after the result is saved and never
+    // blocks it (ask mode goes through the client review flow instead).
+    let jira = null;
+    if (status === STATUS.FAIL) {
+      jira = await createIssuesForFailures(db, teamId, {
+        release,
+        releaseId,
+        environment,
+        entries: [{ tcId, notes, testedBy }],
+      });
+    }
+
     revalidatePath('/dashboard');
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...(jira ? { jira } : {}) });
   },
 );
 
@@ -208,7 +223,8 @@ export const PATCH = withTeam(
       );
     }
 
-    const { environment, status, tcIds, testedOn, notes, reason } = parsed.data;
+    const { environment, status, tcIds, testedOn, notes, reason, jiraKey } =
+      parsed.data;
 
     // Validate the release exists and the environment is declared
     const release = await getRelease(db, teamId, releaseId);
@@ -235,11 +251,24 @@ export const PATCH = withTeam(
       testedOn,
       notes,
       reason,
+      jiraKey,
     }));
 
     await bulkRecordResult(db, teamId, releaseId, environment, entries);
 
+    // Auto-mode Jira creation runs only after the results are saved and never
+    // blocks them (ask mode goes through the client review flow instead).
+    let jira = null;
+    if (status === STATUS.FAIL) {
+      jira = await createIssuesForFailures(db, teamId, {
+        release,
+        releaseId,
+        environment,
+        entries: tcIds.map((tcId) => ({ tcId, notes, testedBy })),
+      });
+    }
+
     revalidatePath('/dashboard');
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...(jira ? { jira } : {}) });
   },
 );

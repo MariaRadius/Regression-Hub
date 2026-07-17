@@ -1,6 +1,7 @@
 'use client';
 
 import { Alert, Button, Skeleton, Stack } from '@mui/material';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Suspense,
   useCallback,
@@ -9,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import JiraDraftReviewDialog from '@/components/JiraDraftReviewDialog';
 import PageHeader from '@/components/PageHeader';
 import ToastProvider from '@/components/Toast';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
@@ -19,11 +21,13 @@ import {
   useTestCasePagination,
 } from '@/hooks/useTestCasePagination';
 import { useTestCaseSelection } from '@/hooks/useTestCaseSelection';
+import { createJiraIssues, improveJiraDraft } from '@/lib/api/jira';
 import {
   getTestCaseForRelease,
   listTestCasesForRelease,
 } from '@/lib/api/releases';
 import { ROLES } from '@/lib/constants';
+import { toastJiraOutcome } from '@/utils/toastJiraOutcome';
 import BulkAssignModal from './master-detail/bulk/BulkAssignModal';
 import BulkModalRenderer from './master-detail/bulk/BulkModalRenderer';
 import FilterStrip from './master-detail/FilterStrip';
@@ -60,7 +64,11 @@ function TestCasesPage({ user }) {
   const pagination = useTestCasePagination();
   const pageIds = useMemo(() => cases.map((c) => c._id), [cases]);
   const selection = useTestCaseSelection(pageIds);
-  const [activeId, setActiveId] = useState(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [activeId, setActiveId] = useState(
+    () => searchParams.get('open') || null,
+  );
   // activeCase holds the currently displayed case independently of the filtered page.
   // The list (`cases`) is a filtered, paginated slice — after a status change the case
   // may fall out of the current filter. activeCase keeps the drawer populated and
@@ -78,9 +86,23 @@ function TestCasesPage({ user }) {
     // no-op when not found — keeps the last-known state visible in the drawer
   }, [activeId, cases]);
 
+  // Strip the `open` param from the URL once it has been applied, so that
+  // refreshing the page doesn't re-open a stale case. Reads window.location.search
+  // at call-time (not searchParams) so this effect runs only on mount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only; router is stable
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('open')) return;
+    params.delete('open');
+    const qs = params.toString();
+    router.replace(qs ? `/test-cases?${qs}` : '/test-cases', { scroll: false });
+  }, []);
+
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ sortBy: 'createdAt', sortDir: 'asc' });
-  const [openModal, setOpenModal] = useState(null); // 'pass'|'fail'|'pending'|'reassign'|'edit'|null
+  // Jira drafts awaiting QA review after a Fail (ask mode); null = dialog closed.
+  const [jiraDrafts, setJiraDrafts] = useState(null);
+  const [openModal, setOpenModal] = useState(null); // 'pass'|'fail'|'pending'|'known-issue'|'reassign'|'edit'|null
   const [singleActionId, setSingleActionId] = useState(null);
   useTestCaseKeyNav({
     cases,
@@ -241,15 +263,17 @@ function TestCasesPage({ user }) {
           )
         }
         actions={
-          !isArchived && (
-            <Button
-              variant='contained'
-              size='small'
-              onClick={() => setShowAddModal(true)}
-            >
-              + Add Test Case
-            </Button>
-          )
+          <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+            {!isArchived && (
+              <Button
+                variant='contained'
+                size='small'
+                onClick={() => setShowAddModal(true)}
+              >
+                + Add Test Case
+              </Button>
+            )}
+          </Stack>
         }
       />
 
@@ -341,10 +365,11 @@ function TestCasesPage({ user }) {
           setOpenModal(null);
           setSingleActionId(null);
         }}
-        onSuccess={() => {
+        onSuccess={(_fields, extra) => {
           setOpenModal(null);
           setSingleActionId(null);
           selection.clear();
+          if (extra?.jiraDrafts?.length) setJiraDrafts(extra.jiraDrafts);
           if (activeId && releaseId) {
             getTestCaseForRelease(
               releaseId,
@@ -364,6 +389,29 @@ function TestCasesPage({ user }) {
         }}
       />
 
+      {jiraDrafts && (
+        <JiraDraftReviewDialog
+          open
+          drafts={jiraDrafts}
+          onCreate={async (issue) => {
+            const outcome = await createJiraIssues(releaseId, {
+              environment,
+              issues: [issue],
+            });
+            // The route returns 200 with per-case outcomes; surface a failure
+            // for THIS issue as a thrown error so the dialog stays put.
+            if (outcome.errors.length) {
+              throw new Error(outcome.errors[0].error);
+            }
+            toastJiraOutcome(outcome);
+          }}
+          onImprove={({ summary, description }) =>
+            improveJiraDraft(releaseId, { summary, description })
+          }
+          onClose={() => setJiraDrafts(null)}
+        />
+      )}
+
       {!isArchived && (
         <TestCaseDialog
           key='add'
@@ -371,6 +419,9 @@ function TestCasesPage({ user }) {
           releaseId={releaseId}
           applications={applications}
           modules={modules}
+          onApplicationCreated={(app) =>
+            setApplications((prev) => [...prev, app])
+          }
           onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
@@ -395,6 +446,9 @@ function TestCasesPage({ user }) {
           releaseId={releaseId}
           applications={applications}
           modules={modules}
+          onApplicationCreated={(app) =>
+            setApplications((prev) => [...prev, app])
+          }
           onModuleCreated={(mod) => setModules((prev) => [...prev, mod])}
           onClose={() => setEditTc(null)}
           onSuccess={(updatedTc) => {

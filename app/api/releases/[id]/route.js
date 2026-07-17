@@ -39,6 +39,7 @@ export const PATCH = withAdmin(
     const patch = {};
     if ('name' in body) patch.name = body.name;
     if ('archived' in body) patch.archived = body.archived;
+    if ('jiraSprintId' in body) patch.jiraSprintId = body.jiraSprintId ?? null;
 
     if (Object.keys(patch).length === 0) {
       throw new ApiError(400, 'No updatable fields provided');
