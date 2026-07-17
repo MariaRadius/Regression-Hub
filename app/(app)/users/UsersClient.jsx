@@ -8,17 +8,12 @@ import EditIcon from '@mui/icons-material/Edit';
 import KeyIcon from '@mui/icons-material/Key';
 import RestoreIcon from '@mui/icons-material/Restore';
 import {
-  Alert,
   Avatar,
   Button,
   Chip,
   Collapse,
   Grid,
   IconButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   MenuItem,
   Stack,
   Table,
@@ -50,10 +45,10 @@ export default function UsersClient({ user, initialUsers }) {
   const router = useRouter();
 
   const roleInfoKey = `roleInfoDismissed:${user.id}`;
-  const [showRoleInfo, setShowRoleInfo] = useState(true);
+  const [showRoleInfo, setShowRoleInfo] = useState(false);
   useEffect(() => {
-    if (sessionStorage.getItem(roleInfoKey) === 'true') {
-      setShowRoleInfo(false);
+    if (sessionStorage.getItem(roleInfoKey) !== 'true') {
+      setShowRoleInfo(true);
     }
   }, [roleInfoKey]);
   const [showAdd, setShowAdd] = useState(false);
@@ -138,19 +133,30 @@ export default function UsersClient({ user, initialUsers }) {
 
       {/* Role permissions info */}
       <Collapse in={showRoleInfo}>
-        <Alert
-          variant='outlined'
-          severity='info'
-          onClose={() => {
-            sessionStorage.setItem(roleInfoKey, 'true');
-            setShowRoleInfo(false);
-          }}
+        <Panel
+          title='Role Permissions'
+          headerActions={
+            <Tooltip title='Dismiss'>
+              <IconButton
+                size='small'
+                aria-label='Dismiss role info'
+                onClick={() => {
+                  sessionStorage.setItem(roleInfoKey, 'true');
+                  setShowRoleInfo(false);
+                }}
+              >
+                <CloseIcon fontSize='small' />
+              </IconButton>
+            </Tooltip>
+          }
         >
-          <Grid container spacing={3}>
+          <Grid container spacing={2} sx={{ p: 1 }}>
             {[
               {
                 role: ROLES.ADMIN,
                 label: 'Admin',
+                accentColor: '#0d9488',
+                accentBg: 'rgba(13,148,136,0.05)',
                 allow: [
                   'Manage users (create, edit, passwords)',
                   'Import Test Cases & manage versions',
@@ -163,6 +169,8 @@ export default function UsersClient({ user, initialUsers }) {
               {
                 role: ROLES.QA,
                 label: 'QA',
+                accentColor: '#0891b2',
+                accentBg: 'rgba(8,145,178,0.05)',
                 allow: [
                   'View & fill test case results',
                   'Manage assignments',
@@ -171,59 +179,70 @@ export default function UsersClient({ user, initialUsers }) {
                 ],
                 deny: ['Import Test Cases', 'Clear data', 'Manage users'],
               },
-            ].map(({ role, label, allow, deny }) => (
+            ].map(({ role, label, accentColor, accentBg, allow, deny }) => (
               <Grid key={role} size={6}>
-                <Typography
-                  variant='panelTitle'
-                  component='h2'
-                  sx={{ display: 'block', mb: 1 }}
+                <Stack
+                  spacing={1.25}
+                  sx={{
+                    p: 1.75,
+                    borderRadius: 2,
+                    bgcolor: accentBg,
+                    borderTop: '3px solid',
+                    borderColor: accentColor,
+                  }}
                 >
-                  {label}
-                </Typography>
-                <List dense disablePadding>
-                  {allow.map((item) => (
-                    <ListItem key={item} sx={{ py: 0.25 }}>
-                      <ListItemIcon
-                        sx={{ minWidth: 28, color: 'success.main' }}
+                  <Typography variant='panelTitle' component='h2'>
+                    {label}
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {allow.map((item) => (
+                      <Stack
+                        key={item}
+                        direction='row'
+                        spacing={0.75}
+                        sx={{ alignItems: 'center' }}
                       >
-                        <CheckIcon fontSize='small' />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={item}
-                        slotProps={{
-                          primary: {
-                            variant: 'tableCell',
-                            color: 'text.disabled',
-                          },
-                        }}
-                      />
-                    </ListItem>
-                  ))}
-                  {deny.map((item) => (
-                    <ListItem key={item} sx={{ py: 0.25 }}>
-                      <ListItemIcon sx={{ minWidth: 28, color: 'error.main' }}>
-                        <CloseIcon fontSize='small' />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={item}
-                        slotProps={{
-                          primary: {
-                            variant: 'tableCell',
-                            color: 'text.disabled',
-                          },
-                        }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
+                        <CheckIcon
+                          sx={{
+                            fontSize: 14,
+                            color: 'success.main',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <Typography variant='tableCell' color='text.secondary'>
+                          {item}
+                        </Typography>
+                      </Stack>
+                    ))}
+                    {deny.map((item) => (
+                      <Stack
+                        key={item}
+                        direction='row'
+                        spacing={0.75}
+                        sx={{ alignItems: 'center' }}
+                      >
+                        <CloseIcon
+                          sx={{
+                            fontSize: 14,
+                            color: 'error.main',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <Typography variant='tableCell' color='text.disabled'>
+                          {item}
+                        </Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Stack>
               </Grid>
             ))}
           </Grid>
-        </Alert>
+        </Panel>
       </Collapse>
 
       {/* Users Table */}
-      <Panel title='Users'>
+      <Panel title={`Users · ${initialUsers.length}`}>
         <TableContainer>
           <Table size='small' stickyHeader>
             <TableHead
@@ -241,7 +260,7 @@ export default function UsersClient({ user, initialUsers }) {
                 <TableCell>Username</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Created</TableCell>
+                <TableCell>Joined</TableCell>
                 <TableCell align='right'>Actions</TableCell>
               </TableRow>
             </TableHead>
