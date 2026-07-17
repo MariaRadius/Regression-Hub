@@ -31,8 +31,15 @@ export async function generateSignoffReport({
   version,
 }) {
   const { doc, autoTable, W, H, ML, MR, CW } = await createPdfDocument();
-  const { total, passed, failed, passPercent, failedCases } =
-    summarizeCases(cases);
+  const {
+    total,
+    passed,
+    failed,
+    knownIssue,
+    pending,
+    passPercent,
+    failedCases,
+  } = summarizeCases(cases);
 
   drawCoverPage(doc, {
     W,
@@ -59,7 +66,47 @@ export async function generateSignoffReport({
     y,
   });
 
-  y += 26;
+  const criticalCount = failedCases.filter((c) => c.priority === 'High').length;
+  const failPercent = total ? Math.round((failed / total) * 100) : 0;
+
+  y += 20;
+  doc.setDrawColor(...PDF_COLORS.teal);
+  doc.setLineWidth(0.5);
+  doc.line(ML, y, ML + CW, y);
+  y += 14;
+
+  writeText(doc, 'Executive Summary', ML, y, 'h2');
+  y += 14;
+
+  const statusLabel =
+    failed === 0
+      ? 'PASS — No failures recorded'
+      : `FAIL — ${failed} failure${failed > 1 ? 's' : ''} require${failed === 1 ? 's' : ''} attention`;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...(failed === 0 ? PDF_COLORS.pass : PDF_COLORS.fail));
+  doc.text(`Overall Status: ${statusLabel}`, ML, y);
+  y += PDF_LINE_H + 6;
+
+  const execBullets = [
+    `Total test cases: ${total}`,
+    `Passed: ${passed} (${passPercent}%)`,
+    `Failed: ${failed} (${failPercent}%)`,
+    `Pending (not yet executed): ${pending}`,
+    `Known issues: ${knownIssue}`,
+    `Critical failures (High priority): ${criticalCount}`,
+  ];
+  for (const bullet of execBullets) {
+    writeText(doc, `•  ${bullet}`, ML, y, 'body');
+    y += PDF_LINE_H + 2;
+  }
+
+  y += 16;
+  doc.setDrawColor(...PDF_COLORS.teal);
+  doc.setLineWidth(0.5);
+  doc.line(ML, y, ML + CW, y);
+  y += 20;
+
   writeText(doc, `${appName} Test Results`, ML, y, 'h2');
 
   y += 14;
