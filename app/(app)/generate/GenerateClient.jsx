@@ -4,6 +4,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import SearchIcon from '@mui/icons-material/Search';
 import {
   Alert,
+  Box,
   Button,
   Chip,
   Divider,
@@ -25,6 +26,35 @@ import JiraStoriesPanel from '@/components/JiraStoriesPanel';
 import PageHeader from '@/components/PageHeader';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
 import { getGeneratedTestCases } from '@/lib/api/testCases';
+import { STATUS } from '@/lib/constants';
+
+const STATUS_BADGE = {
+  [STATUS.PASS]: {
+    bgcolor: '#f0faf5',
+    color: '#2d7a5a',
+    borderColor: '#c6e8d8',
+  },
+  [STATUS.FAIL]: {
+    bgcolor: '#fee2e2',
+    color: '#b91c1c',
+    borderColor: '#fca5a5',
+  },
+  [STATUS.PENDING]: {
+    bgcolor: '#fff8e6',
+    color: '#b45309',
+    borderColor: '#d97706',
+  },
+  [STATUS.KNOWN_ISSUE]: {
+    bgcolor: '#ede9fe',
+    color: '#6d28d9',
+    borderColor: '#c4b5fd',
+  },
+};
+const DEFAULT_BADGE = {
+  bgcolor: '#f1f5f9',
+  color: '#64748b',
+  borderColor: '#e2e8f0',
+};
 
 const PAGE_SIZE = 20;
 
@@ -114,7 +144,7 @@ export default function GenerateClient({
 
   return (
     <Stack spacing={3} sx={{ p: { xs: 2, sm: 3 } }}>
-      <PageHeader eyebrow='GENERATE' title='Generate Test Cases' />
+      <PageHeader title='Generate Test Cases' />
 
       {!releaseId && (
         <Alert severity='warning'>
@@ -216,7 +246,10 @@ export default function GenerateClient({
           </Typography>
         ) : cases.length === 0 ? (
           <Stack sx={{ py: 6, alignItems: 'center' }} spacing={1}>
-            <Typography variant='h6'>No AI-generated cases yet</Typography>
+            <AutoAwesomeIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+            <Typography variant='h6' fontWeight={700}>
+              No AI-generated cases yet
+            </Typography>
             <Typography variant='body2' color='text.secondary'>
               Use &quot;Generate from Story&quot; above to create your first
               AI-generated test cases.
@@ -259,20 +292,36 @@ export default function GenerateClient({
                   px: 2,
                   alignItems: 'center',
                   cursor: 'pointer',
-                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:hover': { bgcolor: 'rgba(13,148,136,0.06)' },
                 }}
               >
-                <Chip
-                  label={tc.testKey || '—'}
-                  size='small'
-                  color='primary'
-                  variant='outlined'
+                <Box
+                  component='span'
                   sx={{
-                    fontWeight: 600,
-                    minWidth: 80,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    px: 0.875,
+                    py: 0.2,
+                    borderRadius: '5px',
+                    border: '1px solid',
+                    borderColor: (STATUS_BADGE[tc.status] ?? DEFAULT_BADGE)
+                      .borderColor,
+                    bgcolor: (STATUS_BADGE[tc.status] ?? DEFAULT_BADGE).bgcolor,
+                    color: (STATUS_BADGE[tc.status] ?? DEFAULT_BADGE).color,
+                    fontFamily:
+                      '"JetBrains Mono","Fira Code","IBM Plex Mono",monospace',
+                    fontSize: '0.695rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    lineHeight: 1.5,
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    minWidth: 72,
                     justifyContent: 'center',
                   }}
-                />
+                >
+                  {tc.testKey || '—'}
+                </Box>
                 <Stack sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant='body2' fontWeight={500} noWrap>
                     {tc.testCase}
@@ -290,16 +339,29 @@ export default function GenerateClient({
                         <Typography variant='caption' color='text.disabled'>
                           ·
                         </Typography>
-                        <Chip
-                          label={tc.jiraStory}
-                          size='small'
-                          variant='outlined'
+                        <Box
+                          component='span'
                           sx={{
-                            height: 18,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            px: 0.75,
+                            py: 0.1,
+                            borderRadius: '4px',
+                            border: '1px solid #93c5fd',
+                            bgcolor: '#eff6ff',
+                            color: '#1d4ed8',
+                            fontFamily:
+                              '"JetBrains Mono","Fira Code","IBM Plex Mono",monospace',
                             fontSize: '0.65rem',
-                            color: 'text.secondary',
+                            fontWeight: 600,
+                            letterSpacing: '0.03em',
+                            lineHeight: 1.6,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
                           }}
-                        />
+                        >
+                          {tc.jiraStory}
+                        </Box>
                       </>
                     )}
                   </Stack>

@@ -127,16 +127,42 @@ export default function JiraStoriesPanel({ onSelectStory, onAnalyzeImpact }) {
                   py: 1.25,
                   alignItems: 'flex-start',
                   cursor: 'pointer',
-                  '&:hover': { bgcolor: 'action.hover' },
+                  borderLeft: 3,
+                  borderColor: 'rgba(29,78,216,0.3)',
+                  transition: 'background-color 120ms ease',
+                  '&:hover': { bgcolor: 'rgba(29,78,216,0.05)' },
                 }}
               >
                 <UpdateIcon
-                  color='warning'
-                  fontSize='small'
-                  sx={{ mt: 0.25, flexShrink: 0 }}
+                  sx={{
+                    mt: 0.25,
+                    flexShrink: 0,
+                    color: '#1d4ed8',
+                    fontSize: 18,
+                  }}
                 />
                 <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant='body2' fontWeight={600}>
+                  <Typography
+                    component='span'
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      px: 0.875,
+                      py: 0.2,
+                      borderRadius: '5px',
+                      border: '1px solid #93c5fd',
+                      bgcolor: '#eff6ff',
+                      color: '#1d4ed8',
+                      fontFamily:
+                        '"JetBrains Mono","Fira Code","IBM Plex Mono",monospace',
+                      fontSize: '0.695rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      lineHeight: 1.5,
+                      alignSelf: 'flex-start',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {s.storyKey}
                   </Typography>
                   {s.jiraSummary && (
