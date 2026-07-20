@@ -25,6 +25,7 @@ function sliceColor(name, index) {
  */
 export default function FailByModuleChart({ failData }) {
   const data = failData.map((d, i) => ({
+    id: d.moduleId ?? 'other',
     name: d.name,
     value: d.value,
     color: sliceColor(d.name, i),
