@@ -6,16 +6,40 @@ import { Box, Checkbox, Stack, Tooltip, Typography } from '@mui/material';
 import MetaChip from '@/components/MetaChip';
 import { PRIORITIES, STATUS } from '@/lib/constants';
 
-const STATUS_COLOR = {
-  [STATUS.PASS]: 'success.main',
-  [STATUS.FAIL]: 'error.main',
-  [STATUS.PENDING]: 'warning.main',
-  [STATUS.KNOWN_ISSUE]: 'info.main',
+// Status encodes directly into the key badge — background + border + text per state.
+// The dot indicator is removed; the badge IS the status signal.
+const STATUS_BADGE = {
+  [STATUS.PASS]: {
+    bgcolor: '#f0faf5',
+    color: '#2d7a5a',
+    borderColor: '#c6e8d8',
+  },
+  [STATUS.FAIL]: {
+    bgcolor: '#fee2e2',
+    color: '#b91c1c',
+    borderColor: '#fca5a5',
+  },
+  [STATUS.PENDING]: {
+    bgcolor: '#fff8e6',
+    color: '#b45309',
+    borderColor: '#d97706',
+  },
+  [STATUS.KNOWN_ISSUE]: {
+    bgcolor: '#ede9fe',
+    color: '#6d28d9',
+    borderColor: '#c4b5fd',
+  },
 };
-const PRIORITY_BAR = {
-  [PRIORITIES.HIGH]: 'error.main',
-  [PRIORITIES.MEDIUM]: 'warning.main',
-  [PRIORITIES.LOW]: 'text.disabled',
+const DEFAULT_BADGE = {
+  bgcolor: '#f1f5f9',
+  color: '#64748b',
+  borderColor: '#e2e8f0',
+};
+
+const PRIORITY_COLOR = {
+  [PRIORITIES.HIGH]: '#ef4444',
+  [PRIORITIES.MEDIUM]: '#f59e0b',
+  [PRIORITIES.LOW]: '#94a3b8',
 };
 
 function toDisplayCase(value) {
@@ -25,7 +49,7 @@ function toDisplayCase(value) {
 
 /**
  * Single row in the master list. Checkbox for bulk selection + priority bar
- * + status dot + title/subtitle metadata.
+ * + status-tinted key badge + title/subtitle metadata.
  *
  * @see app/(app)/test-cases/master-detail/TestCaseList.jsx
  */
@@ -36,6 +60,9 @@ export default function TestCaseListItem({
   onToggle,
   onClick,
 }) {
+  const badgeStyle = STATUS_BADGE[tc.status] || DEFAULT_BADGE;
+  const priorityColor = PRIORITY_COLOR[tc.priority] || '#cbd5e1';
+
   return (
     <Stack
       data-case-id={tc._id}
@@ -56,9 +83,12 @@ export default function TestCaseListItem({
         cursor: 'pointer',
         borderLeft: 3,
         borderColor: active ? 'primary.main' : 'transparent',
-        bgcolor: active ? 'action.hover' : 'transparent',
+        bgcolor: active ? 'rgba(13,148,136,0.06)' : 'transparent',
         alignItems: 'center',
-        '&:hover': { bgcolor: 'action.hover' },
+        transition: 'background-color 120ms ease',
+        '&:hover': {
+          bgcolor: active ? 'rgba(13,148,136,0.09)' : 'action.hover',
+        },
       }}
     >
       <Checkbox
@@ -67,52 +97,68 @@ export default function TestCaseListItem({
         onClick={(e) => e.stopPropagation()}
         onChange={onToggle}
       />
+
+      {/* Priority bar — 4px wide, colored by priority level */}
       <Tooltip
         title={tc.priority ? `Priority: ${tc.priority}` : 'Priority not set'}
       >
         <Box
           sx={{
-            width: 3,
-            height: 22,
+            width: 4,
+            height: 28,
             borderRadius: 1,
-            bgcolor: PRIORITY_BAR[tc.priority] || 'text.disabled',
-          }}
-        />
-      </Tooltip>
-      <Tooltip title={tc.status ? `Status: ${tc.status}` : 'Status not set'}>
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            bgcolor: STATUS_COLOR[tc.status] || 'text.disabled',
+            bgcolor: priorityColor,
+            flexShrink: 0,
           }}
         />
       </Tooltip>
 
       <Stack sx={{ flex: 1, minWidth: 0 }}>
+        {/* Line 1: status-tinted key badge + title */}
         <Stack
           direction='row'
-          spacing={0.5}
-          sx={{ alignItems: 'baseline', overflow: 'hidden' }}
+          spacing={0.75}
+          sx={{ alignItems: 'center', overflow: 'hidden' }}
         >
-          <Typography
-            variant='mono'
-            color='text.disabled'
-            sx={{ flexShrink: 0 }}
+          <Tooltip
+            title={tc.status ? `Status: ${tc.status}` : 'Status not set'}
           >
-            {tc.testKey}
-          </Typography>
+            <Box
+              component='span'
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                px: 0.875,
+                py: 0.2,
+                borderRadius: '5px',
+                border: '1px solid',
+                borderColor: badgeStyle.borderColor,
+                bgcolor: badgeStyle.bgcolor,
+                color: badgeStyle.color,
+                fontFamily:
+                  '"JetBrains Mono","Fira Code","IBM Plex Mono",monospace',
+                fontSize: '0.695rem',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                lineHeight: 1.5,
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {tc.testKey}
+            </Box>
+          </Tooltip>
           <Typography variant='tableCell' noWrap sx={{ flex: 1, minWidth: 0 }}>
             {tc.testCase}
           </Typography>
         </Stack>
 
+        {/* Line 2: module path + assignment chips */}
         <Stack
           direction='row'
           spacing={0.75}
           useFlexGap
-          sx={{ flexWrap: 'wrap' }}
+          sx={{ flexWrap: 'wrap', mt: 0.25 }}
         >
           {tc.moduleName && (
             <Tooltip title='Application / Module'>
@@ -120,10 +166,7 @@ export default function TestCaseListItem({
                 <MetaChip
                   icon={<FolderIcon fontSize='small' />}
                   label={`${toDisplayCase(tc.applicationName)} / ${toDisplayCase(tc.moduleName)}`}
-                  sx={{
-                    bgcolor: 'grey.100',
-                    color: 'text.secondary',
-                  }}
+                  sx={{ bgcolor: 'grey.100', color: 'text.secondary' }}
                 />
               </span>
             </Tooltip>
@@ -139,14 +182,8 @@ export default function TestCaseListItem({
                 }
                 sx={
                   tc.assignedTo
-                    ? {
-                        bgcolor: '#E8F5EE',
-                        color: '#1F6B45',
-                      }
-                    : {
-                        bgcolor: '#FFF1E6',
-                        color: '#9A4D12',
-                      }
+                    ? { bgcolor: '#f0f3f9', color: '#4e5f80' }
+                    : { bgcolor: '#FFF1E6', color: '#9A4D12' }
                 }
               />
             </span>
@@ -157,10 +194,7 @@ export default function TestCaseListItem({
                 <MetaChip
                   icon={<PersonIcon fontSize='small' />}
                   label={`Tested by: ${toDisplayCase(tc.testedBy)}`}
-                  sx={{
-                    bgcolor: 'grey.100',
-                    color: 'text.secondary',
-                  }}
+                  sx={{ bgcolor: '#f0f3f9', color: '#4e5f80' }}
                 />
               </span>
             </Tooltip>

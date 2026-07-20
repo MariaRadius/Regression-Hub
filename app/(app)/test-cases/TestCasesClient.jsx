@@ -253,13 +253,12 @@ function TestCasesPage({ user }) {
 
       {/* Header */}
       <PageHeader
-        eyebrow='Data Grid'
         title='Test Cases'
         sub={
           loading ? (
             <Skeleton variant='text' width={80} />
           ) : (
-            `${totalCount} rows`
+            `${totalCount.toLocaleString()} test cases`
           )
         }
         actions={

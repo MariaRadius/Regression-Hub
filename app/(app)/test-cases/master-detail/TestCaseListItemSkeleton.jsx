@@ -3,7 +3,7 @@ import Stack from '@mui/material/Stack';
 
 /**
  * Loading placeholder mirroring TestCaseListItem's layout: checkbox, priority bar,
- * status dot, and a two-line text block. Width props vary per row so a stack of
+ * key badge, and a two-line text block. Width props vary per row so a stack of
  * these reads as real content rather than a uniform bar grid.
  *
  * @see app/(app)/test-cases/master-detail/TestCaseListItem.jsx
@@ -27,9 +27,14 @@ export default function TestCaseListItemSkeleton({
       {/* Checkbox */}
       <Skeleton variant='rounded' width={20} height={20} />
       {/* Priority bar */}
-      <Skeleton variant='rounded' width={3} height={22} />
-      {/* Status dot */}
-      <Skeleton variant='circular' width={8} height={8} />
+      <Skeleton variant='rounded' width={4} height={28} />
+      {/* Key badge */}
+      <Skeleton
+        variant='rounded'
+        width={72}
+        height={22}
+        sx={{ borderRadius: '5px' }}
+      />
       {/* Text block */}
       <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.4}>
         <Skeleton variant='text' width={titleWidth} height={18} />
