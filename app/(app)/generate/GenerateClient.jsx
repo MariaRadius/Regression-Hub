@@ -23,8 +23,10 @@ import AITestCaseSlidesDialog from '@/components/AITestCaseSlidesDialog';
 import GenerateStoryForm from '@/components/GenerateStoryForm';
 import JiraImpactAnalysisDialog from '@/components/JiraImpactAnalysisDialog';
 import JiraStoriesPanel from '@/components/JiraStoriesPanel';
+import JiraStoryDiscardDialog from '@/components/JiraStoryDiscardDialog';
 import PageHeader from '@/components/PageHeader';
 import { useReleaseEnv } from '@/contexts/ReleaseEnvContext';
+import { useJiraStories } from '@/hooks/useJiraStories';
 import { getGeneratedTestCases } from '@/lib/api/testCases';
 import { STATUS } from '@/lib/constants';
 
@@ -68,6 +70,22 @@ export default function GenerateClient({
   const { releaseId } = useReleaseEnv();
   const router = useRouter();
 
+  const {
+    staleStories,
+    discardedStories,
+    checking,
+    jiraError,
+    handleCheckNow,
+    handleDismiss,
+    handleDismissAll,
+    handleDiscardAcknowledge,
+  } = useJiraStories();
+
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [discardStoryKey, setDiscardStoryKey] = useState('');
+  const [discardStorySummary, setDiscardStorySummary] = useState('');
+  const [discardStoryStatus, setDiscardStoryStatus] = useState(null);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingStories, setPendingStories] = useState(null);
   const [selectedStoryKey, setSelectedStoryKey] = useState('');
@@ -107,6 +125,16 @@ export default function GenerateClient({
   const handleSelectStory = useCallback((key) => {
     setSelectedStoryKey(key);
   }, []);
+
+  const handleReviewDiscard = useCallback(
+    (storyKey, jiraSummary, jiraStatus) => {
+      setDiscardStoryKey(storyKey);
+      setDiscardStorySummary(jiraSummary ?? '');
+      setDiscardStoryStatus(jiraStatus ?? null);
+      setDiscardDialogOpen(true);
+    },
+    [],
+  );
 
   const handleAnalyzeImpact = useCallback((storyKey, jiraSummary) => {
     setImpactStoryKey(storyKey);
@@ -155,8 +183,16 @@ export default function GenerateClient({
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={6} sx={{ display: 'flex' }}>
           <JiraStoriesPanel
+            staleStories={staleStories}
+            discardedStories={discardedStories}
+            checking={checking}
+            jiraError={jiraError}
+            onCheckNow={handleCheckNow}
             onSelectStory={handleSelectStory}
             onAnalyzeImpact={handleAnalyzeImpact}
+            onDismiss={handleDismiss}
+            onDismissAll={handleDismissAll}
+            onReviewDiscard={handleReviewDiscard}
           />
         </Grid>
         <Grid size={6} sx={{ display: 'flex' }}>
@@ -383,6 +419,22 @@ export default function GenerateClient({
           />
         )}
       </Stack>
+
+      <JiraStoryDiscardDialog
+        open={discardDialogOpen}
+        storyKey={discardStoryKey}
+        jiraSummary={discardStorySummary}
+        jiraStatus={discardStoryStatus}
+        onClose={() => setDiscardDialogOpen(false)}
+        onAcknowledged={(storyKey, deletedCount) => {
+          handleDiscardAcknowledge(storyKey);
+          setDiscardDialogOpen(false);
+          if (deletedCount > 0) {
+            setPage(1);
+            fetchCases({ page: 1 });
+          }
+        }}
+      />
 
       <JiraImpactAnalysisDialog
         open={impactDialogOpen}
