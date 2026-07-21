@@ -1,6 +1,12 @@
 'use client';
 import AddIcon from '@mui/icons-material/Add';
-import { Button, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import {
+  Box,
+  Button,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material';
 import { useCallback, useState } from 'react';
 import { useQaUserList } from '@/hooks/useSharedData';
 import {
@@ -11,13 +17,42 @@ import {
 import AddFilterPopover from './AddFilterPopover';
 import FilterChip from './FilterChip';
 
+// Color identity per preset tab — dot, active text, active background
+const PRESET_STYLES = {
+  mine: {
+    dotColor: '#0d9488',
+    activeColor: '#0a7a70',
+    activeBg: 'rgba(13,148,136,0.08)',
+  },
+  pending: {
+    dotColor: '#d97706',
+    activeColor: '#b45309',
+    activeBg: 'rgba(217,119,6,0.09)',
+  },
+  failed: {
+    dotColor: '#dc2626',
+    activeColor: '#b91c1c',
+    activeBg: 'rgba(220,38,38,0.08)',
+  },
+  'known-issues': {
+    dotColor: '#7c3aed',
+    activeColor: '#6d28d9',
+    activeBg: 'rgba(124,58,237,0.08)',
+  },
+  high: {
+    dotColor: '#dc2626',
+    activeColor: '#b91c1c',
+    activeBg: 'rgba(220,38,38,0.08)',
+  },
+};
+
 function resolvePresetValue(preset, user) {
   if (preset.value === '__currentUser__') return user?.name ?? '';
   return preset.value;
 }
 
 /**
- * Filter strip: ToggleButtonGroup saved-view row + active filter chips + "+ Add filter".
+ * Filter strip: color-coded saved-view tabs + active filter chips + "+ Add filter".
  *
  * @param {object}   props.filters      Return value of useTestCaseFilters()
  * @param {object}   props.user         Session user ({ name, email, ... })
@@ -43,7 +78,6 @@ export default function FilterStrip({
   const [addOpen, setAddOpen] = useState(false);
   const setAddBtnRef = useCallback((el) => setAddBtnEl(el), []);
 
-  // Derive which preset IDs are currently "on" (computed, not stored).
   const selectedPresets = VIEW_PRESETS.filter((p) => {
     const resolved = resolvePresetValue(p, user);
     return resolved && valuesOf(p.key).includes(String(resolved));
@@ -51,8 +85,6 @@ export default function FilterStrip({
 
   const allActive = Object.keys(active).length === 0;
 
-  // ToggleButtonGroup calls onChange with next full selection array.
-  // Diff to find the single toggled preset, then call toggleValue.
   function handlePresetChange(_e, nextSelected) {
     const added = nextSelected.filter((id) => !selectedPresets.includes(id));
     const removed = selectedPresets.filter((id) => !nextSelected.includes(id));
@@ -95,27 +127,89 @@ export default function FilterStrip({
         spacing={1}
         sx={{ alignItems: 'center', px: 2, justifyContent: 'space-between' }}
       >
-        <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+        <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
+          {/* "All" pill */}
           <Button
             size='small'
-            variant={allActive ? 'contained' : 'text'}
             disableElevation
             onClick={clearAll}
+            sx={{
+              borderRadius: '20px',
+              border: '1px solid',
+              borderColor: allActive ? 'primary.main' : 'divider',
+              bgcolor: allActive ? 'rgba(13,148,136,0.10)' : 'transparent',
+              color: allActive ? 'primary.main' : 'text.secondary',
+              fontWeight: allActive ? 700 : 400,
+              fontSize: '0.78rem',
+              px: 1.5,
+              py: 0.4,
+              minWidth: 0,
+              '&:hover': {
+                bgcolor: 'rgba(13,148,136,0.08)',
+                borderColor: 'primary.main',
+              },
+            }}
           >
-            {`All${counts?.all != null ? ` (${counts.all})` : ''}`}
+            {`All${counts?.all != null ? ` (${counts.all.toLocaleString()})` : ''}`}
           </Button>
 
+          {/* Preset pills */}
           <ToggleButtonGroup
             value={selectedPresets}
             onChange={handlePresetChange}
             size='small'
             aria-label='saved view presets'
+            sx={{
+              gap: 0.5,
+              '& .MuiToggleButtonGroup-grouped': {
+                borderRadius: '20px !important',
+                border: '1px solid !important',
+                borderColor: 'divider',
+                mx: 0,
+                px: 1.25,
+                py: 0.4,
+                fontSize: '0.78rem',
+                fontWeight: 400,
+                color: 'text.secondary',
+              },
+            }}
           >
-            {VIEW_PRESETS.map((p) => (
-              <ToggleButton key={p.id} value={p.id} aria-label={p.label}>
-                {p.label}
-              </ToggleButton>
-            ))}
+            {VIEW_PRESETS.map((p) => {
+              const style = PRESET_STYLES[p.id] ?? PRESET_STYLES.mine;
+              const isOn = selectedPresets.includes(p.id);
+              return (
+                <ToggleButton
+                  key={p.id}
+                  value={p.id}
+                  aria-label={p.label}
+                  sx={{
+                    gap: 0.625,
+                    '&.Mui-selected': {
+                      color: `${style.activeColor} !important`,
+                      bgcolor: `${style.activeBg} !important`,
+                      borderColor: `${style.dotColor} !important`,
+                      fontWeight: 600,
+                    },
+                    '&:hover': {
+                      bgcolor: `${style.activeBg} !important`,
+                    },
+                  }}
+                >
+                  <Box
+                    component='span'
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      bgcolor: isOn ? style.dotColor : '#cbd5e1',
+                      flexShrink: 0,
+                      display: 'inline-block',
+                    }}
+                  />
+                  {p.label}
+                </ToggleButton>
+              );
+            })}
           </ToggleButtonGroup>
         </Stack>
 

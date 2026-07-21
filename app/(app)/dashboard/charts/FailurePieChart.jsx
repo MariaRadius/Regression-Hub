@@ -102,7 +102,7 @@ export default function FailurePieChart({ data, ariaLabel }) {
                   return (
                     // biome-ignore lint/a11y/noStaticElementInteractions: SVG path is a chart segment — no native interactive equivalent inside SVG
                     <path
-                      key={name}
+                      key={arc.data.id ?? name}
                       d={arcPath}
                       fill={color}
                       cursor={navHref ? 'pointer' : 'default'}

@@ -153,7 +153,7 @@ export default function GenerateStoryForm({
       sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}
     >
       <CardHeader
-        avatar={<AutoAwesomeIcon color='primary' />}
+        avatar={<AutoAwesomeIcon sx={{ color: '#0d9488' }} />}
         title='Generate from Story'
         slotProps={{ title: { variant: 'subtitle2' } }}
       />

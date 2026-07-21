@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { JIRA_STORY_SYNC_BATCH_LIMIT } from '@/lib/constants';
 import {
+  JIRA_DISCARDED_STATUSES_DEFAULT,
+  JIRA_STORY_SYNC_BATCH_LIMIT,
+} from '@/lib/constants';
+import {
+  clearDiscardedAcknowledgement,
   listDistinctStoryKeys,
   listStoryWatches,
   upsertStoryWatch,
@@ -32,17 +36,25 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
   };
 
   if (!isJiraConfigured(jiraConfig)) {
-    return NextResponse.json({ stories: [] });
+    return NextResponse.json({ stories: [], discarded: [] });
   }
 
   const allKeys = await listDistinctStoryKeys(db, teamId);
   if (allKeys.length === 0) {
-    return NextResponse.json({ stories: [] });
+    return NextResponse.json({ stories: [], discarded: [] });
   }
 
   const keys = allKeys.slice(0, JIRA_STORY_SYNC_BATCH_LIMIT);
   const watches = await listStoryWatches(db, teamId);
   const watchMap = Object.fromEntries(watches.map((w) => [w.storyKey, w]));
+
+  // Snapshot sprint states from DB BEFORE the Jira refresh overwrites them.
+  // Used later to detect active→null/inactive transitions (sprint removal).
+  const oldSprintStates = Object.fromEntries(
+    keys
+      .filter((k) => watchMap[k])
+      .map((k) => [k, watchMap[k].jiraSprintState]),
+  );
 
   const throttleCutoff = new Date(
     Date.now() - settings.jiraSyncThrottleHours * 3_600_000,
@@ -65,10 +77,12 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
             jiraUpdatedAt: issue.updatedAt,
             jiraSummary: issue.summary,
             jiraDescription: issue.description,
+            jiraStatus: issue.jiraStatus,
+            jiraSprintState: issue.jiraSprintState,
           }),
         ),
       );
-      // Merge upserted values into watchMap for stale computation
+      // Merge upserted values into watchMap for stale/discarded computation
       for (const issue of issues) {
         watchMap[issue.key] = {
           ...watchMap[issue.key],
@@ -77,6 +91,8 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
           jiraSummary: issue.summary,
           jiraDescription: issue.description,
           jiraCheckedAt: new Date(),
+          jiraStatus: issue.jiraStatus,
+          jiraSprintState: issue.jiraSprintState,
         };
       }
     } catch (err) {
@@ -87,12 +103,76 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
     }
   }
 
+  // Discarded is computed first so its keys can be excluded from stale.
+  // A discarded story (status: Deferred/Grooming/etc. or removed from sprint)
+  // should only surface the archive action — never the impact-analysis action.
+
+  // Case-insensitive comparison: normalize both sides to lowercase.
+  const discardedStatusesLower = new Set(
+    (settings.jiraDiscardedStatuses ?? JIRA_DISCARDED_STATUSES_DEFAULT).map(
+      (s) => s.toLowerCase(),
+    ),
+  );
+
+  const isSprintRemoved = (storyKey) => {
+    const wasActive = oldSprintStates[storyKey] === 'active';
+    const nowActive = watchMap[storyKey]?.jiraSprintState === 'active';
+    return wasActive && !nowActive;
+  };
+
+  const isDiscardedNow = (w) => {
+    if (!w) return false;
+    const statusDiscarded =
+      w.jiraStatus && discardedStatusesLower.has(w.jiraStatus.toLowerCase());
+    const sprintDiscarded =
+      w.jiraSprintState === 'inactive' || isSprintRemoved(w.storyKey);
+    return statusDiscarded || sprintDiscarded;
+  };
+
+  // Re-arm: when a story is no longer discarded but was previously acknowledged,
+  // clear discardedAcknowledgedAt so the next discard event will resurface it.
+  const reArmKeys = keys
+    .map((k) => watchMap[k])
+    .filter((w) => w && w.discardedAcknowledgedAt && !isDiscardedNow(w))
+    .map((w) => w.storyKey);
+
+  if (reArmKeys.length > 0) {
+    await Promise.all(
+      reArmKeys.map((key) => clearDiscardedAcknowledgement(db, teamId, key)),
+    );
+    // Clear in-memory so the map reflects the re-armed state immediately.
+    for (const key of reArmKeys) {
+      if (watchMap[key]) {
+        watchMap[key] = { ...watchMap[key], discardedAcknowledgedAt: null };
+      }
+    }
+  }
+
+  const discarded = keys
+    .map((k) => watchMap[k])
+    .filter((w) => {
+      if (!w) return false;
+      if (w.discardedAcknowledgedAt) return false;
+      return isDiscardedNow(w);
+    })
+    .map((w) => ({
+      storyKey: w.storyKey,
+      jiraSummary: w.jiraSummary ?? '',
+      jiraStatus: w.jiraStatus ?? null,
+    }));
+
+  const discardedKeySet = new Set(discarded.map((d) => d.storyKey));
+
   const stale = keys
     .map((k) => watchMap[k])
     .filter((w) => {
       if (!w) return false;
+      // Discarded stories are handled by the discard flow, not impact analysis.
+      if (discardedKeySet.has(w.storyKey)) return false;
       if (!w.acknowledgedAt) return true;
-      if (w.jiraUpdatedAt && w.jiraUpdatedAt <= w.acknowledgedAt) return false;
+      // Always compare content — jiraUpdatedAt alone is not reliable enough
+      // to skip this (Jira index lag, old DB records with null jiraUpdatedAt,
+      // or status-only changes that don't alter the `updated` timestamp).
       const summaryChanged =
         (w.jiraSummary ?? '') !== (w.acknowledgedSummary ?? '');
       const descriptionChanged =
@@ -105,11 +185,12 @@ export const POST = withTeam(async (request, _ctx, { teamId, db }) => {
       jiraUpdatedAt:
         w.jiraUpdatedAt instanceof Date
           ? w.jiraUpdatedAt.toISOString()
-          : w.jiraUpdatedAt,
+          : (w.jiraUpdatedAt ?? null),
     }));
 
   return NextResponse.json({
     stories: stale,
+    discarded,
     ...(jiraError ? { jiraError } : {}),
   });
 });

@@ -5,6 +5,7 @@ import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import CircleIcon from '@mui/icons-material/Circle';
 import FolderIcon from '@mui/icons-material/Folder';
+import KeyIcon from '@mui/icons-material/Key';
 import LabelIcon from '@mui/icons-material/Label';
 import PersonIcon from '@mui/icons-material/Person';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
@@ -27,16 +28,44 @@ import {
 } from 'react';
 import { FILTER_TYPES } from '@/lib/constants';
 
-const FILTER_ICONS = {
-  applicationId: <AppsIcon fontSize='small' />,
-  moduleId: <FolderIcon fontSize='small' />,
-  status: <CircleIcon fontSize='small' />,
-  priority: <PriorityHighIcon fontSize='small' />,
-  testedBy: <PersonIcon fontSize='small' />,
-  assignedTo: <AssignmentIndIcon fontSize='small' />,
-  version: <LabelIcon fontSize='small' />,
-  jiraStory: <BugReportIcon fontSize='small' />,
+// Component references (not instances) so we can apply color at render time
+const FILTER_ICON_MAP = {
+  applicationId: AppsIcon,
+  moduleId: FolderIcon,
+  status: CircleIcon,
+  priority: PriorityHighIcon,
+  testedBy: PersonIcon,
+  assignedTo: AssignmentIndIcon,
+  version: LabelIcon,
+  jiraStory: BugReportIcon,
+  testKey: KeyIcon,
 };
+
+const FILTER_ICON_COLORS = {
+  applicationId: '#0d9488',
+  moduleId: '#6366f1',
+  status: '#8b5cf6',
+  priority: '#ef4444',
+  testedBy: '#64748b',
+  assignedTo: '#3b82f6',
+  version: '#0ea5e9',
+  jiraStory: '#f59e0b',
+  testKey: '#0891b2',
+};
+
+function FilterIcon({ filterKey }) {
+  const Icon = FILTER_ICON_MAP[filterKey];
+  if (!Icon) return null;
+  return (
+    <Icon
+      fontSize='small'
+      sx={{
+        color: FILTER_ICON_COLORS[filterKey] || 'text.secondary',
+        fontSize: 16,
+      }}
+    />
+  );
+}
 
 /** Normalises a raw option (string | { value, label }) to { value, label }. */
 function resolveOpt(opt) {
@@ -45,16 +74,6 @@ function resolveOpt(opt) {
 
 /**
  * Returns a keydown handler for a single-select listbox panel.
- *
- * @param {object}          cfg
- * @param {Array}           cfg.items          Visible (filtered) items in the list.
- * @param {number|null}     cfg.activeIndex    Current focused index (null = search input focused).
- * @param {Function}        cfg.setActiveIndex State setter for activeIndex.
- * @param {React.RefObject} cfg.searchInputRef Ref to the panel's search/text input.
- * @param {Function}        cfg.onPick         Called with the item when Enter confirms selection.
- * @param {Function}        cfg.onEscape       Called when Escape is pressed (close or back).
- * @param {Function}        [cfg.isDisabled]   (item) → boolean. Suppresses Enter when true.
- * @param {React.RefObject} cfg.listRef        Ref to the scrollable list container.
  */
 function makeListKeyDownHandler({
   items,
@@ -71,7 +90,6 @@ function makeListKeyDownHandler({
   }
 
   return function handleListKeyDown(e) {
-    // Escape always fires — runs before the empty-list guard below.
     if (e.key === 'Escape') {
       e.stopPropagation();
       onEscape();
@@ -128,16 +146,6 @@ function makeListKeyDownHandler({
   };
 }
 
-/**
- * Single focusable row inside a listbox panel.
- *
- * @param {number}          props.idx
- * @param {boolean}         props.active
- * @param {boolean}         [props.disabled=false]
- * @param {Function}        [props.onClick]
- * @param {Function}        props.onFocus  Receives idx when row is focused.
- * @param {React.ReactNode} props.children
- */
 function OptionRow({
   idx,
   active,
@@ -159,12 +167,12 @@ function OptionRow({
         display: 'flex',
         alignItems: 'center',
         gap: 1,
-        px: 2,
-        py: 1,
+        px: 1.5,
+        py: 0.75,
         cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        bgcolor: active ? 'action.selected' : 'transparent',
-        '&:hover': disabled ? {} : { bgcolor: 'action.hover' },
+        opacity: disabled ? 0.45 : 1,
+        bgcolor: active ? 'rgba(13,148,136,0.10)' : 'transparent',
+        '&:hover': disabled ? {} : { bgcolor: 'rgba(13,148,136,0.06)' },
         outline: 'none',
         '&:focus-visible': {
           outline: '2px solid',
@@ -179,24 +187,12 @@ function OptionRow({
 }
 
 // ── Shared context ─────────────────────────────────────────────────────────────
-// Holds all state and handlers needed by sub-components, eliminating prop-drilling.
 const FilterPopoverContext = createContext(null);
 function useFilterPopover() {
   return useContext(FilterPopoverContext);
 }
 
 // ── FilterSearchBox ────────────────────────────────────────────────────────────
-// Unified search input: size='small' fullWidth TextField in a flexShrink:0 Box.
-// sx prop merges over defaults for spacing variants.
-
-/**
- * @param {string}          props.placeholder
- * @param {React.Ref}       props.inputRef
- * @param {string}          props.value
- * @param {Function}        props.onChange
- * @param {string}          props.ariaLabel
- * @param {object}          [props.sx]  Merged over default Box sx.
- */
 function FilterSearchBox({
   placeholder,
   inputRef,
@@ -206,7 +202,7 @@ function FilterSearchBox({
   sx,
 }) {
   return (
-    <Box sx={{ p: 1, flexShrink: 0, ...sx }}>
+    <Box sx={{ px: 1.5, py: 0.875, flexShrink: 0, ...sx }}>
       <TextField
         size='small'
         fullWidth
@@ -214,19 +210,16 @@ function FilterSearchBox({
         inputRef={inputRef}
         value={value}
         onChange={onChange}
-        slotProps={{ htmlInput: { 'aria-label': ariaLabel } }}
+        slotProps={{
+          htmlInput: { 'aria-label': ariaLabel },
+          input: { sx: { fontSize: '0.825rem' } },
+        }}
       />
     </Box>
   );
 }
 
 // ── FilterPanel ────────────────────────────────────────────────────────────────
-// Shared Stack wrapper: flex:1, overflow hidden, keyboard handler.
-
-/**
- * @param {object}          props.keyHandlerConfig  Passed to makeListKeyDownHandler.
- * @param {React.ReactNode} props.children
- */
 function FilterPanel({ keyHandlerConfig, children }) {
   return (
     <Stack
@@ -239,30 +232,44 @@ function FilterPanel({ keyHandlerConfig, children }) {
 }
 
 // ── ValuePickerHeader ──────────────────────────────────────────────────────────
-// Sticky header shared by SelectPicker and TextPicker: back button + filter
-// icon + label + optional children (SelectPicker injects the search box) + Divider.
-
-/**
- * @param {React.ReactNode} [props.children]  Optional content between title and Divider.
- */
 function ValuePickerHeader({ children }) {
   const { pendingFilter, handleBack } = useFilterPopover();
+  const iconColor = FILTER_ICON_COLORS[pendingFilter.key];
+
   return (
     <Box sx={{ flexShrink: 0, bgcolor: 'background.paper', zIndex: 1 }}>
       <Stack
         direction='row'
-        spacing={0.5}
-        sx={{ alignItems: 'center', px: 0.5, py: 0.5 }}
+        spacing={0.75}
+        sx={{ alignItems: 'center', px: 1, py: 0.875 }}
       >
         <IconButton
           size='small'
           onClick={handleBack}
           aria-label='Back to filter list'
+          sx={{ color: 'text.secondary' }}
         >
-          <ArrowBackIcon fontSize='small' />
+          <ArrowBackIcon sx={{ fontSize: 16 }} />
         </IconButton>
-        {FILTER_ICONS[pendingFilter.key]}
-        <Typography variant='body2' fontWeight={600}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 26,
+            height: 26,
+            borderRadius: 1,
+            bgcolor: iconColor ? `${iconColor}18` : 'action.hover',
+            flexShrink: 0,
+          }}
+        >
+          <FilterIcon filterKey={pendingFilter.key} />
+        </Box>
+        <Typography
+          variant='body2'
+          fontWeight={600}
+          sx={{ fontSize: '0.825rem', color: 'text.primary' }}
+        >
           {pendingFilter.label}
         </Typography>
       </Stack>
@@ -300,6 +307,28 @@ function TypePicker() {
         listRef: containerRef,
       }}
     >
+      {/* Header */}
+      <Box
+        sx={{
+          px: 1.5,
+          pt: 1.25,
+          pb: 0.25,
+          flexShrink: 0,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'text.disabled',
+          }}
+        >
+          Filter by
+        </Typography>
+      </Box>
+
       <FilterSearchBox
         placeholder='Search filters…'
         inputRef={searchInputRef}
@@ -311,11 +340,13 @@ function TypePicker() {
         ariaLabel='Search filter types'
       />
 
+      <Divider />
+
       <Box
         ref={containerRef}
         role='listbox'
         aria-label='Filter types'
-        sx={{ overflowY: 'auto', flex: 1 }}
+        sx={{ overflowY: 'auto', flex: 1, py: 0.5 }}
       >
         {filteredTypes.map((f, i) => {
           const alreadyAdded = f.key in active;
@@ -328,17 +359,44 @@ function TypePicker() {
               onClick={() => handlePickType(f)}
               onFocus={setActiveIndex}
             >
-              {FILTER_ICONS[f.key]}
-              <Typography component='span'>{f.label}</Typography>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: 0.75,
+                  bgcolor: FILTER_ICON_COLORS[f.key]
+                    ? `${FILTER_ICON_COLORS[f.key]}14`
+                    : 'action.hover',
+                  flexShrink: 0,
+                }}
+              >
+                <FilterIcon filterKey={f.key} />
+              </Box>
+              <Typography
+                component='span'
+                sx={{ fontSize: '0.825rem', flex: 1, color: 'text.primary' }}
+              >
+                {f.label}
+              </Typography>
               {alreadyAdded && (
-                <Typography
-                  component='span'
-                  variant='caption'
-                  color='text.disabled'
-                  sx={{ ml: 'auto' }}
+                <Box
+                  sx={{
+                    px: 0.75,
+                    py: 0.1,
+                    borderRadius: 1,
+                    bgcolor: 'rgba(13,148,136,0.10)',
+                    color: 'primary.main',
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    flexShrink: 0,
+                  }}
                 >
-                  added
-                </Typography>
+                  active
+                </Box>
               )}
             </OptionRow>
           );
@@ -385,7 +443,7 @@ function SelectPicker() {
             setActiveValueIndex(null);
           }}
           ariaLabel={`Search ${pendingFilter.label} values`}
-          sx={{ px: 1, pb: 0.5 }}
+          sx={{ pb: 0.5 }}
         />
       </ValuePickerHeader>
 
@@ -393,11 +451,11 @@ function SelectPicker() {
         ref={containerRef}
         role='listbox'
         aria-label={`${pendingFilter.label} values`}
-        sx={{ overflowY: 'auto', flex: 1 }}
+        sx={{ overflowY: 'auto', flex: 1, py: 0.5 }}
       >
         {filteredValueOptions.length === 0 ? (
-          <Box aria-live='polite' sx={{ px: 2, py: 1 }}>
-            <Typography variant='body2' color='text.disabled'>
+          <Box aria-live='polite' sx={{ px: 2, py: 1.5 }}>
+            <Typography sx={{ fontSize: '0.825rem', color: 'text.disabled' }}>
               No matches
             </Typography>
           </Box>
@@ -412,7 +470,12 @@ function SelectPicker() {
                 onClick={() => handlePickValue(optVal)}
                 onFocus={setActiveValueIndex}
               >
-                {optLabel}
+                <Typography
+                  component='span'
+                  sx={{ fontSize: '0.825rem', color: 'text.primary' }}
+                >
+                  {optLabel}
+                </Typography>
               </OptionRow>
             );
           })
@@ -423,8 +486,6 @@ function SelectPicker() {
 }
 
 // ── TextPicker — step 2b: enter a free-text value ─────────────────────────────
-// FilterPanel is still used here so Escape bubbles to handleBack via
-// makeListKeyDownHandler (which fires Escape before the empty-items guard).
 function TextPicker() {
   const {
     pendingFilter,
@@ -449,7 +510,7 @@ function TextPicker() {
     >
       <ValuePickerHeader />
 
-      <Box sx={{ p: 1 }}>
+      <Box sx={{ p: 1.5 }}>
         <TextField
           size='small'
           fullWidth
@@ -465,10 +526,10 @@ function TextPicker() {
               e.stopPropagation();
               handlePickValue(textDraft.trim());
             }
-            // Escape bubbles to FilterPanel onKeyDown → handleBack
           }}
           slotProps={{
             htmlInput: { 'aria-label': `${pendingFilter.label} value` },
+            input: { sx: { fontSize: '0.825rem' } },
           }}
         />
       </Box>
@@ -477,15 +538,11 @@ function TextPicker() {
 }
 
 /**
- * Two-step filter picker rendered inside a MUI Popover (not Menu — Menu's
- * roving-tabindex fights a search TextField and skips the first list item on
- * ArrowDown). All keyboard navigation is custom; MUI owns only positioning.
+ * Two-step filter picker rendered inside a MUI Popover.
  *
- * Step 1 (TypePicker)  — searchable list of filter types (Application, Status, …).
+ * Step 1 (TypePicker)    — searchable list of filter types.
  * Step 2a (SelectPicker) — sticky header + value search + scrollable option list.
  * Step 2b (TextPicker)   — sticky header + free-text input.
- *
- * Calls onPick(filterDef, value) only once both type AND value are chosen.
  *
  * @param {Element|null} props.anchorEl
  * @param {boolean}      props.open
@@ -509,18 +566,10 @@ export default function AddFilterPopover({
   const [activeValueIndex, setActiveValueIndex] = useState(null);
   const [textDraft, setTextDraft] = useState('');
 
-  // Panel 1 search input ref
   const searchInputRef = useRef(null);
-  // Panel 2 search input ref (also used for text-kind input — mutually exclusive)
   const valueSearchInputRef = useRef(null);
-  // Scrollable list ref — shared between pickers (only one renders at a time)
   const containerRef = useRef(null);
 
-  // Focus the active picker's search input whenever the step changes.
-  // Step switches happen with no transition so refs are live and focus()
-  // lands immediately. Initial-open focus is handled by
-  // slotProps.transition.onEntered, which fires after the Grow animation and
-  // after MUI Modal's focus trap — guaranteed to win.
   useEffect(() => {
     if (!pendingFilter) {
       searchInputRef.current?.focus();
@@ -537,7 +586,6 @@ export default function AddFilterPopover({
     [q],
   );
 
-  // Resets all value-picker state (step 2 state) without touching step 1 state.
   function resetValueState() {
     setValueQ('');
     setActiveValueIndex(null);
@@ -582,7 +630,6 @@ export default function AddFilterPopover({
     : valueOptions;
 
   const ctx = {
-    // Step 1 (TypePicker)
     q,
     setQ,
     filteredTypes,
@@ -593,7 +640,6 @@ export default function AddFilterPopover({
     handleClose,
     handlePickType,
     active,
-    // Step 2 (SelectPicker / TextPicker)
     pendingFilter,
     valueQ,
     setValueQ,
@@ -617,22 +663,22 @@ export default function AddFilterPopover({
       slotProps={{
         paper: {
           sx: {
-            width: 280,
+            width: 296,
             display: 'flex',
             flexDirection: 'column',
             maxHeight: '50vh',
             overflow: 'hidden',
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider',
+            boxShadow:
+              '0 8px 30px rgba(15,23,42,0.12), 0 2px 8px rgba(15,23,42,0.06)',
           },
         },
-        // onEntered fires after the Grow animation completes and after MUI
-        // Modal's internal focus trap has already run — so this focus() wins.
-        // TransitionProps is NOT used: silently ignored in MUI v9 (forwarded
-        // as an unknown DOM attribute) and onEntered never fires from it.
         transition: { onEntered: () => searchInputRef.current?.focus() },
       }}
     >
       <FilterPopoverContext.Provider value={ctx}>
-        {/* Step 1 → Step 2a → Step 2b: explicit render paths, no hidden conditionals */}
         {!pendingFilter ? (
           <TypePicker />
         ) : pendingFilter.kind === 'select' ? (

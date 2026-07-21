@@ -45,7 +45,7 @@ const CB_USERS = [
   { username: 'ali', name: 'Ali', password: 'Ali@CB1', role: 'admin' },
   { username: 'nimra', name: 'Nimra', password: 'Nimra@CB1', role: 'qa' },
   { username: 'aimen', name: 'Aimen', password: 'Aimen@CB1', role: 'qa' },
-  { username: 'hamza', name: 'Hamza', password: 'Hamza@CB1', role: 'qa' },
+  { username: 'hamza', name: 'Hamza', password: 'Hamza@CB1', role: 'admin' },
 ];
 
 const LOCATIONS = [

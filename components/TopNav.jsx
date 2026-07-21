@@ -38,6 +38,9 @@ import { ROLES } from '@/lib/constants';
 
 async function handleSignOut() {
   await signOut({ redirect: false });
+  for (const key of Object.keys(sessionStorage)) {
+    if (key.startsWith('roleInfoDismissed:')) sessionStorage.removeItem(key);
+  }
   window.location.replace('/login');
 }
 

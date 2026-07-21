@@ -112,12 +112,18 @@ export default function DashboardInsightsPanels({
               {topFailingModules.map((module) => (
                 <Stack
                   key={module.id}
+                  component={Link}
+                  href={`/test-cases?moduleId=${encodeURIComponent(module.id)}&status=Fail`}
                   direction='row'
                   spacing={2}
                   sx={{
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     p: 2,
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    '&:hover': { bgcolor: 'action.hover' },
+                    transition: 'background-color 0.15s',
                   }}
                 >
                   <Stack spacing={0.5}>
