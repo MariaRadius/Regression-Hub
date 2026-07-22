@@ -23,6 +23,7 @@ export default function TestCaseDetailPanel({
   displayCase,
   releaseId,
   environments,
+  resultsVersion = 0,
   onEdit,
   onAction,
   onClose,
@@ -63,6 +64,21 @@ export default function TestCaseDetailPanel({
       cancelled = true;
     };
   }, [releaseId, tcId, environments]);
+
+  // Re-fetch results after a Jira issue is created so jiraIssueKeys appear
+  // without a page refresh. Skips the initial mount (resultsVersion === 0).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: environments and releaseId/tcId are intentionally omitted — this effect only runs on explicit refresh triggers, not on scope changes (which are handled above).
+  useEffect(() => {
+    if (!resultsVersion || !releaseId || !tcId || !environments?.length) return;
+    listCaseResults(releaseId, tcId)
+      .then((rows) => {
+        const byEnv = new Map(rows.map((r) => [r.environment, r]));
+        setEnvResults(
+          environments.map((env) => ({ env, result: byEnv.get(env) ?? null })),
+        );
+      })
+      .catch(() => {});
+  }, [resultsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset cached history when the selected case scope changes.
   useEffect(() => {

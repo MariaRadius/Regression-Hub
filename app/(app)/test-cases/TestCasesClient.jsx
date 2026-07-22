@@ -76,6 +76,7 @@ function TestCasesPage({ user }) {
   // needing to re-scan `cases`. It is updated from `cases` whenever the server confirms
   // the case is still on the page, and optimistically merged in onSuccess.
   const [activeCase, setActiveCase] = useState(null);
+  const [resultsVersion, setResultsVersion] = useState(0);
   useEffect(() => {
     if (!activeId) {
       setActiveCase(null);
@@ -318,6 +319,7 @@ function TestCasesPage({ user }) {
         displayCase={activeCase}
         releaseId={releaseId}
         environments={environments}
+        resultsVersion={resultsVersion}
         onEdit={(tc) => setEditTc(tc)}
         onAction={(a, id) => {
           setSingleActionId(id);
@@ -403,6 +405,7 @@ function TestCasesPage({ user }) {
               throw new Error(outcome.errors[0].error);
             }
             toastJiraOutcome(outcome);
+            setResultsVersion((v) => v + 1);
           }}
           onImprove={({ summary, description }) =>
             improveJiraDraft(releaseId, { summary, description })

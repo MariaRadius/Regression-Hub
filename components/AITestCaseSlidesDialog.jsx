@@ -624,6 +624,7 @@ export default function AITestCaseSlidesDialog({
   const combinationsRef = useRef([]);
   const [currentCombIndex, setCurrentCombIndex] = useState(0);
   const [totalCreated, setTotalCreated] = useState(0);
+  const [skippedCombs, setSkippedCombs] = useState(0);
   const [error, setError] = useState(null);
   // slides-phase state
   const [slides, setSlides] = useState([]);
@@ -647,6 +648,7 @@ export default function AITestCaseSlidesDialog({
     combinationsRef.current = [];
     setCurrentCombIndex(0);
     setTotalCreated(0);
+    setSkippedCombs(0);
     setError(null);
     setCreateError(null);
     setSlides([]);
@@ -672,11 +674,25 @@ export default function AITestCaseSlidesDialog({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jiraStory: combo.key }),
+            body: JSON.stringify({
+              jiraStory: combo.key,
+              applicationId: combo.app._id,
+              moduleId: combo.moduleId,
+            }),
           },
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Generation failed');
+        if (data.skipped) {
+          setSkippedCombs((prev) => prev + 1);
+          const next = index + 1;
+          if (next < combinationsRef.current.length) {
+            handleGenerateNext(next);
+          } else {
+            onSuccess(0);
+          }
+          return;
+        }
         setSlides(data.testCases);
         setStoryKey(data.story.key);
         setApplicationId(combo.app._id);
@@ -692,7 +708,7 @@ export default function AITestCaseSlidesDialog({
         setPhase('setup');
       }
     },
-    [releaseId],
+    [releaseId, onSuccess],
   );
 
   // When dialog opens with pre-built stories, bypass the setup phase.
@@ -862,6 +878,12 @@ export default function AITestCaseSlidesDialog({
               <Typography variant='caption' color='text.secondary'>
                 Combination {currentCombIndex + 1} of{' '}
                 {combinationsRef.current.length}
+              </Typography>
+            )}
+            {skippedCombs > 0 && (
+              <Typography variant='caption' color='text.secondary'>
+                {skippedCombs} skipped — test cases already exist for that story
+                + app + module
               </Typography>
             )}
           </Stack>
