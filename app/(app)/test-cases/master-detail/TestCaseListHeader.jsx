@@ -169,6 +169,19 @@ export default function TestCaseListHeader({
                 <SearchIcon fontSize='small' />
               </InputAdornment>
             ),
+            endAdornment: search ? (
+              <InputAdornment position='end'>
+                <IconButton
+                  size='small'
+                  edge='end'
+                  onClick={() => onSearchChange('')}
+                  aria-label='Clear search'
+                  sx={{ p: 0.25 }}
+                >
+                  <CloseIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
           },
         }}
       />
