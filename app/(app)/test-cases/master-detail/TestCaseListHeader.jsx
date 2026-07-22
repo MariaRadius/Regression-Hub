@@ -150,7 +150,7 @@ export default function TestCaseListHeader({
       <TextField
         size='small'
         fullWidth
-        placeholder='Search by ID, title, application, module, or assignee…'
+        placeholder='Search by ID, title, application, module, assignee, or Jira story…'
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         sx={{
