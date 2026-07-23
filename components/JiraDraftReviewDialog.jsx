@@ -1,16 +1,19 @@
 'use client';
 
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   Alert,
+  Box,
   Button,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  InputAdornment,
   Stack,
   TextField,
   Typography,
@@ -28,7 +31,7 @@ import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
  * When `onValidateStory` is provided, clicking "Create issue" first validates
  * the draft's linked Jira story. If the story is not found, an inline warning
  * is shown with two options:
- *   - Edit the story key (inline) and retry
+ *   - Edit the story key (inline) and retry — also updates the test case via `onUpdateStory`
  *   - Create the issue without linking it to any story
  *
  * @param {object} props
@@ -38,6 +41,8 @@ import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
  * @param {() => void} props.onClose
  * @param {((draft: { summary: string, description: string }) => Promise<{ summary: string, description: string }>)=} props.onImprove
  * @param {((storyKey: string) => Promise<{ valid: boolean }>)=} props.onValidateStory
+ * @param {((tcId: string, storyKey: string) => Promise<unknown>)=} props.onUpdateStory
+ *   Called after a successful "Create with this key" to persist the corrected story key on the test case.
  * @see {@link components/__tests__/JiraDraftReviewDialog.test.jsx}
  */
 export default function JiraDraftReviewDialog({
@@ -47,6 +52,7 @@ export default function JiraDraftReviewDialog({
   onClose,
   onImprove,
   onValidateStory,
+  onUpdateStory,
 }) {
   const [index, setIndex] = useState(0);
   const [summary, setSummary] = useState(drafts[0]?.summary ?? '');
@@ -55,8 +61,8 @@ export default function JiraDraftReviewDialog({
   const [validating, setValidating] = useState(false);
   const [improving, setImproving] = useState(false);
   const [error, setError] = useState('');
-  // When the story key isn't found: stores the key so the user can edit it
-  const [storyWarning, setStoryWarning] = useState(null); // { key: string, editKey: string }
+  // storyWarning: null when no warning; { key: original bad key, editKey: current user input }
+  const [storyWarning, setStoryWarning] = useState(null);
 
   const draft = drafts[index];
   const total = drafts.length;
@@ -75,10 +81,8 @@ export default function JiraDraftReviewDialog({
   }
 
   async function handleCreate() {
-    // If a story warning is already showing, the user must pick an action
     if (storyWarning) return;
 
-    // Validate the linked story key before creating, if a validator was provided
     if (draft.jiraStory && onValidateStory) {
       setValidating(true);
       setError('');
@@ -89,7 +93,7 @@ export default function JiraDraftReviewDialog({
           return;
         }
       } catch {
-        // On network error, proceed — don't block creation over a failed check
+        // Network error — don't block creation
       } finally {
         setValidating(false);
       }
@@ -133,6 +137,14 @@ export default function JiraDraftReviewDialog({
     setError('');
     try {
       await onCreate({ tcId: draft.tcId, summary, description, ...extra });
+      // If the user corrected the story key, persist it on the test case in real time
+      if (extra.storyOverride && onUpdateStory) {
+        try {
+          await onUpdateStory(draft.tcId, extra.storyOverride);
+        } catch {
+          // Non-fatal — issue was already created; silently skip the TC update
+        }
+      }
       advance();
     } catch (e) {
       setError(e.message || 'Jira issue creation failed');
@@ -161,27 +173,63 @@ export default function JiraDraftReviewDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth='sm'>
-      <DialogTitle>
-        Review Jira issue ({index + 1} of {total})
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant='body2' color='text.secondary'>
-            Review and edit the issue before it is created in Jira. Project,
-            issue type, and the story link are derived from the test case.
+      <DialogTitle sx={{ pb: 1 }}>
+        <Stack spacing={0.25}>
+          <Typography variant='h6' fontWeight={600}>
+            Review Jira issue
           </Typography>
+          {total > 1 && (
+            <Typography variant='caption' color='text.secondary'>
+              {index + 1} of {total}
+            </Typography>
+          )}
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent sx={{ pt: 0 }}>
+        <Stack spacing={2}>
+          {!storyWarning && (
+            <Typography variant='body2' color='text.secondary'>
+              Review and edit before creating in Jira. Project, issue type, and
+              story link are derived from the test case.
+            </Typography>
+          )}
+
           {error && <Alert severity='error'>{error}</Alert>}
 
           {storyWarning && (
-            <Alert severity='warning' icon={false}>
-              <Stack spacing={1}>
-                <Typography variant='body2' fontWeight={500}>
-                  Story not found in Jira
-                </Typography>
-                <Typography variant='body2'>
-                  <strong>{storyWarning.key}</strong> could not be found. Enter
-                  a different story key to link to, or create the issue without
-                  a story link.
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'warning.light',
+                borderRadius: 2,
+                bgcolor: 'warning.50',
+                p: 2,
+              }}
+            >
+              <Stack spacing={1.5}>
+                <Stack
+                  direction='row'
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <WarningAmberIcon
+                    fontSize='small'
+                    sx={{ color: 'warning.main', flexShrink: 0 }}
+                  />
+                  <Typography
+                    variant='body2'
+                    fontWeight={600}
+                    color='warning.dark'
+                  >
+                    Story not found in Jira
+                  </Typography>
+                </Stack>
+                <Typography variant='body2' color='text.secondary'>
+                  <strong>{storyWarning.key}</strong> could not be found. Edit
+                  the story key below and click <em>Create with this key</em> —
+                  the test case will be updated automatically. Or create the
+                  issue without any story link.
                 </Typography>
                 <TextField
                   size='small'
@@ -193,13 +241,40 @@ export default function JiraDraftReviewDialog({
                       editKey: e.target.value.toUpperCase(),
                     }))
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreateWithOverride();
+                  }}
                   disabled={busy}
                   placeholder='e.g. AIOP-123'
-                  sx={{ maxWidth: 200 }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position='start'>
+                          <Typography variant='caption' color='text.disabled'>
+                            #
+                          </Typography>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  error={
+                    !!storyWarning.editKey &&
+                    !JIRA_KEY_RE.test(storyWarning.editKey)
+                  }
+                  helperText={
+                    storyWarning.editKey &&
+                    !JIRA_KEY_RE.test(storyWarning.editKey)
+                      ? 'Use PROJECT-123 format'
+                      : ' '
+                  }
+                  sx={{ maxWidth: 220 }}
+                  autoFocus
                 />
               </Stack>
-            </Alert>
+            </Box>
           )}
+
+          <Divider />
 
           <TextField
             fullWidth
@@ -214,16 +289,27 @@ export default function JiraDraftReviewDialog({
             fullWidth
             label='Description'
             multiline
-            minRows={8}
-            maxRows={16}
+            minRows={7}
+            maxRows={14}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={busy}
           />
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between' }}>
-        <Stack direction='row' spacing={1}>
+
+      <DialogActions
+        sx={{
+          px: 3,
+          py: 2,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          gap: 1,
+          justifyContent: 'space-between',
+        }}
+      >
+        {/* Left: AI improve */}
+        <Box>
           {onImprove && !storyWarning && (
             <Button
               variant='outlined'
@@ -232,21 +318,35 @@ export default function JiraDraftReviewDialog({
               disabled={busy || !summary.trim() || !description.trim()}
               startIcon={
                 improving ? (
-                  <CircularProgress size={14} color='inherit' />
+                  <CircularProgress size={13} color='inherit' />
                 ) : (
-                  <AutoAwesomeOutlinedIcon />
+                  <AutoAwesomeOutlinedIcon fontSize='small' />
                 )
               }
+              sx={{ textTransform: 'none' }}
             >
               {improving ? 'Improving…' : 'Improve with AI'}
             </Button>
           )}
-        </Stack>
-        <Stack direction='row' spacing={1}>
-          <Button onClick={onClose} disabled={busy}>
-            Cancel remaining
+        </Box>
+
+        {/* Right: primary actions */}
+        <Stack direction='row' spacing={1} sx={{ alignItems: 'center' }}>
+          <Button
+            onClick={onClose}
+            disabled={busy}
+            size='small'
+            sx={{ color: 'text.secondary', textTransform: 'none' }}
+          >
+            Cancel
           </Button>
-          <Button onClick={advance} disabled={busy}>
+          <Button
+            onClick={advance}
+            disabled={busy}
+            size='small'
+            variant='outlined'
+            sx={{ textTransform: 'none' }}
+          >
             Skip
           </Button>
 
@@ -254,48 +354,58 @@ export default function JiraDraftReviewDialog({
             <>
               <Button
                 variant='outlined'
+                color='warning'
+                size='small'
                 onClick={handleCreateWithoutLink}
                 disabled={busy}
                 startIcon={
-                  submitting ? (
-                    <CircularProgress size={14} color='inherit' />
+                  submitting && !storyWarning.editKey ? (
+                    <CircularProgress size={13} color='inherit' />
                   ) : (
-                    <LinkOffIcon />
+                    <LinkOffIcon fontSize='small' />
                   )
                 }
+                sx={{ textTransform: 'none' }}
               >
                 Create without linking
               </Button>
               <Button
                 variant='contained'
+                size='small'
                 onClick={handleCreateWithOverride}
                 disabled={
                   busy ||
-                  !storyWarning.editKey.trim() ||
+                  !storyWarning.editKey?.trim() ||
+                  !JIRA_KEY_RE.test(storyWarning.editKey) ||
                   !summary.trim() ||
                   !description.trim()
                 }
                 startIcon={
                   busy ? (
-                    <CircularProgress size={14} color='inherit' />
-                  ) : (
-                    <EditOutlinedIcon />
-                  )
+                    <CircularProgress size={13} color='inherit' />
+                  ) : undefined
                 }
+                sx={{ textTransform: 'none', minWidth: 160 }}
               >
-                {validating ? 'Checking…' : 'Create with this key'}
+                {validating
+                  ? 'Checking…'
+                  : submitting
+                    ? 'Creating…'
+                    : 'Create with this key'}
               </Button>
             </>
           ) : (
             <Button
               variant='contained'
+              size='small'
               onClick={handleCreate}
               disabled={busy || !summary.trim() || !description.trim()}
               startIcon={
                 busy ? (
-                  <CircularProgress size={14} color='inherit' />
+                  <CircularProgress size={13} color='inherit' />
                 ) : undefined
               }
+              sx={{ textTransform: 'none', minWidth: 130 }}
             >
               {validating
                 ? 'Checking story…'

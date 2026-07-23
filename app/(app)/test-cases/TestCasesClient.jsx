@@ -29,6 +29,7 @@ import {
 import {
   getTestCaseForRelease,
   listTestCasesForRelease,
+  updateTestCaseForRelease,
 } from '@/lib/api/releases';
 import { ROLES } from '@/lib/constants';
 import { toastJiraOutcome } from '@/utils/toastJiraOutcome';
@@ -412,6 +413,11 @@ function TestCasesPage({ user }) {
             setResultsVersion((v) => v + 1);
           }}
           onValidateStory={(key) => validateJiraStory(key)}
+          onUpdateStory={(tcId, newKey) =>
+            updateTestCaseForRelease(releaseId, tcId, {
+              jiraStory: newKey,
+            }).catch(() => {})
+          }
           onImprove={({ summary, description }) =>
             improveJiraDraft(releaseId, { summary, description })
           }
