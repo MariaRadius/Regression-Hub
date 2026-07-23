@@ -21,7 +21,11 @@ import {
   useTestCasePagination,
 } from '@/hooks/useTestCasePagination';
 import { useTestCaseSelection } from '@/hooks/useTestCaseSelection';
-import { createJiraIssues, improveJiraDraft } from '@/lib/api/jira';
+import {
+  createJiraIssues,
+  improveJiraDraft,
+  validateJiraStory,
+} from '@/lib/api/jira';
 import {
   getTestCaseForRelease,
   listTestCasesForRelease,
@@ -407,6 +411,7 @@ function TestCasesPage({ user }) {
             toastJiraOutcome(outcome);
             setResultsVersion((v) => v + 1);
           }}
+          onValidateStory={(key) => validateJiraStory(key)}
           onImprove={({ summary, description }) =>
             improveJiraDraft(releaseId, { summary, description })
           }
