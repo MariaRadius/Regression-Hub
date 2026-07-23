@@ -36,6 +36,7 @@ const TYPES = [
   'Edge Case',
   'Negative Test',
   'Security Test',
+  'Known Issue',
 ];
 function SetupPhase({
   storyKeysRaw,
