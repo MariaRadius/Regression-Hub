@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getRelease } from '@/lib/db/releasesData';
 import { getTeamSettings } from '@/lib/db/settingsData';
+import { countTestCasesByCombo } from '@/lib/db/testCasesData';
 import { ApiError } from '@/lib/errors';
 import { JIRA_KEY_RE } from '@/lib/schemas/testCases';
 import {
@@ -15,6 +16,8 @@ const bodySchema = z.object({
   jiraStory: z
     .string()
     .regex(JIRA_KEY_RE, 'Invalid Jira story key (expected format: ABC-123)'),
+  applicationId: z.string().optional(),
+  moduleId: z.string().optional(),
 });
 
 export const POST = withTeam(async (request, { params }, { teamId, db }) => {
@@ -34,9 +37,22 @@ export const POST = withTeam(async (request, { params }, { teamId, db }) => {
 
   await getRelease(db, teamId, releaseId);
 
+  const { jiraStory, applicationId, moduleId } = parsed.data;
+
+  if (applicationId && moduleId) {
+    const existing = await countTestCasesByCombo(
+      db,
+      teamId,
+      jiraStory,
+      applicationId,
+      moduleId,
+    );
+    if (existing > 0) return NextResponse.json({ skipped: true });
+  }
+
   let story;
   try {
-    story = await getJiraStory(parsed.data.jiraStory, {
+    story = await getJiraStory(jiraStory, {
       jiraBaseUrl: settings.jiraBaseUrl,
       jiraEmail: settings.jiraEmail,
       jiraApiToken: settings.jiraApiToken,

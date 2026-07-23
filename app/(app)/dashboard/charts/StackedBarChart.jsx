@@ -450,6 +450,7 @@ export default function StackedBarChart({
 
   // ── Vertical category-axis tick (with optional label wrapping / rotation) ──
   function verticalCategoryTick({ formattedValue, x, y }) {
+    const label = formattedValue || emptyLabel || formattedValue;
     // Rotated budget: midpoint between the geometric max (margin-derived) and
     // bandwidth, so wrapping is tighter than the full diagonal but not as
     // aggressive as the per-bar slot width alone.
@@ -458,18 +459,16 @@ export default function StackedBarChart({
           xBandScale.bandwidth()) /
         2
       : xBandScale.bandwidth();
-    const lines = wrapLabels
-      ? wrapLabel(formattedValue, labelMaxWidth, 11)
-      : [formattedValue];
+    const wrapped = wrapLabels ? wrapLabel(label, labelMaxWidth, 10) : [label];
+    const lines = wrapped.length > 0 ? wrapped : [label];
     return (
       <text
         x={x}
         y={y}
         textAnchor={rotateLabels ? 'end' : 'middle'}
-        fontSize={11}
+        fontSize={10}
         fill={CHART_THEME.text}
-        fontWeight={500}
-        letterSpacing='0.02em'
+        fontWeight={400}
         transform={rotateLabels ? `rotate(-45, ${x}, ${y})` : undefined}
       >
         {lines.map((line, i) => (
@@ -491,6 +490,7 @@ export default function StackedBarChart({
         <svg
           width={width}
           height={height}
+          overflow='visible'
           style={{ animation: 'chartFadeIn 0.35s ease forwards' }}
         >
           <title>{title}</title>
@@ -534,6 +534,7 @@ export default function StackedBarChart({
                   stroke={CHART_THEME.axis}
                   tickStroke='transparent'
                   tickComponent={verticalCategoryTick}
+                  numTicks={sortedData.length}
                 />
               </>
             ) : (

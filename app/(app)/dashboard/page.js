@@ -279,6 +279,7 @@ export default async function DashboardPage() {
               sortBy='total'
               minBarSize={3}
               rotateLabels
+              emptyLabel='Unknown'
               navTo={{ filterKey: 'moduleId', valueField: 'moduleId' }}
             />
           </Box>

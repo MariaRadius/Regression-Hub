@@ -11,8 +11,6 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
 import ManageHistoryOutlinedIcon from '@mui/icons-material/ManageHistoryOutlined';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
-import UpdateOutlinedIcon from '@mui/icons-material/UpdateOutlined';
 import {
   Alert,
   Box,
@@ -179,65 +177,89 @@ function HistoryDetailRow({ detail }) {
 
   return (
     <Stack
-      spacing={0.5}
-      sx={{
-        py: 0.875,
-        borderTop: 1,
-        borderColor: 'divider',
-      }}
+      direction='row'
+      spacing={1}
+      sx={{ alignItems: 'center', py: 0.375, minWidth: 0 }}
     >
       <Typography
-        variant='formLabel'
-        sx={{ color: 'primary.main', letterSpacing: 0.8 }}
+        sx={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: 'text.disabled',
+          textTransform: 'uppercase',
+          letterSpacing: 0.6,
+          flexShrink: 0,
+          width: 64,
+        }}
       >
         {detail.label}
       </Typography>
       {isStatusRow ? (
-        <Stack direction='row' spacing={0.75} sx={{ alignItems: 'center' }}>
+        <Stack direction='row' spacing={0.5} sx={{ alignItems: 'center' }}>
           <Chip
             size='small'
             icon={statusIcon(statusBefore)}
-            label={`Before: ${statusBefore}`}
+            label={statusBefore}
             color={STATUS_COLOR[statusBefore] || 'default'}
             variant='outlined'
             sx={{
-              height: 24,
+              height: 20,
               '& .MuiChip-label': {
-                px: 1,
-                fontSize: 11,
+                px: 0.75,
+                fontSize: 10,
                 fontWeight: 700,
                 textTransform: 'uppercase',
               },
-              '& .MuiChip-icon': { fontSize: 14 },
+              '& .MuiChip-icon': { fontSize: 12, ml: 0.5 },
             }}
           />
-          <Typography variant='tableCell' color='text.secondary'>
+          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
             →
           </Typography>
           <Chip
             size='small'
             icon={statusIcon(statusAfter)}
-            label={`After: ${statusAfter}`}
+            label={statusAfter}
             color={STATUS_COLOR[statusAfter] || 'default'}
             sx={{
-              height: 24,
+              height: 20,
               '& .MuiChip-label': {
-                px: 1,
-                fontSize: 11,
+                px: 0.75,
+                fontSize: 10,
                 fontWeight: 700,
                 textTransform: 'uppercase',
               },
-              '& .MuiChip-icon': { fontSize: 14 },
+              '& .MuiChip-icon': { fontSize: 12, ml: 0.5 },
             }}
           />
         </Stack>
       ) : (
-        <Stack spacing={0.25}>
-          <Typography variant='tableCell' color='text.secondary'>
-            Before: {detail.before}
+        <Stack
+          direction='row'
+          spacing={0.5}
+          sx={{ alignItems: 'center', minWidth: 0 }}
+        >
+          <Typography
+            sx={{ fontSize: 12, color: 'text.disabled', flexShrink: 0 }}
+          >
+            {detail.before}
           </Typography>
-          <Typography variant='tableCell' sx={{ fontWeight: 600 }}>
-            After: {detail.after}
+          <Typography
+            sx={{ fontSize: 11, color: 'text.disabled', flexShrink: 0 }}
+          >
+            →
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'text.primary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {detail.after}
           </Typography>
         </Stack>
       )}
@@ -813,94 +835,110 @@ export default function TestCaseDetail({
                 </Button>
               </Stack>
             ) : (
-              <Stack spacing={1.5}>
-                {historyEntries.map((entry) => (
-                  <Card
-                    key={entry._id}
-                    variant='outlined'
-                    sx={{
-                      borderRadius: 2,
-                      borderColor: 'divider',
-                      bgcolor: 'background.paper',
-                      boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
-                    }}
-                  >
-                    <CardContent>
-                      <Stack spacing={1}>
-                        <Stack
-                          direction='row'
-                          spacing={1}
+              <Stack spacing={0}>
+                {historyEntries.map((entry, idx) => (
+                  <Stack key={entry._id} direction='row' spacing={1.5}>
+                    {/* timeline column: dot + connecting line */}
+                    <Stack
+                      sx={{ alignItems: 'center', width: 14, flexShrink: 0 }}
+                    >
+                      <Box
+                        sx={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          bgcolor: 'background.paper',
+                          border: '2px solid',
+                          borderColor: 'primary.main',
+                          flexShrink: 0,
+                          mt: 0.375,
+                        }}
+                      />
+                      {idx < historyEntries.length - 1 && (
+                        <Box
                           sx={{
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
+                            flex: 1,
+                            width: '1px',
+                            bgcolor: 'divider',
+                            mt: 0.5,
                           }}
-                        >
-                          <Typography
-                            variant='sectionTitle'
-                            sx={{ flex: 1, minWidth: 0 }}
-                          >
-                            Updated by {actorName(entry.by)}
-                          </Typography>
+                        />
+                      )}
+                    </Stack>
+
+                    {/* entry content */}
+                    <Box
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        pb: idx < historyEntries.length - 1 ? 2 : 0,
+                      }}
+                    >
+                      {/* header: actor · env chip · timestamp */}
+                      <Stack
+                        direction='row'
+                        spacing={0.75}
+                        sx={{
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          mb: 0.25,
+                        }}
+                      >
+                        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                          {actorName(entry.by)}
+                        </Typography>
+                        {entry.environment && (
                           <Chip
                             size='small'
-                            label={entry.environment || 'All environments'}
+                            label={entry.environment}
                             variant='outlined'
+                            sx={{
+                              height: 18,
+                              '& .MuiChip-label': { px: 0.75, fontSize: 10 },
+                            }}
                           />
-                        </Stack>
-
-                        <Stack
-                          direction='row'
-                          spacing={0.75}
-                          sx={{ alignItems: 'center' }}
-                        >
-                          <ScheduleOutlinedIcon
-                            fontSize='small'
-                            sx={{ color: 'primary.main' }}
-                          />
-                          <Typography
-                            variant='tableCell'
-                            color='text.secondary'
-                          >
-                            {new Date(entry.at).toLocaleString()}
-                          </Typography>
-                        </Stack>
-
-                        <Stack
-                          direction='row'
-                          spacing={0.75}
-                          sx={{ alignItems: 'center' }}
-                        >
-                          <UpdateOutlinedIcon
-                            fontSize='small'
-                            sx={{ color: 'primary.main' }}
-                          />
-                          <Typography variant='tableCell'>
-                            {entry.summary}
-                          </Typography>
-                        </Stack>
-
-                        {entry.details.length > 0 && (
-                          <Stack spacing={0}>
-                            {entry.details.map((detail) => (
-                              <HistoryDetailRow
-                                key={`${entry._id}-${detail.label}`}
-                                detail={detail}
-                              />
-                            ))}
-                          </Stack>
                         )}
-
-                        {entry.details.length === 0 && (
-                          <Typography
-                            variant='tableCell'
-                            color='text.secondary'
-                          >
-                            No field-level diff was recorded for this activity.
-                          </Typography>
-                        )}
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            color: 'text.disabled',
+                            ml: 'auto',
+                          }}
+                        >
+                          {new Date(entry.at).toLocaleString()}
+                        </Typography>
                       </Stack>
-                    </CardContent>
-                  </Card>
+
+                      {/* action summary */}
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          color: 'text.secondary',
+                          mb: entry.details.length ? 0.75 : 0,
+                        }}
+                      >
+                        {entry.summary}
+                      </Typography>
+
+                      {/* field diffs */}
+                      {entry.details.length > 0 && (
+                        <Box
+                          sx={{
+                            borderLeft: '2px solid',
+                            borderColor: 'divider',
+                            pl: 1,
+                          }}
+                        >
+                          {entry.details.map((detail) => (
+                            <HistoryDetailRow
+                              key={`${entry._id}-${detail.label}`}
+                              detail={detail}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                  </Stack>
                 ))}
               </Stack>
             )}
