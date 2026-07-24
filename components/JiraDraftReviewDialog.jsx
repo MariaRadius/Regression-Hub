@@ -227,7 +227,7 @@ export default function JiraDraftReviewDialog({
                 </Stack>
                 <Typography variant='body2' color='text.secondary'>
                   <strong>{storyWarning.key}</strong> could not be found. Edit
-                  the story key below and click <em>Create with this key</em> —
+                  the story key below and click <em>Create with new key</em> —
                   the test case will be updated automatically. Or create the
                   issue without any story link.
                 </Typography>
@@ -347,7 +347,7 @@ export default function JiraDraftReviewDialog({
             variant='outlined'
             sx={{ textTransform: 'none' }}
           >
-            Skip
+            Cancel
           </Button>
 
           {storyWarning ? (
@@ -391,7 +391,7 @@ export default function JiraDraftReviewDialog({
                   ? 'Checking…'
                   : submitting
                     ? 'Creating…'
-                    : 'Create with this key'}
+                    : 'Create with new key'}
               </Button>
             </>
           ) : (
